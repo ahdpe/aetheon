@@ -22,12 +22,13 @@ export class ChemicalGrid {
   }
 
   initVents() {
+    // Symmetrically arranged vents inside the circular petri chamber (R_grid ~ 56.7)
     this.vents = [
-      { x: Math.floor(this.size * 0.25), y: Math.floor(this.size * 0.3), radius: 6, power: 0.65, hue: 0.12 }, // Amber vent
-      { x: Math.floor(this.size * 0.75), y: Math.floor(this.size * 0.35), radius: 8, power: 0.75, hue: 0.52 }, // Cyan vent
-      { x: Math.floor(this.size * 0.5), y: Math.floor(this.size * 0.75), radius: 9, power: 0.85, hue: 0.38 }, // Phosphor vent
-      { x: Math.floor(this.size * 0.15), y: Math.floor(this.size * 0.8), radius: 5, power: 0.55, hue: 0.78 }, // Violet vent
-      { x: Math.floor(this.size * 0.85), y: Math.floor(this.size * 0.8), radius: 5, power: 0.50, hue: 0.95 }  // Rose vent
+      { x: Math.floor(this.size * 0.35), y: Math.floor(this.size * 0.35), radius: 6, power: 0.65, hue: 0.12 }, // Amber vent (top-left)
+      { x: Math.floor(this.size * 0.65), y: Math.floor(this.size * 0.35), radius: 7, power: 0.75, hue: 0.52 }, // Cyan vent (top-right)
+      { x: Math.floor(this.size * 0.50), y: Math.floor(this.size * 0.72), radius: 8, power: 0.85, hue: 0.38 }, // Phosphor vent (bottom-center)
+      { x: Math.floor(this.size * 0.30), y: Math.floor(this.size * 0.58), radius: 5, power: 0.55, hue: 0.78 }, // Violet vent (mid-left)
+      { x: Math.floor(this.size * 0.70), y: Math.floor(this.size * 0.58), radius: 5, power: 0.50, hue: 0.95 }  // Rose vent (mid-right)
     ];
   }
 
@@ -40,7 +41,7 @@ export class ChemicalGrid {
     }
   }
 
-  // 10 Hz step: 2D Toroidal Laplacian diffusion + decay + active hydrothermal recharge
+  // 10 Hz step: 2D Laplacian diffusion with reflective zero-flux boundaries + active hydrothermal recharge
   step() {
     const N = this.size;
     const diffN = CONFIG.DIFFUSION_RATE_NUTRIENT;
@@ -58,22 +59,21 @@ export class ChemicalGrid {
     const nextWst = this.nextWaste;
     const nextSig = this.nextSignal;
 
-    // Vectorized 2D stencil with toroidal periodic boundary wrapping
+    // Vectorized 2D stencil with zero-flux Neumann reflective boundaries
     for (let y = 0; y < N; y++) {
-      const ym1 = (y === 0 ? N - 1 : y - 1) * N;
+      const ym1 = Math.max(0, y - 1) * N;
       const y0 = y * N;
-      const yp1 = (y === N - 1 ? 0 : y + 1) * N;
+      const yp1 = Math.min(N - 1, y + 1) * N;
 
       for (let x = 0; x < N; x++) {
-        const xm1 = x === 0 ? N - 1 : x - 1;
-        const xp1 = x === N - 1 ? 0 : x + 1;
+        const xm1 = Math.max(0, x - 1);
+        const xp1 = Math.min(N - 1, x + 1);
         const idx = y0 + x;
 
-        // Nutrients diffusion
+        // Nutrients diffusion + steady ambient chemosynthetic replenishment
         const avgN = (nut[ym1 + x] + nut[yp1 + x] + nut[y0 + xm1] + nut[y0 + xp1]) * 0.25;
-        let nVal = (nut[idx] + diffN * (avgN - nut[idx])) * decayN;
-        if (nVal < 0.0001) nVal = 0;
-        else if (nVal > 2.0) nVal = 2.0;
+        let nVal = (nut[idx] + diffN * (avgN - nut[idx])) * decayN + 0.004;
+        if (nVal > 2.0) nVal = 2.0;
         nextNut[idx] = nVal;
 
         // Waste diffusion
@@ -103,13 +103,18 @@ export class ChemicalGrid {
       const r = vent.radius;
       const pow = vent.power * 0.2;
       
-      for (let dy = -r; dy <= r; dy++) {
-        const vy = (vent.y + dy + N) % N;
+      const minY = Math.max(0, vent.y - r);
+      const maxY = Math.min(N - 1, vent.y + r);
+      const minX = Math.max(0, vent.x - r);
+      const maxX = Math.min(N - 1, vent.x + r);
+
+      for (let vy = minY; vy <= maxY; vy++) {
+        const dy = vy - vent.y;
         const row = vy * N;
-        for (let dx = -r; dx <= r; dx++) {
+        for (let vx = minX; vx <= maxX; vx++) {
+          const dx = vx - vent.x;
           const dist2 = dx * dx + dy * dy;
           if (dist2 <= r * r) {
-            const vx = (vent.x + dx + N) % N;
             const factor = Math.exp(-dist2 / (r * 1.5));
             const idx = row + vx;
             this.nutrients[idx] = Math.min(2.0, this.nutrients[idx] + pow * factor);
@@ -122,25 +127,25 @@ export class ChemicalGrid {
   // Convert continuous world coords [0, WORLD_SIZE) into grid cell index
   worldToGrid(wx, wy) {
     const scale = this.size / CONFIG.WORLD_SIZE;
-    let gx = (wx * scale) % this.size;
-    let gy = (wy * scale) % this.size;
-    if (gx < 0) gx += this.size;
-    if (gy < 0) gy += this.size;
+    const clampedX = Math.max(0, Math.min(CONFIG.WORLD_SIZE - 0.01, wx));
+    const clampedY = Math.max(0, Math.min(CONFIG.WORLD_SIZE - 0.01, wy));
+    const gx = clampedX * scale;
+    const gy = clampedY * scale;
     return { gx, gy, ix: Math.floor(gx), iy: Math.floor(gy) };
   }
 
   // Bilinear sampling of chemical concentrations at arbitrary continuous world coordinates
   sample(wx, wy) {
     const scale = this.size / CONFIG.WORLD_SIZE;
-    let x = (wx * scale) % this.size;
-    let y = (wy * scale) % this.size;
-    if (x < 0) x += this.size;
-    if (y < 0) y < 0 ? y += this.size : y;
+    const clampedX = Math.max(0, Math.min(CONFIG.WORLD_SIZE - 0.01, wx));
+    const clampedY = Math.max(0, Math.min(CONFIG.WORLD_SIZE - 0.01, wy));
+    const x = clampedX * scale;
+    const y = clampedY * scale;
 
     const x0 = Math.floor(x);
     const y0 = Math.floor(y);
-    const x1 = (x0 + 1) % this.size;
-    const y1 = (y0 + 1) % this.size;
+    const x1 = Math.min(this.size - 1, x0 + 1);
+    const y1 = Math.min(this.size - 1, y0 + 1);
 
     const fx = x - x0;
     const fy = y - y0;
@@ -196,13 +201,18 @@ export class ChemicalGrid {
     const { ix: cx, iy: cy } = this.worldToGrid(wx, wy);
     const N = this.size;
 
-    for (let dy = -gridR; dy <= gridR; dy++) {
-      const y = (cy + dy + N) % N;
+    const minY = Math.max(0, cy - gridR);
+    const maxY = Math.min(N - 1, cy + gridR);
+    const minX = Math.max(0, cx - gridR);
+    const maxX = Math.min(N - 1, cx + gridR);
+
+    for (let y = minY; y <= maxY; y++) {
+      const dy = y - cy;
       const row = y * N;
-      for (let dx = -gridR; dx <= gridR; dx++) {
+      for (let x = minX; x <= maxX; x++) {
+        const dx = x - cx;
         const dist2 = dx * dx + dy * dy;
         if (dist2 <= gridR * gridR) {
-          const x = (cx + dx + N) % N;
           const factor = Math.exp(-dist2 / (gridR * 1.2));
           const idx = row + x;
           this.nutrients[idx] = Math.min(2.5, this.nutrients[idx] + nutrientAmount * factor);
@@ -211,20 +221,33 @@ export class ChemicalGrid {
     }
   }
 
-  // Compress chemical field into a 64x64 Uint8Array thumbnail for ultra-lean WebSocket broadcast
-  getThumbnail(targetSize = 64) {
+  // Compress chemical field into a 48x48/64x64 Uint8Array thumbnail for ultra-lean WebSocket broadcast
+  getThumbnail(targetSize = 48) {
     const step = this.size / targetSize;
     const out = new Uint8Array(targetSize * targetSize * 3); // R: nutrient, G: waste, B: signal
     let ptr = 0;
     
+    const thumbCenter = targetSize * 0.5;
+    const thumbRadius = (CONFIG.CHAMBER_RADIUS / CONFIG.WORLD_SIZE) * targetSize;
+
     for (let ty = 0; ty < targetSize; ty++) {
       const sy = Math.floor(ty * step) * this.size;
+      const dy = ty - thumbCenter;
       for (let tx = 0; tx < targetSize; tx++) {
+        const dx = tx - thumbCenter;
+        const dist = Math.hypot(dx, dy);
+
+        // Circular chamber mask: fade to black outside droplet
+        let mask = 1.0;
+        if (dist > thumbRadius) {
+          mask = Math.max(0, 1.0 - (dist - thumbRadius) * 0.8);
+        }
+
         const sx = Math.floor(tx * step);
         const idx = sy + sx;
-        out[ptr++] = Math.min(255, Math.floor(this.nutrients[idx] * 128));
-        out[ptr++] = Math.min(255, Math.floor(this.waste[idx] * 128));
-        out[ptr++] = Math.min(255, Math.floor(this.signal[idx] * 128));
+        out[ptr++] = Math.min(255, Math.floor(this.nutrients[idx] * 128 * mask));
+        out[ptr++] = Math.min(255, Math.floor(this.waste[idx] * 128 * mask));
+        out[ptr++] = Math.min(255, Math.floor(this.signal[idx] * 128 * mask));
       }
     }
     return out;

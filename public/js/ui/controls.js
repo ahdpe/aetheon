@@ -42,10 +42,22 @@ export class InputController {
         // Break tracking if user manual pans
         this.renderer.camera.trackedEntityId = null;
 
-        const ws = this.renderer.worldSize || 1400.0;
         const zoom = this.renderer.camera.zoom;
-        this.renderer.camera.targetX = (this.camStartX - dx / zoom + ws) % ws;
-        this.renderer.camera.targetY = (this.camStartY - dy / zoom + ws) % ws;
+        const targetX = this.camStartX - dx / zoom;
+        const targetY = this.camStartY - dy / zoom;
+
+        // Soft clamp camera to keep chamber in view
+        const cx = this.renderer.chamber?.cx || 700.0;
+        const cy = this.renderer.chamber?.cy || 700.0;
+        const maxPan = 750.0;
+        const distFromCenter = Math.hypot(targetX - cx, targetY - cy);
+        if (distFromCenter > maxPan) {
+          this.renderer.camera.targetX = cx + ((targetX - cx) / distFromCenter) * maxPan;
+          this.renderer.camera.targetY = cy + ((targetY - cy) / distFromCenter) * maxPan;
+        } else {
+          this.renderer.camera.targetX = targetX;
+          this.renderer.camera.targetY = targetY;
+        }
       }
     });
 
@@ -98,11 +110,10 @@ export class InputController {
       return;
     }
 
-    // 2. Otherwise, drop nutrient into the ocean!
-    const ws = this.renderer.worldSize || 1400.0;
+    // 2. Otherwise, drop nutrient into the petri chamber!
     const worldPt = this.renderer.screenToWorld(screenX, screenY);
-    const wx = (worldPt.x + ws) % ws;
-    const wy = (worldPt.y + ws) % ws;
+    const wx = worldPt.x;
+    const wy = worldPt.y;
 
     // Send to server
     this.client.sendInteraction('nutrient_drop', wx, wy);

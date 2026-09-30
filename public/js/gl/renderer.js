@@ -6,15 +6,16 @@ export class OceanRenderer {
     this.ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
     
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.worldSize = 1000.0;
+    this.worldSize = 1400.0;
+    this.chamber = { cx: 700.0, cy: 700.0, r: 620.0 };
     
-    // Camera
+    // Camera centered on chamber
     this.camera = {
-      x: 500.0,
-      y: 500.0,
+      x: 700.0,
+      y: 700.0,
       zoom: 1.0,
-      targetX: 500.0,
-      targetY: 500.0,
+      targetX: 700.0,
+      targetY: 700.0,
       targetZoom: 1.0,
       viewportW: window.innerWidth,
       viewportH: window.innerHeight,
@@ -28,7 +29,7 @@ export class OceanRenderer {
     this.currTickTime = performance.now();
     
     // Ambient fluid particles
-    this.particles = new ParticleSystem(1000, this.worldSize);
+    this.particles = new ParticleSystem(1000, this.worldSize, this.chamber);
     
     // Interaction ripples
     this.ripples = [];
@@ -44,6 +45,14 @@ export class OceanRenderer {
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
+  }
+
+  setChamber(chamber) {
+    if (!chamber) return;
+    this.chamber = chamber;
+    if (this.particles) {
+      this.particles.setChamber(chamber);
+    }
   }
 
   resize() {
@@ -170,15 +179,24 @@ export class OceanRenderer {
     // World transform helper
     const toScreenX = (wx) => (wx - this.camera.x) * this.camera.zoom + w * 0.5;
     const toScreenY = (wy) => (wy - this.camera.y) * this.camera.zoom + h * 0.5;
+    const camZoom = this.camera.zoom;
 
-    // 3. Render continuous fluid substrate field (scaled thumbnail)
+    // Chamber screen geometry
+    const ch = this.chamber;
+    const chScreenX = toScreenX(ch.cx);
+    const chScreenY = toScreenY(ch.cy);
+    const chScreenR = ch.r * camZoom;
+
+    // 3. Render continuous fluid substrate field (clipped to circular chamber)
     ctx.save();
+    ctx.beginPath();
+    ctx.arc(chScreenX, chScreenY, chScreenR, 0, Math.PI * 2);
+    ctx.clip();
+
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.globalAlpha = this.isLabMode ? 0.70 : 0.35;
     
-    // Draw chemical fluid across 4 quadrants to handle wrapping
-    const camZoom = this.camera.zoom;
     const wsPix = this.worldSize * camZoom;
     const originX = toScreenX(0);
     const originY = toScreenY(0);
@@ -212,9 +230,11 @@ export class OceanRenderer {
       ctx.fill();
     }
 
-    // 4.5. If Lab Mode, draw analysis counting chamber grid and reactor boundaries
+    // 4.5. Render Chamber Boundary (Meniscus in Zen mode, Polar counting chamber in Lab mode)
     if (this.isLabMode) {
-      this.drawLabGrid(ctx, toScreenX, toScreenY);
+      this.drawLabGrid(ctx, toScreenX, toScreenY, chScreenX, chScreenY, chScreenR);
+    } else {
+      this.drawZenMeniscus(ctx, chScreenX, chScreenY, chScreenR, w, h, camZoom);
     }
 
     // 5. Ambient fluid micro-plankton
@@ -232,11 +252,9 @@ export class OceanRenderer {
       const curr = currentList[i];
       const prev = this.prevEntities.get(curr.id) || curr;
 
-      // Handle toroidal wrapping interpolation
-      let ix = prev.x + (curr.x - prev.x) * alpha;
-      let iy = prev.y + (curr.y - prev.y) * alpha;
-      if (Math.abs(curr.x - prev.x) > this.worldSize * 0.5) ix = curr.x;
-      if (Math.abs(curr.y - prev.y) > this.worldSize * 0.5) iy = curr.y;
+      // Smooth continuous interpolation without wrapping jumps
+      const ix = prev.x + (curr.x - prev.x) * alpha;
+      const iy = prev.y + (curr.y - prev.y) * alpha;
 
       const sx = toScreenX(ix);
       const sy = toScreenY(iy);
@@ -368,104 +386,134 @@ export class OceanRenderer {
     ctx.restore();
   }
 
-  // High-precision Hemocytometer / Counting Chamber grid & thermal isotherms
-  drawLabGrid(ctx, toScreenX, toScreenY) {
+  // Beautiful living surface tension meniscus & dark optical field
+  drawZenMeniscus(ctx, cx, cy, cr, w, h, zoom) {
+    ctx.save();
+    // 1. Dark mask outside droplet (vignette cutout)
+    ctx.beginPath();
+    ctx.rect(0, 0, w, h);
+    ctx.arc(cx, cy, cr, 0, Math.PI * 2, true);
+    ctx.fillStyle = '#02040a';
+    ctx.fill();
+
+    // 2. Living Meniscus: Surface tension ring with organic optical refraction
+    const innerR = Math.max(0, cr - 16 * zoom);
+    const outerR = cr + 5 * zoom;
+    const meniscusGrad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
+    meniscusGrad.addColorStop(0, 'rgba(0, 240, 255, 0.0)');
+    meniscusGrad.addColorStop(0.65, 'rgba(0, 240, 255, 0.12)');
+    meniscusGrad.addColorStop(0.95, 'rgba(0, 240, 255, 0.42)');
+    meniscusGrad.addColorStop(1.0, 'rgba(0, 240, 255, 0.0)');
+    ctx.fillStyle = meniscusGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3. Crisp meniscus rim
+    ctx.beginPath();
+    ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.45)';
+    ctx.lineWidth = Math.max(1.5, 2.2 * zoom);
+    ctx.stroke();
+
+    // 4. Subtle inner caustic highlight
+    ctx.beginPath();
+    ctx.arc(cx, cy, cr - 2, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // High-precision Hemocytometer / Circular Petri Counting Chamber
+  drawLabGrid(ctx, toScreenX, toScreenY, cx, cy, cr) {
     ctx.save();
     const zoom = this.camera.zoom;
     const w = this.camera.viewportW;
     const h = this.camera.viewportH;
-    const WS = this.worldSize;
 
-    // 1. Minor grid (every 50 world units)
-    ctx.strokeStyle = 'rgba(0, 240, 255, 0.08)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([2, 4]);
+    // 1. Dark mask outside chamber
+    ctx.beginPath();
+    ctx.rect(0, 0, w, h);
+    ctx.arc(cx, cy, cr, 0, Math.PI * 2, true);
+    ctx.fillStyle = 'rgba(2, 4, 10, 0.92)';
+    ctx.fill();
 
-    for (let u = 0; u <= WS; u += 50) {
-      if (u % 200 === 0) continue; // Skip major lines
-      const sx = toScreenX(u);
-      if (sx >= -10 && sx <= w + 10) {
-        ctx.beginPath();
-        ctx.moveTo(sx, toScreenY(0));
-        ctx.lineTo(sx, toScreenY(WS));
-        ctx.stroke();
-      }
-      const sy = toScreenY(u);
-      if (sy >= -10 && sy <= h + 10) {
-        ctx.beginPath();
-        ctx.moveTo(toScreenX(0), sy);
-        ctx.lineTo(toScreenX(WS), sy);
-        ctx.stroke();
-      }
-    }
-
-    // 2. Major grid (every 200 world units) with measurement ticks & coordinate tags
-    ctx.setLineDash([]);
-    ctx.strokeStyle = 'rgba(0, 240, 255, 0.25)';
-    ctx.fillStyle = 'rgba(0, 240, 255, 0.65)';
+    // 2. Concentric Range Rings (every 150 μm from center)
     ctx.font = '9px "JetBrains Mono", monospace';
+    const rings = [150, 300, 450, 600];
+    for (let i = 0; i < rings.length; i++) {
+      const radiusWorld = rings[i];
+      const radiusPix = radiusWorld * zoom;
+      
+      ctx.beginPath();
+      ctx.arc(cx, cy, radiusPix, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.16)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.stroke();
 
-    for (let u = 0; u <= WS; u += 200) {
-      const sx = toScreenX(u);
-      if (sx >= -10 && sx <= w + 10) {
-        ctx.beginPath();
-        ctx.moveTo(sx, toScreenY(0));
-        ctx.lineTo(sx, toScreenY(WS));
-        ctx.stroke();
-        ctx.fillText(`${u}μm`, sx + 4, toScreenY(0) + 14);
-      }
-      const sy = toScreenY(u);
-      if (sy >= -10 && sy <= h + 10) {
-        ctx.beginPath();
-        ctx.moveTo(toScreenX(0), sy);
-        ctx.lineTo(toScreenX(WS), sy);
-        ctx.stroke();
-        ctx.fillText(`${u}μm`, toScreenX(0) + 6, sy - 4);
+      // Range label
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.55)';
+      ctx.fillText(`r = ${radiusWorld} μm`, cx + radiusPix + 4, cy - 4);
+    }
+    ctx.setLineDash([]);
+
+    // 3. Polar degree ray spokes (every 30 degrees)
+    for (let deg = 0; deg < 360; deg += 30) {
+      const rad = (deg * Math.PI) / 180;
+      const cosA = Math.cos(rad);
+      const sinA = Math.sin(rad);
+
+      ctx.beginPath();
+      ctx.moveTo(cx + cosA * (cr - 25), cy + sinA * (cr - 25));
+      ctx.lineTo(cx + cosA * cr, cy + sinA * cr);
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.35)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Degree label
+      if (deg % 60 === 0) {
+        ctx.fillStyle = 'rgba(0, 240, 255, 0.7)';
+        ctx.fillText(`${deg}°`, cx + cosA * (cr - 38) - 8, cy + sinA * (cr - 38) + 3);
       }
     }
 
-    // 3. Canonical Reactor Bounds with Corner Brackets
-    const rx0 = toScreenX(0);
-    const ry0 = toScreenY(0);
-    const rx1 = toScreenX(WS);
-    const ry1 = toScreenY(WS);
-    const rw = rx1 - rx0;
-    const rh = ry1 - ry0;
+    // 4. Outer Chamber Rim & Precision Measurement Caliper Marks
+    ctx.beginPath();
+    ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.65)';
+    ctx.lineWidth = 2.0;
+    ctx.stroke();
 
-    // Glowing border frame
-    ctx.strokeStyle = 'rgba(0, 240, 255, 0.5)';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(rx0, ry0, rw, rh);
+    // 4 Crosshair cardinal calipers
+    const calLen = 14 * zoom;
+    const cardinals = [
+      { a: 0 },
+      { a: Math.PI * 0.5 },
+      { a: Math.PI },
+      { a: Math.PI * 1.5 }
+    ];
 
-    // High-tech corner brackets
-    const bLen = Math.max(12, 22 * zoom);
     ctx.strokeStyle = '#00f0ff';
     ctx.lineWidth = 2.5;
-
-    // Top-Left
-    ctx.beginPath();
-    ctx.moveTo(rx0, ry0 + bLen); ctx.lineTo(rx0, ry0); ctx.lineTo(rx0 + bLen, ry0);
-    ctx.stroke();
-    // Top-Right
-    ctx.beginPath();
-    ctx.moveTo(rx1 - bLen, ry0); ctx.lineTo(rx1, ry0); ctx.lineTo(rx1, ry0 + bLen);
-    ctx.stroke();
-    // Bottom-Left
-    ctx.beginPath();
-    ctx.moveTo(rx0, ry1 - bLen); ctx.lineTo(rx0, ry1); ctx.lineTo(rx0 + bLen, ry1);
-    ctx.stroke();
-    // Bottom-Right
-    ctx.beginPath();
-    ctx.moveTo(rx1 - bLen, ry1); ctx.lineTo(rx1, ry1); ctx.lineTo(rx1, ry1 - bLen);
-    ctx.stroke();
+    for (const c of cardinals) {
+      const rx = cx + Math.cos(c.a) * cr;
+      const ry = cy + Math.sin(c.a) * cr;
+      ctx.beginPath();
+      ctx.moveTo(rx - Math.cos(c.a) * calLen, ry - Math.sin(c.a) * calLen);
+      ctx.lineTo(rx + Math.cos(c.a) * 8, ry + Math.sin(c.a) * 8);
+      ctx.stroke();
+    }
 
     // Chamber identification badge
-    ctx.fillStyle = '#00f0ff';
+    ctx.fillStyle = 'rgba(0, 240, 255, 0.85)';
     ctx.font = '10px "JetBrains Mono", monospace';
-    ctx.fillText('◈ CANONICAL BIO-REACTOR: 1000 × 1000 μm [CHAMBER ALPHA]', rx0 + 12, ry0 - 8);
+    ctx.fillText('◈ PETRI BIO-CHAMBER: Ø 1240 μm [ACTIVE MENISCUS]', cx - 135, cy - cr + 26);
 
-    // 4. Hydrothermal Vents Isotherms in Lab Mode
-    const ventScale = WS / 128;
+    // 5. Hydrothermal Vents Isotherms in Lab Mode
+    const ventScale = this.worldSize / 128;
     for (let v = 0; v < this.vents.length; v++) {
       const vent = this.vents[v];
       const vx = toScreenX(vent.x * ventScale);
@@ -499,7 +547,6 @@ export class OceanRenderer {
     const zoom = this.camera.zoom;
     const w = this.camera.viewportW;
     const h = this.camera.viewportH;
-    const WS = this.worldSize;
 
     // 1. Batch Velocity Vector Lines (2 draw calls total instead of 2000!)
     ctx.lineWidth = 1.6;
@@ -511,10 +558,8 @@ export class OceanRenderer {
       const curr = organisms[i];
       if (curr.carnivory > 0.4) continue;
       const prev = this.prevEntities.get(curr.id) || curr;
-      let ix = prev.x + (curr.x - prev.x) * alpha;
-      let iy = prev.y + (curr.y - prev.y) * alpha;
-      if (Math.abs(curr.x - prev.x) > WS * 0.5) ix = curr.x;
-      if (Math.abs(curr.y - prev.y) > WS * 0.5) iy = curr.y;
+      const ix = prev.x + (curr.x - prev.x) * alpha;
+      const iy = prev.y + (curr.y - prev.y) * alpha;
       const sx = toScreenX(ix);
       const sy = toScreenY(iy);
       if (sx < -20 || sx > w + 20 || sy < -20 || sy > h + 20) continue;
@@ -534,10 +579,8 @@ export class OceanRenderer {
       const curr = organisms[i];
       if (curr.carnivory <= 0.4) continue;
       const prev = this.prevEntities.get(curr.id) || curr;
-      let ix = prev.x + (curr.x - prev.x) * alpha;
-      let iy = prev.y + (curr.y - prev.y) * alpha;
-      if (Math.abs(curr.x - prev.x) > WS * 0.5) ix = curr.x;
-      if (Math.abs(curr.y - prev.y) > WS * 0.5) iy = curr.y;
+      const ix = prev.x + (curr.x - prev.x) * alpha;
+      const iy = prev.y + (curr.y - prev.y) * alpha;
       const sx = toScreenX(ix);
       const sy = toScreenY(iy);
       if (sx < -20 || sx > w + 20 || sy < -20 || sy > h + 20) continue;
@@ -558,10 +601,8 @@ export class OceanRenderer {
     for (let i = 0; i < organisms.length; i++) {
       const curr = organisms[i];
       const prev = this.prevEntities.get(curr.id) || curr;
-      let ix = prev.x + (curr.x - prev.x) * alpha;
-      let iy = prev.y + (curr.y - prev.y) * alpha;
-      if (Math.abs(curr.x - prev.x) > WS * 0.5) ix = curr.x;
-      if (Math.abs(curr.y - prev.y) > WS * 0.5) iy = curr.y;
+      const ix = prev.x + (curr.x - prev.x) * alpha;
+      const iy = prev.y + (curr.y - prev.y) * alpha;
       const sx = toScreenX(ix);
       const sy = toScreenY(iy);
       if (sx < -30 || sx > w + 30 || sy < -30 || sy > h + 30) continue;

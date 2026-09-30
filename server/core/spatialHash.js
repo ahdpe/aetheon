@@ -16,10 +16,8 @@ export class SpatialHash {
   }
 
   hash(x, y) {
-    let gx = Math.floor(x / this.cellSize) % this.gridWidth;
-    let gy = Math.floor(y / this.cellSize) % this.gridWidth;
-    if (gx < 0) gx += this.gridWidth;
-    if (gy < 0) gy += this.gridWidth;
+    const gx = Math.max(0, Math.min(this.gridWidth - 1, Math.floor(x / this.cellSize)));
+    const gy = Math.max(0, Math.min(this.gridWidth - 1, Math.floor(y / this.cellSize)));
     return gy * this.gridWidth + gx;
   }
 
@@ -28,7 +26,7 @@ export class SpatialHash {
     this.buckets[idx].push(entity);
   }
 
-  // Query nearby entities within a given radius with periodic wrapping
+  // Query nearby entities within a given radius in bounded Euclidean chamber
   query(x, y, radius, outResults = []) {
     outResults.length = 0;
     const r2 = radius * radius;
@@ -37,26 +35,20 @@ export class SpatialHash {
     const baseGx = Math.floor(x / this.cellSize);
     const baseGy = Math.floor(y / this.cellSize);
     const W = this.gridWidth;
-    const WS = this.worldSize;
 
-    for (let dy = -cellRadius; dy <= cellRadius; dy++) {
-      let gy = (baseGy + dy) % W;
-      if (gy < 0) gy += W;
+    const minGy = Math.max(0, baseGy - cellRadius);
+    const maxGy = Math.min(W - 1, baseGy + cellRadius);
+    const minGx = Math.max(0, baseGx - cellRadius);
+    const maxGx = Math.min(W - 1, baseGx + cellRadius);
+
+    for (let gy = minGy; gy <= maxGy; gy++) {
       const row = gy * W;
-
-      for (let dx = -cellRadius; dx <= cellRadius; dx++) {
-        let gx = (baseGx + dx) % W;
-        if (gx < 0) gx += W;
+      for (let gx = minGx; gx <= maxGx; gx++) {
         const bucket = this.buckets[row + gx];
-
         for (let i = 0; i < bucket.length; i++) {
           const other = bucket[i];
-          // Toroidal shortest distance
-          let diffX = Math.abs(x - other.x);
-          if (diffX > WS * 0.5) diffX = WS - diffX;
-          let diffY = Math.abs(y - other.y);
-          if (diffY > WS * 0.5) diffY = WS - diffY;
-
+          const diffX = x - other.x;
+          const diffY = y - other.y;
           if (diffX * diffX + diffY * diffY <= r2) {
             outResults.push(other);
           }

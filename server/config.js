@@ -23,6 +23,12 @@ export const CONFIG = {
   GRID_SIZE: parseInt(process.env.GRID_SIZE || '128', 10), // 128x128 chemical grid
   WORLD_SIZE: 1400.0, // Continuous virtual coordinates [0, WORLD_SIZE)
   
+  // Physical Chamber (Petri dish / droplet with soft surface tension)
+  CHAMBER_RADIUS: 620.0,
+  CHAMBER_CENTER_X: 700.0,
+  CHAMBER_CENTER_Y: 700.0,
+  SURFACE_TENSION_MARGIN: 120.0,
+  
   MAX_ORGANISMS: parseInt(process.env.MAX_ORGANISMS || '300', 10),
   MIN_ORGANISMS: 140, // Spontaneous biogenesis triggers if population drops below this
   

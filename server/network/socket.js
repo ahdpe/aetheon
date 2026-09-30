@@ -19,6 +19,11 @@ export class NetworkManager {
       const initialPayload = {
         type: 'init',
         worldSize: CONFIG.WORLD_SIZE,
+        chamber: {
+          cx: CONFIG.CHAMBER_CENTER_X,
+          cy: CONFIG.CHAMBER_CENTER_Y,
+          r: CONFIG.CHAMBER_RADIUS
+        },
         vents: this.engine.grid.vents,
         stats: this.engine.getStats(),
         journal: this.engine.naturalist.getRecentEntries(10),

@@ -130,6 +130,9 @@ class AetheonApp {
         this.renderer.worldSize = msg.worldSize;
         if (this.renderer.particles) this.renderer.particles.worldSize = msg.worldSize;
       }
+      if (msg.chamber) {
+        this.renderer.setChamber(msg.chamber);
+      }
       this.renderer.setVents(msg.vents);
       if (msg.thumbnail) this.renderer.updateThumbnail(msg.thumbnail);
       this.updateStats(msg.stats);

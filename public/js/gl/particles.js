@@ -1,7 +1,8 @@
 export class ParticleSystem {
-  constructor(count = 1200, worldSize = 1000.0) {
+  constructor(count = 1000, worldSize = 1400.0, chamber = { cx: 700.0, cy: 700.0, r: 620.0 }) {
     this.count = count;
     this.worldSize = worldSize;
+    this.chamber = chamber;
     
     // Float arrays for particle properties
     this.x = new Float32Array(count);
@@ -16,10 +17,20 @@ export class ParticleSystem {
     this.init();
   }
 
+  setChamber(chamber) {
+    this.chamber = chamber;
+  }
+
   init() {
+    const cx = this.chamber.cx;
+    const cy = this.chamber.cy;
+    const r = this.chamber.r;
+
     for (let i = 0; i < this.count; i++) {
-      this.x[i] = Math.random() * this.worldSize;
-      this.y[i] = Math.random() * this.worldSize;
+      const ang = Math.random() * Math.PI * 2;
+      const dist = Math.sqrt(Math.random()) * (r - 12);
+      this.x[i] = cx + Math.cos(ang) * dist;
+      this.y[i] = cy + Math.sin(ang) * dist;
       this.vx[i] = (Math.random() - 0.5) * 0.4;
       this.vy[i] = (Math.random() - 0.5) * 0.4;
       this.depth[i] = 0.2 + Math.random() * 0.8;
@@ -31,12 +42,25 @@ export class ParticleSystem {
 
   // Update particles with gentle fluid drift and organism wakes
   step(organisms) {
-    const WS = this.worldSize;
+    const cx = this.chamber.cx;
+    const cy = this.chamber.cy;
+    const r = this.chamber.r;
 
     for (let i = 0; i < this.count; i++) {
-      // Ambient fluid currents
-      this.x[i] = (this.x[i] + this.vx[i] + WS) % WS;
-      this.y[i] = (this.y[i] + this.vy[i] + WS) % WS;
+      // Fluid movement
+      this.x[i] += this.vx[i];
+      this.y[i] += this.vy[i];
+
+      // Soft reflection at circular chamber boundary
+      const dx = this.x[i] - cx;
+      const dy = this.y[i] - cy;
+      const dist = Math.hypot(dx, dy) || 0.001;
+      if (dist > r - 4) {
+        this.x[i] = cx + (dx / dist) * (r - 5);
+        this.y[i] = cy + (dy / dist) * (r - 5);
+        this.vx[i] *= -0.5;
+        this.vy[i] *= -0.5;
+      }
 
       // Gentle damping + brownian motion
       this.vx[i] = this.vx[i] * 0.98 + (Math.random() - 0.5) * 0.04;
@@ -54,13 +78,8 @@ export class ParticleSystem {
 
         // Push nearby particles
         for (let p = 0; p < this.count; p += 4) {
-          let dx = this.x[p] - ox;
-          let dy = this.y[p] - oy;
-          if (dx > WS * 0.5) dx -= WS;
-          else if (dx < -WS * 0.5) dx += WS;
-          if (dy > WS * 0.5) dy -= WS;
-          else if (dy < -WS * 0.5) dy += WS;
-
+          const dx = this.x[p] - ox;
+          const dy = this.y[p] - oy;
           const d2 = dx * dx + dy * dy;
           if (d2 < r2 && d2 > 0.1) {
             const force = (1.0 - Math.sqrt(d2) / (org.size * 2.5)) * 0.8;

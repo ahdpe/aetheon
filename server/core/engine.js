@@ -31,11 +31,25 @@ export class SimulationEngine {
     const restored = this.persistence.loadSnapshot(this);
     if (!restored) {
       this.seedPrimordialFauna();
+    } else {
+      // Ensure all restored organisms are strictly inside the circular chamber
+      const CX = CONFIG.CHAMBER_CENTER_X;
+      const CY = CONFIG.CHAMBER_CENTER_Y;
+      const maxR = CONFIG.CHAMBER_RADIUS - 15.0;
+      for (let i = 0; i < this.organisms.length; i++) {
+        const o = this.organisms[i];
+        const dist = Math.hypot(o.x - CX, o.y - CY);
+        if (dist > maxR) {
+          const ang = Math.atan2(o.y - CY, o.x - CX);
+          o.x = CX + Math.cos(ang) * (maxR - 20);
+          o.y = CY + Math.sin(ang) * (maxR - 20);
+        }
+      }
     }
   }
 
   seedPrimordialFauna() {
-    console.log('[SimulationEngine] Seeding initial primordial fauna...');
+    console.log('[SimulationEngine] Seeding initial primordial fauna in circular chamber...');
     // Seed autotrophs, weavers, and hunters around the vents
     const vents = this.grid.vents;
     const speciesList = this.lineage.getAllSpecies();
@@ -43,13 +57,14 @@ export class SimulationEngine {
     for (let i = 0; i < 280; i++) {
       const vent = vents[i % vents.length];
       const angle = Math.random() * Math.PI * 2;
-      const dist = Math.random() * 80 + 10;
+      const dist = Math.random() * 60 + 5;
       
-      const wx = (vent.x * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + Math.cos(angle) * dist + CONFIG.WORLD_SIZE) % CONFIG.WORLD_SIZE;
-      const wy = (vent.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + Math.sin(angle) * dist + CONFIG.WORLD_SIZE) % CONFIG.WORLD_SIZE;
+      const wx = vent.x * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + Math.cos(angle) * dist;
+      const wy = vent.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + Math.sin(angle) * dist;
 
-      const species = speciesList[i % speciesList.length];
-      const org = new Organism(wx, wy, Organism.createRandomGenome(species.hue), 1, 0, species.id);
+      const isHunter = (i % 7 === 0); // ~14% apex predators, 86% primary producers
+      const species = isHunter ? speciesList[2] : speciesList[i % 2];
+      const org = new Organism(wx, wy, Organism.createRandomGenome(species.hue, isHunter), 1, 0, species.id);
       this.organisms.push(org);
     }
   }
@@ -135,13 +150,14 @@ export class SimulationEngine {
     if (this.organisms.length < CONFIG.MIN_ORGANISMS) {
       const needed = CONFIG.MIN_ORGANISMS - this.organisms.length;
       const vents = this.grid.vents;
+      const speciesList = this.lineage.getAllSpecies();
       for (let k = 0; k < needed; k++) {
         const vent = vents[Math.floor(Math.random() * vents.length)];
-        const wx = (vent.x * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 60 + CONFIG.WORLD_SIZE) % CONFIG.WORLD_SIZE;
-        const wy = (vent.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 60 + CONFIG.WORLD_SIZE) % CONFIG.WORLD_SIZE;
-        const speciesList = this.lineage.getAllSpecies();
-        const sp = speciesList[Math.floor(Math.random() * speciesList.length)];
-        this.organisms.push(new Organism(wx, wy, Organism.createRandomGenome(sp.hue), 1, 0, sp.id));
+        const wx = vent.x * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 40;
+        const wy = vent.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 40;
+        const isHunter = Math.random() < 0.12;
+        const sp = isHunter ? speciesList[2] : speciesList[Math.floor(Math.random() * 2)];
+        this.organisms.push(new Organism(wx, wy, Organism.createRandomGenome(sp.hue, isHunter), 1, 0, sp.id));
       }
     }
 

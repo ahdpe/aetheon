@@ -37,20 +37,20 @@ export class Organism {
     this.maxSpeed = Math.max(0.8, Math.min(4.5, this.genome.speedMax));
   }
 
-  static createRandomGenome(seedHue = null) {
-    const isPredator = Math.random() < 0.15;
+  static createRandomGenome(seedHue = null, forcePredator = null) {
+    const isPredator = forcePredator !== null ? forcePredator : (Math.random() < 0.12);
     const baseHue = seedHue !== null ? seedHue : (isPredator ? 0.95 + Math.random() * 0.1 : 0.45 + Math.random() * 0.25);
     
     return {
-      size: isPredator ? 9.0 + Math.random() * 4.0 : 5.0 + Math.random() * 5.0,
+      size: isPredator ? 9.5 + Math.random() * 4.0 : 5.0 + Math.random() * 4.5,
       hue: baseHue % 1.0,
-      speedMax: isPredator ? 2.5 + Math.random() * 1.5 : 1.2 + Math.random() * 1.5,
-      carnivory: isPredator ? 0.65 + Math.random() * 0.35 : Math.random() * 0.15,
-      chemotaxisNutrient: isPredator ? 0.2 : 0.8 + Math.random() * 0.8,
+      speedMax: isPredator ? 2.6 + Math.random() * 1.4 : 1.2 + Math.random() * 1.4,
+      carnivory: isPredator ? 0.70 + Math.random() * 0.25 : Math.random() * 0.15,
+      chemotaxisNutrient: isPredator ? 0.15 : 0.9 + Math.random() * 0.8,
       chemotaxisWaste: -0.6 + (Math.random() - 0.5) * 0.4, // usually avoid waste
       ciliaryFrequency: 0.15 + Math.random() * 0.35,
       phaseCoupling: Math.random() * 0.8,
-      splitThreshold: isPredator ? 140.0 + Math.random() * 50 : 100.0 + Math.random() * 40,
+      splitThreshold: isPredator ? 220.0 + Math.random() * 40 : 80.0 + Math.random() * 30,
       metabolismEfficiency: 0.9 + Math.random() * 0.25,
       mutationRate: 0.05 + Math.random() * 0.05,
       adhesion: Math.random() * 0.5
@@ -123,13 +123,8 @@ export class Organism {
         const other = nearbyNeighbors[i];
         if (other === this) continue;
 
-        let dx = other.x - this.x;
-        let dy = other.y - this.y;
-        if (dx > CONFIG.WORLD_SIZE * 0.5) dx -= CONFIG.WORLD_SIZE;
-        else if (dx < -CONFIG.WORLD_SIZE * 0.5) dx += CONFIG.WORLD_SIZE;
-        if (dy > CONFIG.WORLD_SIZE * 0.5) dy -= CONFIG.WORLD_SIZE;
-        else if (dy < -CONFIG.WORLD_SIZE * 0.5) dy += CONFIG.WORLD_SIZE;
-
+        const dx = other.x - this.x;
+        const dy = other.y - this.y;
         const d2 = dx * dx + dy * dy;
         const d = Math.sqrt(d2) || 0.01;
 
@@ -168,6 +163,34 @@ export class Organism {
     steerX += separationX;
     steerY += separationY;
 
+    // Option 1: Soft Surface Tension & Inward Chamber Steering
+    const CX = CONFIG.CHAMBER_CENTER_X;
+    const CY = CONFIG.CHAMBER_CENTER_Y;
+    const R = CONFIG.CHAMBER_RADIUS;
+    const margin = CONFIG.SURFACE_TENSION_MARGIN;
+
+    const toCenterX = this.x - CX;
+    const toCenterY = this.y - CY;
+    const distCenter = Math.hypot(toCenterX, toCenterY) || 0.001;
+
+    if (distCenter > R - margin) {
+      const t = (distCenter - (R - margin)) / margin; // 0 (edge of margin) to 1 (at the rim)
+      const nx = -toCenterX / distCenter; // Inward unit normal vector
+      const ny = -toCenterY / distCenter;
+
+      // Smooth progressive inward steering force
+      const steerPush = 4.5 * (t * t);
+      steerX += nx * steerPush;
+      steerY += ny * steerPush;
+
+      // Deflect outward radial velocity so organisms naturally cruise along the rim
+      const outwardVel = (this.vx * toCenterX + this.vy * toCenterY) / distCenter;
+      if (outwardVel > 0) {
+        steerX += nx * outwardVel * 2.2;
+        steerY += ny * outwardVel * 2.2;
+      }
+    }
+
     // Smooth angular turning with inertia (prevent rapid 180° twitching)
     const steerMag = Math.sqrt(steerX * steerX + steerY * steerY);
     if (steerMag > 0.05) {
@@ -195,12 +218,30 @@ export class Organism {
     this.vx *= 0.98;
     this.vy *= 0.98;
 
-    this.x = (this.x + this.vx + CONFIG.WORLD_SIZE) % CONFIG.WORLD_SIZE;
-    this.y = (this.y + this.vy + CONFIG.WORLD_SIZE) % CONFIG.WORLD_SIZE;
+    this.x += this.vx;
+    this.y += this.vy;
+
+    // Hard physical boundary: elastic meniscus / petri dish rim
+    const newDist = Math.hypot(this.x - CX, this.y - CY) || 0.001;
+    const maxAllowedDist = R - this.size;
+    if (newDist > maxAllowedDist) {
+      const uX = (this.x - CX) / newDist;
+      const uY = (this.y - CY) / newDist;
+      this.x = CX + uX * maxAllowedDist;
+      this.y = CY + uY * maxAllowedDist;
+
+      // Elastic cushioned bounce off the surface tension
+      const radV = this.vx * uX + this.vy * uY;
+      if (radV > 0) {
+        this.vx -= 1.6 * radV * uX;
+        this.vy -= 1.6 * radV * uY;
+        this.heading = Math.atan2(this.vy, this.vx);
+      }
+    }
 
     // 3. Metabolism & Feeding
     const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-    const predatorPenalty = this.carnivory > 0.4 ? 1.8 : 1.0;
+    const predatorPenalty = this.carnivory > 0.4 ? (2.2 + this.carnivory * 1.8) : 1.0;
     const metabolicCost = ((CONFIG.BASE_METABOLIC_RATE * (this.size * 0.15) + (currentSpeed * currentSpeed) * 0.03) * predatorPenalty) / this.genome.metabolismEfficiency;
     this.energy -= metabolicCost;
 
@@ -214,7 +255,7 @@ export class Organism {
         0.3, // waste ratio
         0.06 * ciliaryPulse // luminescence signal
       );
-      this.energy += consumed * 18.0 * this.genome.metabolismEfficiency;
+      this.energy += consumed * 21.0 * this.genome.metabolismEfficiency;
     }
 
     // Cap maximum energy
@@ -226,19 +267,15 @@ export class Organism {
   // Predation interaction: check if this organism can consume 'prey'
   attemptPredation(prey, grid) {
     if (this.carnivory < 0.4 || prey === this) return false;
-    if (prey.size >= this.size * 0.9) return false; // Must be noticeably larger to consume
+    if (prey.size >= this.size * 0.8) return false; // Must be noticeably larger to consume
 
-    let dx = prey.x - this.x;
-    let dy = prey.y - this.y;
-    if (dx > CONFIG.WORLD_SIZE * 0.5) dx -= CONFIG.WORLD_SIZE;
-    else if (dx < -CONFIG.WORLD_SIZE * 0.5) dx += CONFIG.WORLD_SIZE;
-    if (dy > CONFIG.WORLD_SIZE * 0.5) dy -= CONFIG.WORLD_SIZE;
-    else if (dy < -CONFIG.WORLD_SIZE * 0.5) dy += CONFIG.WORLD_SIZE;
+    const dx = prey.x - this.x;
+    const dy = prey.y - this.y;
 
     const contactDist = (this.size + prey.size) * 0.7;
     if (dx * dx + dy * dy <= contactDist * contactDist) {
-      // Successful predatory strike!
-      const gainedEnergy = prey.energy * 0.75;
+      // Successful predatory strike! (35% trophic conversion efficiency)
+      const gainedEnergy = prey.energy * 0.35;
       this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + gainedEnergy);
       this.kills++;
       
@@ -263,8 +300,18 @@ export class Organism {
     const spawnAngle = Math.random() * Math.PI * 2;
     const spawnDist = this.size * 1.5;
     
-    const childX = (this.x + Math.cos(spawnAngle) * spawnDist + CONFIG.WORLD_SIZE) % CONFIG.WORLD_SIZE;
-    const childY = (this.y + Math.sin(spawnAngle) * spawnDist + CONFIG.WORLD_SIZE) % CONFIG.WORLD_SIZE;
+    let childX = this.x + Math.cos(spawnAngle) * spawnDist;
+    let childY = this.y + Math.sin(spawnAngle) * spawnDist;
+
+    const CX = CONFIG.CHAMBER_CENTER_X;
+    const CY = CONFIG.CHAMBER_CENTER_Y;
+    const maxR = CONFIG.CHAMBER_RADIUS - 12.0;
+    const cDist = Math.hypot(childX - CX, childY - CY);
+    if (cDist > maxR) {
+      const angle = Math.atan2(childY - CY, childX - CX);
+      childX = CX + Math.cos(angle) * (maxR - 5);
+      childY = CY + Math.sin(angle) * (maxR - 5);
+    }
 
     const child = new Organism(
       childX,
