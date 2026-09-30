@@ -47,10 +47,10 @@ const server = http.createServer((req, res) => {
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
-    // Enable gzip/caching headers if appropriate
+    // Disable caching so clients always get fresh code without stale cache mismatch
     res.writeHead(200, {
       'Content-Type': contentType,
-      'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=3600'
+      'Cache-Control': 'no-cache, no-store, must-revalidate'
     });
 
     fs.createReadStream(filePath).pipe(res);

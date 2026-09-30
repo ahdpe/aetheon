@@ -115,10 +115,10 @@ export class OceanRenderer {
     this.currEntities = new Map();
 
     const raw = packet.orgs;
-    if (raw) {
-      const count = raw.length / 10;
-      for (let i = 0; i < count; i++) {
-        const ptr = i * 10;
+    if (raw && packet.n > 0) {
+      const stride = Math.round(raw.length / packet.n);
+      for (let i = 0; i < packet.n; i++) {
+        const ptr = i * stride;
         const id = raw[ptr];
         this.currEntities.set(id, {
           id,
@@ -129,8 +129,8 @@ export class OceanRenderer {
           energy: raw[ptr + 5],
           size: raw[ptr + 6],
           hue: raw[ptr + 7],
-          speciesId: raw[ptr + 8],
-          carnivory: raw[ptr + 9]
+          speciesId: stride >= 9 ? raw[ptr + 8] : 1,
+          carnivory: stride >= 10 ? raw[ptr + 9] : 0.1
         });
       }
     }
@@ -222,9 +222,10 @@ export class OceanRenderer {
     this.particles.step(currentList);
     this.particles.draw(ctx, this.camera);
 
-    // 6. Compute interpolation factor alpha between 10 Hz ticks
-    const tickDelta = Math.max(10, this.currTickTime - this.prevTickTime);
-    const alpha = Math.min(1.0, (time - this.currTickTime) / tickDelta);
+    // 6. Compute interpolation factor alpha between 10 Hz ticks (clamped to prevent freezing or jumps)
+    const tickDelta = Math.max(10, Math.min(250, this.currTickTime - this.prevTickTime));
+    const elapsed = Math.max(0, time - this.currTickTime);
+    const alpha = Math.min(1.2, elapsed / tickDelta);
 
     // 7. Render Organisms
     for (let i = 0; i < currentList.length; i++) {
@@ -500,78 +501,106 @@ export class OceanRenderer {
     const h = this.camera.viewportH;
     const WS = this.worldSize;
 
-    ctx.font = '9px "JetBrains Mono", monospace';
-
+    // 1. Batch Velocity Vector Lines (2 draw calls total instead of 2000!)
+    ctx.lineWidth = 1.6;
+    
+    // Grazers batch (neon green)
+    ctx.strokeStyle = '#00ffaa';
+    ctx.beginPath();
     for (let i = 0; i < organisms.length; i++) {
       const curr = organisms[i];
+      if (curr.carnivory > 0.4) continue;
       const prev = this.prevEntities.get(curr.id) || curr;
-
       let ix = prev.x + (curr.x - prev.x) * alpha;
       let iy = prev.y + (curr.y - prev.y) * alpha;
       if (Math.abs(curr.x - prev.x) > WS * 0.5) ix = curr.x;
       if (Math.abs(curr.y - prev.y) > WS * 0.5) iy = curr.y;
-
       const sx = toScreenX(ix);
       const sy = toScreenY(iy);
+      if (sx < -20 || sx > w + 20 || sy < -20 || sy > h + 20) continue;
 
-      // Cull offscreen
-      if (sx < -40 || sx > w + 40 || sy < -40 || sy > h + 40) continue;
-
-      const isHunter = curr.carnivory > 0.4;
       const speed = Math.hypot(curr.vx, curr.vy);
+      const arrowLen = Math.max(8, speed * 18 * zoom);
+      const angle = Math.atan2(curr.vy, curr.vx);
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + Math.cos(angle) * arrowLen, sy + Math.sin(angle) * arrowLen);
+    }
+    ctx.stroke();
 
-      // A. Sensory Field (Chemotactic Gradient Detection Radius)
+    // Hunters batch (neon red)
+    ctx.strokeStyle = '#ff4d4d';
+    ctx.beginPath();
+    for (let i = 0; i < organisms.length; i++) {
+      const curr = organisms[i];
+      if (curr.carnivory <= 0.4) continue;
+      const prev = this.prevEntities.get(curr.id) || curr;
+      let ix = prev.x + (curr.x - prev.x) * alpha;
+      let iy = prev.y + (curr.y - prev.y) * alpha;
+      if (Math.abs(curr.x - prev.x) > WS * 0.5) ix = curr.x;
+      if (Math.abs(curr.y - prev.y) > WS * 0.5) iy = curr.y;
+      const sx = toScreenX(ix);
+      const sy = toScreenY(iy);
+      if (sx < -20 || sx > w + 20 || sy < -20 || sy > h + 20) continue;
+
+      const speed = Math.hypot(curr.vx, curr.vy);
+      const arrowLen = Math.max(12, speed * 22 * zoom);
+      const angle = Math.atan2(curr.vy, curr.vx);
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + Math.cos(angle) * arrowLen, sy + Math.sin(angle) * arrowLen);
+    }
+    ctx.stroke();
+
+    // 2. High-Detail Telemetry Tags & Sensory Bubbles (LOD: closest 25 to viewport center)
+    const centerX = w * 0.5;
+    const centerY = h * 0.5;
+    const candidates = [];
+
+    for (let i = 0; i < organisms.length; i++) {
+      const curr = organisms[i];
+      const prev = this.prevEntities.get(curr.id) || curr;
+      let ix = prev.x + (curr.x - prev.x) * alpha;
+      let iy = prev.y + (curr.y - prev.y) * alpha;
+      if (Math.abs(curr.x - prev.x) > WS * 0.5) ix = curr.x;
+      if (Math.abs(curr.y - prev.y) > WS * 0.5) iy = curr.y;
+      const sx = toScreenX(ix);
+      const sy = toScreenY(iy);
+      if (sx < -30 || sx > w + 30 || sy < -30 || sy > h + 30) continue;
+
+      const dCenter = Math.hypot(sx - centerX, sy - centerY);
+      candidates.push({ curr, sx, sy, dCenter });
+    }
+
+    // Sort by distance to center
+    candidates.sort((a, b) => a.dCenter - b.dCenter);
+    const detailCount = Math.min(25, candidates.length);
+
+    ctx.font = '9px "JetBrains Mono", monospace';
+
+    for (let k = 0; k < detailCount; k++) {
+      const { curr, sx, sy } = candidates[k];
+      const isHunter = curr.carnivory > 0.4;
+
+      // Sensory Field
       ctx.beginPath();
-      ctx.setLineDash([3, 4]);
+      ctx.setLineDash([2, 3]);
       ctx.arc(sx, sy, curr.size * 3.5 * zoom, 0, Math.PI * 2);
       ctx.strokeStyle = isHunter ? 'rgba(255, 77, 77, 0.35)' : 'rgba(0, 240, 255, 0.25)';
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // B. Velocity Vector with Arrowhead
+      // Telemetry Data Tag Badge
       ctx.setLineDash([]);
-      const arrowLen = Math.max(12, speed * 22 * zoom);
-      const angle = Math.atan2(curr.vy, curr.vx);
-      const endX = sx + Math.cos(angle) * arrowLen;
-      const endY = sy + Math.sin(angle) * arrowLen;
-
-      ctx.strokeStyle = isHunter ? '#ff4d4d' : '#00ffaa';
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      ctx.lineTo(endX, endY);
-      ctx.stroke();
-
-      // Arrowhead
-      const headLen = 6;
-      ctx.fillStyle = isHunter ? '#ff4d4d' : '#00ffaa';
-      ctx.beginPath();
-      ctx.moveTo(endX, endY);
-      ctx.lineTo(
-        endX - headLen * Math.cos(angle - Math.PI / 6),
-        endY - headLen * Math.sin(angle - Math.PI / 6)
-      );
-      ctx.lineTo(
-        endX - headLen * Math.cos(angle + Math.PI / 6),
-        endY - headLen * Math.sin(angle + Math.PI / 6)
-      );
-      ctx.closePath();
-      ctx.fill();
-
-      // C. Telemetry Data Tag Badge
       const tagText = `${isHunter ? '▲' : '●'} Sp.${curr.speciesId || 1} • ${Math.round(curr.energy)}E`;
       const textWidth = ctx.measureText(tagText).width;
       const tagX = sx - textWidth * 0.5;
-      const tagY = sy - curr.size * zoom - 10;
+      const tagY = sy - curr.size * zoom - 8;
 
-      // Background pill
       ctx.fillStyle = 'rgba(6, 12, 26, 0.85)';
-      ctx.fillRect(tagX - 4, tagY - 9, textWidth + 8, 12);
-      ctx.strokeStyle = isHunter ? 'rgba(255, 77, 77, 0.55)' : 'rgba(0, 240, 255, 0.45)';
+      ctx.fillRect(tagX - 3, tagY - 9, textWidth + 6, 12);
+      ctx.strokeStyle = isHunter ? 'rgba(255, 77, 77, 0.5)' : 'rgba(0, 240, 255, 0.4)';
       ctx.lineWidth = 0.8;
-      ctx.strokeRect(tagX - 4, tagY - 9, textWidth + 8, 12);
+      ctx.strokeRect(tagX - 3, tagY - 9, textWidth + 6, 12);
 
-      // Text
       ctx.fillStyle = isHunter ? '#ff8080' : '#80ffcc';
       ctx.fillText(tagText, tagX, tagY);
     }
