@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>AETHEON — The Autocatalytic Ocean</title>
+  <meta name="description" content="A 24/7 autonomous living digital ocean governed by non-equilibrium thermodynamics, continuous evolution, and active-matter emergence.">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=JetBrains+Mono:wght@300;400;500;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="theme-ocean mode-zen">
+  <!-- Fullscreen WebGL2 / Canvas Simulation Surface -->
+  <canvas id="ocean-canvas"></canvas>
+
+  <!-- Background Vignette / Optical Microscope Aperture Overlay -->
+  <div class="microscope-overlay" aria-hidden="true"></div>
+
+  <!-- HUD: Top Header Bar -->
+  <header class="hud-header glass-panel" role="banner">
+    <div class="hud-left">
+      <div class="brand">
+        <span class="brand-symbol">◈</span>
+        <h1 class="brand-title">AETHEON</h1>
+      </div>
+      <div class="live-badge" title="Canonical 24/7 world stream">
+        <span class="live-pulse"></span>
+        <span class="live-text" id="live-indicator">LIVE • DAY 1</span>
+      </div>
+      <div class="stats-counter" id="stats-counter" aria-live="polite">
+        <span class="stat-item"><strong id="stat-organisms">--</strong> <span data-i18n="organisms">organisms</span></span>
+        <span class="stat-sep">•</span>
+        <span class="stat-item"><strong id="stat-species">--</strong> <span data-i18n="species">species</span></span>
+        <span class="stat-sep">•</span>
+        <span class="stat-item"><strong id="stat-generation">--</strong> <span data-i18n="gen">gen</span></span>
+      </div>
+    </div>
+
+    <div class="hud-right">
+      <!-- Visitors Count -->
+      <div class="visitor-counter" id="visitor-counter" title="Connected observers">
+        <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+        <span id="visitor-count">1</span>
+      </div>
+
+      <!-- Mode Toggle: Zen vs Research Lab -->
+      <button class="hud-btn" id="btn-mode-toggle" aria-label="Toggle Lab Mode" title="Toggle Research Lab Mode (R)">
+        <svg class="icon icon-lab" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 2v7.31L4.1 19.33A2 2 0 0 0 5.8 22h12.4a2 2 0 0 0 1.7-2.67L14 9.31V2h-4z"></path>
+          <path d="M8.5 2h7"></path>
+          <path d="M7 16h10"></path>
+        </svg>
+        <span class="btn-label" id="label-mode" data-i18n="mode_lab">Lab</span>
+      </button>
+
+      <!-- Field Codex (Species Encyclopedia & AI Journal) -->
+      <button class="hud-btn" id="btn-codex" aria-label="Open Field Codex" title="Open Field Codex (C)">
+        <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+        </svg>
+        <span class="btn-label" data-i18n="codex_title">Codex</span>
+      </button>
+
+      <!-- Audio Toggle -->
+      <button class="hud-btn" id="btn-audio" aria-label="Toggle Sound" title="Toggle Ambient Audio (M)">
+        <svg class="icon icon-sound-off" id="icon-sound-off" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="1" y1="1" x2="23" y2="23"></line>
+          <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+          <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
+          <line x1="12" y1="19" x2="12" y2="23"></line>
+          <line x1="8" y1="23" x2="16" y2="23"></line>
+        </svg>
+        <svg class="icon icon-sound-on hidden" id="icon-sound-on" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+        </svg>
+        <span class="btn-label" id="label-audio" data-i18n="sound_off">Sound</span>
+      </button>
+
+      <!-- Language Toggle (EN / RU) -->
+      <button class="hud-btn hud-btn-lang" id="btn-lang" aria-label="Switch Language">
+        <span class="lang-flag" id="lang-indicator">RU</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Interactive Onboarding Hint (Auto-fades out) -->
+  <div class="interactive-hint" id="interactive-hint">
+    <div class="hint-pill glass-panel">
+      <span class="hint-icon">✦</span>
+      <span id="hint-text" data-i18n="hint_intro">Tap to drop nutrients • Drag to stir currents • Click any creature to inspect</span>
+    </div>
+  </div>
+
+  <!-- Bottom AI Naturalist Ticker -->
+  <footer class="hud-footer glass-panel" role="contentinfo">
+    <div class="ticker-prefix">
+      <span class="ticker-badge" data-i18n="naturalist_tag">XENOBIOLOGIST</span>
+      <span class="ticker-epoch" id="ticker-epoch">Epoch I: Primordial Genesis</span>
+    </div>
+    <div class="ticker-content" id="ticker-text" aria-live="polite">
+      Observing fluid equilibrium... Resonators are clustering around mineral vents.
+    </div>
+  </footer>
+
+  <!-- Organism Inspector / Bio-Card (Appears when clicking an organism) -->
+  <aside class="bio-inspector glass-panel hidden" id="bio-inspector" aria-label="Organism Scanner">
+    <div class="inspector-header">
+      <div class="inspector-title-wrap">
+        <span class="species-badge-dot" id="bio-badge-dot"></span>
+        <h2 class="species-name" id="bio-species-name">Aethenella luminosa</h2>
+      </div>
+      <button class="close-btn" id="bio-close-btn" aria-label="Close Inspector">&times;</button>
+    </div>
+
+    <div class="inspector-common-name" id="bio-common-name">Luminous Grazer</div>
+    
+    <div class="inspector-vitals">
+      <div class="vital-row">
+        <span class="vital-label" data-i18n="status">Status</span>
+        <span class="vital-val status-pill" id="bio-status">Grazing</span>
+      </div>
+      <div class="vital-row">
+        <span class="vital-label" data-i18n="energy">Energy</span>
+        <div class="energy-bar-wrap">
+          <div class="energy-bar-fill" id="bio-energy-fill" style="width: 75%;"></div>
+          <span class="energy-bar-text" id="bio-energy-text">75%</span>
+        </div>
+      </div>
+      <div class="vital-row">
+        <span class="vital-label" data-i18n="generation">Generation</span>
+        <span class="vital-val" id="bio-generation">#42</span>
+      </div>
+      <div class="vital-row">
+        <span class="vital-label" data-i18n="age">Age</span>
+        <span class="vital-val" id="bio-age">4m 12s</span>
+      </div>
+      <div class="vital-row">
+        <span class="vital-label" data-i18n="diet">Diet & Trophism</span>
+        <span class="vital-val" id="bio-diet">Primary Autotroph</span>
+      </div>
+      <div class="vital-row">
+        <span class="vital-label" data-i18n="offspring">Offspring</span>
+        <span class="vital-val" id="bio-offspring">3 children</span>
+      </div>
+    </div>
+
+    <div class="inspector-actions">
+      <button class="action-btn" id="btn-feed-target" data-i18n="btn_feed">
+        <span class="btn-icon">💧</span> Feed (+Nutrient)
+      </button>
+      <button class="action-btn" id="btn-track-target" data-i18n="btn_track">
+        <span class="btn-icon">🎯</span> Track Cam
+      </button>
+    </div>
+  </aside>
+
+  <!-- Species Codex & AI Journal Modal Dialog -->
+  <dialog class="codex-dialog glass-panel" id="codex-dialog" aria-labelledby="codex-modal-title">
+    <div class="modal-header">
+      <div class="modal-tabs">
+        <button class="tab-btn active" id="tab-species-btn" data-i18n="tab_species">Species Codex</button>
+        <button class="tab-btn" id="tab-journal-btn" data-i18n="tab_journal">Naturalist Journal</button>
+      </div>
+      <button class="close-btn" id="codex-close-btn" aria-label="Close Dialog">&times;</button>
+    </div>
+
+    <!-- Tab 1: Species Encyclopedia -->
+    <div class="modal-body tab-content active" id="tab-species-content">
+      <div class="codex-intro" data-i18n="codex_intro">
+        Continuous catalog of all lineages that have emerged, adapted, or gone extinct since Genesis.
+      </div>
+      <div class="species-grid" id="species-grid">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+
+    <!-- Tab 2: AI Field Journal -->
+    <div class="modal-body tab-content" id="tab-journal-content">
+      <div class="journal-timeline" id="journal-timeline">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Scripts -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
