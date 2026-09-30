@@ -96,8 +96,8 @@ export class InputController {
 
         if (this.pinchStartDist > 10) {
           const scale = currDist / this.pinchStartDist;
-          const minZoom = 0.35;
-          const maxZoom = 3.50;
+          const minZoom = 0.28;
+          const maxZoom = 4.80;
           const newZoom = Math.max(minZoom, Math.min(maxZoom, this.pinchStartZoom * scale));
 
           this.renderer.camera.targetZoom = newZoom;
@@ -162,8 +162,8 @@ export class InputController {
       e.preventDefault();
       const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
       const oldZoom = this.renderer.camera.targetZoom;
-      const minZoom = 0.35;
-      const maxZoom = 3.50;
+      const minZoom = 0.28;
+      const maxZoom = 4.80;
       const newZoom = Math.max(minZoom, Math.min(maxZoom, oldZoom * zoomFactor));
 
       if (Math.abs(newZoom - oldZoom) > 0.001) {

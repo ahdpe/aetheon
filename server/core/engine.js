@@ -4,6 +4,7 @@ import { SpatialHash } from './spatialHash.js';
 import { Organism } from './organism.js';
 import { LineageManager } from './lineage.js';
 import { ColonyManager } from './colonies.js';
+import { ClimateEngine } from './climate.js';
 import { AINaturalist } from '../ai/naturalist.js';
 import { PersistenceManager } from './persistence.js';
 
@@ -17,6 +18,7 @@ export class SimulationEngine {
     this.grid = new ChemicalGrid(CONFIG.GRID_SIZE);
     this.spatialHash = new SpatialHash(CONFIG.WORLD_SIZE, 35.0);
     this.lineage = new LineageManager();
+    this.climate = new ClimateEngine();
     this.naturalist = new AINaturalist(this.lineage);
     this.persistence = new PersistenceManager();
     this.colonies = new ColonyManager();
@@ -99,8 +101,13 @@ export class SimulationEngine {
       }
     }
 
-    // 1. Advance chemical diffusion & vents
-    this.grid.step();
+    // 0.5. Advance planetary climate (thermal breathing, dendritic frost, vent modulation)
+    this.climate.step(this.grid.vents);
+    const effRadius = this.climate.getEffectiveRadius(CONFIG.CHAMBER_RADIUS);
+    const tempFactor = 0.85 + 0.25 * this.climate.temperature;
+
+    // 1. Advance chemical diffusion & vents (modulated by climate vent factors)
+    this.grid.step(this.climate.ventFactors);
 
     // 2. Clear & repopulate spatial hash
     this.spatialHash.clear();
@@ -120,8 +127,8 @@ export class SimulationEngine {
       // Query nearby neighbors for phase coupling & predation
       this.spatialHash.query(org.x, org.y, org.size * 3.5, this.neighborScratch);
       
-      // Step organism physics, metabolism, and food sensing
-      org.step(this.grid, this.neighborScratch, this.nutrientBlooms);
+      // Step organism physics, metabolism, and food sensing (with climate constraints)
+      org.step(this.grid, this.neighborScratch, this.nutrientBlooms, effRadius, tempFactor);
 
       // Predation checks (carnivores attack smaller neighbors)
       // Predation checks (carnivores attack neighbors)
@@ -179,8 +186,11 @@ export class SimulationEngine {
             y: child.y,
             speciesId: child.speciesId
           });
-          // Multicellular bonding: if parent has high adhesion, child stays attached
-          if (org.genome.adhesion > 0.6) {
+          // Multicellular bonding: if parent has high adhesion or collective phase-coupling, child stays attached
+          const adhesion = org.genome.adhesion ?? 0.35;
+          const coupling = org.genome.phaseCoupling ?? 0.4;
+          const bondingAffinity = adhesion + coupling * 0.3;
+          if (bondingAffinity > 0.48 && org.carnivory < 0.45) {
             this.colonies.formBond(org, child);
           }
         }
@@ -352,7 +362,8 @@ export class SimulationEngine {
       topPredatorNameRu: apexHunterSpecies ? (apexHunterSpecies.nameRu || apexHunterSpecies.nameLa) : null,
       topPredatorNameEn: apexHunterSpecies ? (apexHunterSpecies.nameEn || apexHunterSpecies.nameLa) : null,
       reefCoverage: this.grid.getReefCoverage ? this.grid.getReefCoverage() : 0,
-      ...this.colonies.getStats()
+      ...this.colonies.getStats(),
+      ...this.climate.getStats()
     };
   }
 
@@ -401,7 +412,8 @@ export class SimulationEngine {
         r: Math.round(b.radius),
         e: Math.round(b.energy)
       })),
-      colonies: this.colonies.getBondPairs()
+      colonies: this.colonies.getBondPairs(),
+      climate: this.climate.getBroadcastState()
     };
   }
 }

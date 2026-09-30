@@ -44,7 +44,8 @@ export class PersistenceManager {
         speciesList: engine.lineage.getAllSpecies(),
         journalEntries: engine.naturalist.journalEntries,
         substrateBase64: (engine.grid && engine.grid.substrate) ? Buffer.from(engine.grid.substrate.buffer).toString('base64') : null,
-        colonyData: engine.colonies ? engine.colonies.getSerializableData() : []
+        colonyData: engine.colonies ? engine.colonies.getSerializableData() : [],
+        climate: engine.climate ? engine.climate.toJSON() : null
       };
 
       const tempPath = `${this.filePath}.tmp`;
@@ -71,6 +72,7 @@ export class PersistenceManager {
       if (data.currentEpoch) engine.naturalist.currentEpoch = data.currentEpoch;
       if (data.epochNameEn) engine.naturalist.epochNameEn = data.epochNameEn;
       if (data.epochNameRu) engine.naturalist.epochNameRu = data.epochNameRu;
+      if (data.climate && engine.climate) engine.climate.fromJSON(data.climate);
 
       if (data.speciesList && Array.isArray(data.speciesList)) {
         engine.lineage.speciesMap.clear();

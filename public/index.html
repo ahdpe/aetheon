@@ -93,6 +93,8 @@
       <span class="lab-metric">⚖️ <span data-i18n="trophic_balance">Trophic</span>: <strong id="lab-trophic-ratio">85% Grazers / 15% Hunters</strong></span>
       <span class="lab-sep">•</span>
       <span class="lab-metric">🧬 <span data-i18n="diversity_index">Shannon H'</span>: <strong id="lab-shannon-h">2.41</strong></span>
+      <span class="lab-sep">•</span>
+      <span class="lab-metric" id="lab-climate-metric">🌡️ <span data-i18n="climate_metric">Climate</span>: <strong id="lab-climate-text">29.4°C • TEMPERATE</strong></span>
     </div>
     <div class="lab-legend">
       <span class="legend-item"><span class="legend-dot green"></span> <span data-i18n="legend_grazer">Grazer Thrust</span></span>
@@ -267,6 +269,7 @@
       <div class="modal-tabs">
         <button class="tab-btn active" id="tab-about-overview-btn" data-i18n="about_tab_overview">Concept & Controls</button>
         <button class="tab-btn" id="tab-about-math-btn" data-i18n="about_tab_math">Mathematical Model (Full)</button>
+        <button class="tab-btn" id="tab-about-roadmap-btn" data-i18n="about_tab_roadmap">Эволюция и Будущее</button>
       </div>
       <button class="close-btn" id="about-close-btn" aria-label="Close Dialog">&times;</button>
     </div>
@@ -278,6 +281,11 @@
 
     <!-- Tab 2: Deep dive mathematical model -->
     <div class="modal-body tab-content" id="tab-about-math-content">
+      <!-- Rendered dynamically -->
+    </div>
+
+    <!-- Tab 3: Emergence Roadmap & Planetary Evolution -->
+    <div class="modal-body tab-content" id="tab-about-roadmap-content">
       <!-- Rendered dynamically -->
     </div>
   </dialog>

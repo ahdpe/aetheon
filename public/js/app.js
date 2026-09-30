@@ -277,6 +277,20 @@ class AetheonApp {
     if (shannonEl) {
       shannonEl.textContent = shannon.toFixed(2);
     }
+
+    const climateEl = document.getElementById('lab-climate-text');
+    if (climateEl && this.renderer.climate) {
+      const c = this.renderer.climate;
+      let seasonName = c.season.toUpperCase();
+      if (isRu) {
+        if (c.season === 'glacial') seasonName = 'ЛЕДНИК';
+        else if (c.season === 'hydrothermal_surge') seasonName = 'ТЕРМАЛЬНЫЙ ВСПЛЕСК';
+        else seasonName = 'ОПТИМУМ';
+      }
+      const frostInfo = c.frost > 1 ? ` • ${isRu ? 'ЛЕД' : 'ICE'} +${Math.round(c.frost)}μm` : '';
+      climateEl.textContent = `${c.tempC}°C • ${seasonName}${frostInfo}`;
+      climateEl.style.color = c.season === 'glacial' ? '#93c5fd' : (c.season === 'hydrothermal_surge' ? '#fdba74' : '#bef264');
+    }
   }
 
   // Outbound socket messages

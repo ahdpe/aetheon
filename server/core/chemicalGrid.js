@@ -9,11 +9,13 @@ export class ChemicalGrid {
     this.nutrients = new Float32Array(this.cellCount);
     this.waste = new Float32Array(this.cellCount);
     this.signal = new Float32Array(this.cellCount);
+    this.substrate = new Float32Array(this.cellCount); // Bio-calcite mineral reefs (Stigmergy)
     
     // Scratch buffers for double-buffering diffusion
     this.nextNutrients = new Float32Array(this.cellCount);
     this.nextWaste = new Float32Array(this.cellCount);
     this.nextSignal = new Float32Array(this.cellCount);
+    this.nextSubstrate = new Float32Array(this.cellCount);
     
     // Fixed hydrothermal vents (mineral/energy sources)
     this.vents = [];
@@ -50,11 +52,12 @@ export class ChemicalGrid {
       this.nutrients[i] = 0.15 + Math.random() * 0.1;
       this.waste[i] = 0.0;
       this.signal[i] = 0.0;
+      this.substrate[i] = 0.0;
     }
   }
 
   // 10 Hz step: 2D Laplacian diffusion with reflective zero-flux boundaries + active hydrothermal recharge
-  step() {
+  step(ventFactors = null) {
     const N = this.size;
     const diffN = CONFIG.DIFFUSION_RATE_NUTRIENT;
     const diffW = CONFIG.DIFFUSION_RATE_WASTE;
@@ -67,9 +70,11 @@ export class ChemicalGrid {
     const nut = this.nutrients;
     const wst = this.waste;
     const sig = this.signal;
+    const sub = this.substrate;
     const nextNut = this.nextNutrients;
     const nextWst = this.nextWaste;
     const nextSig = this.nextSignal;
+    const nextSub = this.nextSubstrate;
 
     // Vectorized 2D stencil with zero-flux Neumann reflective boundaries
     for (let y = 0; y < N; y++) {
@@ -82,15 +87,20 @@ export class ChemicalGrid {
         const xp1 = Math.min(N - 1, x + 1);
         const idx = y0 + x;
 
+        // Impede fluid diffusion through dense bio-calcite reefs
+        const reefImpede = Math.max(0.12, 1.0 - sub[idx] * 0.88);
+        const effDiffN = diffN * reefImpede;
+        const effDiffW = diffW * reefImpede;
+
         // Nutrients diffusion + steady ambient chemosynthetic replenishment
         const avgN = (nut[ym1 + x] + nut[yp1 + x] + nut[y0 + xm1] + nut[y0 + xp1]) * 0.25;
-        let nVal = (nut[idx] + diffN * (avgN - nut[idx])) * decayN + 0.004;
+        let nVal = (nut[idx] + effDiffN * (avgN - nut[idx])) * decayN + 0.004;
         if (nVal > 2.0) nVal = 2.0;
         nextNut[idx] = nVal;
 
         // Waste diffusion
         const avgW = (wst[ym1 + x] + wst[yp1 + x] + wst[y0 + xm1] + wst[y0 + xp1]) * 0.25;
-        let wVal = (wst[idx] + diffW * (avgW - wst[idx])) * decayW;
+        let wVal = (wst[idx] + effDiffW * (avgW - wst[idx])) * decayW;
         if (wVal < 0.0001) wVal = 0;
         else if (wVal > 2.0) wVal = 2.0;
         nextWst[idx] = wVal;
@@ -101,6 +111,13 @@ export class ChemicalGrid {
         if (sVal < 0.0001) sVal = 0;
         else if (sVal > 2.0) sVal = 2.0;
         nextSig[idx] = sVal;
+
+        // Substrate: gentle Laplacian smoothing for organic contours + ultra-slow erosion
+        const avgSub = (sub[ym1 + x] + sub[yp1 + x] + sub[y0 + xm1] + sub[y0 + xp1]) * 0.25;
+        let subVal = (sub[idx] + 0.002 * (avgSub - sub[idx])) * 0.99998;
+        if (subVal < 0.002) subVal = 0.0;
+        else if (subVal > 1.0) subVal = 1.0;
+        nextSub[idx] = subVal;
       }
     }
 
@@ -108,12 +125,14 @@ export class ChemicalGrid {
     this.nutrients.set(nextNut);
     this.waste.set(nextWst);
     this.signal.set(nextSig);
+    this.substrate.set(nextSub);
 
-    // Thermal vents continuous nutrient injection
+    // Thermal vents continuous nutrient injection (modulated by climate vent factors)
     for (let v = 0; v < this.vents.length; v++) {
       const vent = this.vents[v];
       const r = vent.radius;
-      const pow = vent.power * 0.2;
+      const vFactor = (ventFactors && ventFactors[v] !== undefined) ? ventFactors[v] : 1.0;
+      const pow = vent.power * 0.2 * vFactor;
       
       const minY = Math.max(0, vent.y - r);
       const maxY = Math.min(N - 1, vent.y + r);
@@ -285,10 +304,87 @@ export class ChemicalGrid {
     }
   }
 
-  // Compress chemical field into a 48x48/64x64 Uint8Array thumbnail for ultra-lean WebSocket broadcast
+  // Deposit bio-calcite mineral into substrate (Stigmergy / Reef building)
+  depositSubstrate(wx, wy, amount = 0.05, radius = 12) {
+    const scale = this.size / CONFIG.WORLD_SIZE;
+    const gridR = Math.max(2, Math.ceil(radius * scale));
+    const { ix: cx, iy: cy } = this.worldToGrid(wx, wy);
+    const N = this.size;
+
+    const minY = Math.max(0, cy - gridR);
+    const maxY = Math.min(N - 1, cy + gridR);
+    const minX = Math.max(0, cx - gridR);
+    const maxX = Math.min(N - 1, cx + gridR);
+
+    for (let y = minY; y <= maxY; y++) {
+      const dy = y - cy;
+      const row = y * N;
+      for (let x = minX; x <= maxX; x++) {
+        const dx = x - cx;
+        const dist2 = dx * dx + dy * dy;
+        if (dist2 <= gridR * gridR) {
+          const factor = Math.exp(-dist2 / (gridR * 1.1));
+          const idx = row + x;
+          this.substrate[idx] = Math.min(1.0, this.substrate[idx] + amount * factor);
+        }
+      }
+    }
+  }
+
+  // Sample continuous substrate density at world coordinates [0, WORLD_SIZE)
+  getSubstrate(wx, wy) {
+    const scale = this.size / CONFIG.WORLD_SIZE;
+    const gx = wx * scale;
+    const gy = wy * scale;
+
+    const x0 = Math.max(0, Math.min(this.size - 2, Math.floor(gx)));
+    const y0 = Math.max(0, Math.min(this.size - 2, Math.floor(gy)));
+    const fx = gx - x0;
+    const fy = gy - y0;
+
+    const N = this.size;
+    const i00 = y0 * N + x0;
+    const i10 = i00 + 1;
+    const i01 = (y0 + 1) * N + x0;
+    const i11 = i01 + 1;
+
+    const sub = this.substrate;
+    return (
+      sub[i00] * (1 - fx) * (1 - fy) +
+      sub[i10] * fx * (1 - fy) +
+      sub[i01] * (1 - fx) * fy +
+      sub[i11] * fx * fy
+    );
+  }
+
+  // Substrate gradient vector for physical deflection of organisms from reefs
+  getSubstrateGradient(wx, wy) {
+    const scale = this.size / CONFIG.WORLD_SIZE;
+    const gx = wx * scale;
+    const gy = wy * scale;
+    const x = Math.max(1, Math.min(this.size - 2, Math.round(gx)));
+    const y = Math.max(1, Math.min(this.size - 2, Math.round(gy)));
+    const N = this.size;
+    const sub = this.substrate;
+
+    const dx = (sub[y * N + (x + 1)] - sub[y * N + (x - 1)]) * 0.5;
+    const dy = (sub[(y + 1) * N + x] - sub[(y - 1) * N + x]) * 0.5;
+    return { dx, dy };
+  }
+
+  // Metric for ecological reports: percentage of manifold covered by reefs (>0.25 density)
+  getReefCoverage() {
+    let reefCells = 0;
+    for (let i = 0; i < this.cellCount; i++) {
+      if (this.substrate[i] > 0.25) reefCells++;
+    }
+    return Math.round((reefCells / this.cellCount) * 1000) / 10;
+  }
+
+  // Compress chemical field into a 48x48/64x64 Uint8Array thumbnail (RGBA: nut, waste, signal, substrate)
   getThumbnail(targetSize = 48) {
     const step = this.size / targetSize;
-    const out = new Uint8Array(targetSize * targetSize * 3); // R: nutrient, G: waste, B: signal
+    const out = new Uint8Array(targetSize * targetSize * 4); // R: nutrient, G: waste, B: signal, A: substrate
     let ptr = 0;
     
     const thumbCenter = targetSize * 0.5;
@@ -312,6 +408,7 @@ export class ChemicalGrid {
         out[ptr++] = Math.min(255, Math.floor(this.nutrients[idx] * 128 * mask));
         out[ptr++] = Math.min(255, Math.floor(this.waste[idx] * 128 * mask));
         out[ptr++] = Math.min(255, Math.floor(this.signal[idx] * 128 * mask));
+        out[ptr++] = Math.min(255, Math.floor(this.substrate[idx] * 255 * mask));
       }
     }
     return out;

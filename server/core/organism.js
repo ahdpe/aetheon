@@ -87,7 +87,7 @@ export class Organism {
   }
 
   // Step 10 Hz physics, chemistry, Kuramoto oscillator, and metabolism
-  step(grid, nearbyNeighbors, nutrientBlooms = []) {
+  step(grid, nearbyNeighbors, nutrientBlooms = [], effectiveRadius = null, tempFactor = 1.0) {
     this.age++;
 
     // 1. Advance Kuramoto phase oscillator
@@ -212,8 +212,8 @@ export class Organism {
     // Option 1: Soft Surface Tension & Inward Chamber Steering
     const CX = CONFIG.CHAMBER_CENTER_X;
     const CY = CONFIG.CHAMBER_CENTER_Y;
-    const R = CONFIG.CHAMBER_RADIUS;
-    const margin = CONFIG.SURFACE_TENSION_MARGIN;
+    const R = effectiveRadius || CONFIG.CHAMBER_RADIUS;
+    const margin = Math.min(CONFIG.SURFACE_TENSION_MARGIN, R * 0.22);
 
     const toCenterX = this.x - CX;
     const toCenterY = this.y - CY;
@@ -255,8 +255,8 @@ export class Organism {
     const ciliaryPulse = 0.5 + 0.5 * Math.sin(this.phase);
     const speedMultiplier = 0.7 + 0.5 * ciliaryPulse;
 
-    const targetVx = Math.cos(this.heading) * this.maxSpeed * speedMultiplier;
-    const targetVy = Math.sin(this.heading) * this.maxSpeed * speedMultiplier;
+    const targetVx = Math.cos(this.heading) * this.maxSpeed * speedMultiplier * tempFactor;
+    const targetVy = Math.sin(this.heading) * this.maxSpeed * speedMultiplier * tempFactor;
 
     this.vx += (targetVx - this.vx) * 0.2;
     this.vy += (targetVy - this.vy) * 0.2;

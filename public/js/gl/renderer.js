@@ -37,6 +37,7 @@ export class OceanRenderer {
     this.foodParticles = [];
     this.serverBlooms = [];
     this.colonyBonds = [];
+    this.climate = null;
     this.vents = [];
     this.isLabMode = false;
 
@@ -200,6 +201,10 @@ export class OceanRenderer {
       this.colonyBonds = packet.colonies;
     }
 
+    if (packet.climate) {
+      this.climate = packet.climate;
+    }
+
     if (packet.thumbnail) {
       this.updateThumbnail(packet.thumbnail);
     }
@@ -268,18 +273,19 @@ export class OceanRenderer {
     }
     ctx.restore();
 
-    // 4. Render Hydrothermal Vents
+    // 4. Render Hydrothermal Vents (Modulated by Planetary Climate)
     const ventScale = this.worldSize / 128;
     for (let i = 0; i < this.vents.length; i++) {
       const vent = this.vents[i];
+      const vFactor = (this.climate && this.climate.vents && this.climate.vents[i]) ? this.climate.vents[i] : 1.0;
       const vx = toScreenX(vent.x * ventScale);
       const vy = toScreenY(vent.y * ventScale);
-      const vr = vent.radius * ventScale * camZoom * 1.5;
+      const vr = vent.radius * ventScale * camZoom * 1.5 * Math.sqrt(vFactor);
 
       const grad = ctx.createRadialGradient(vx, vy, 0, vx, vy, vr * 2);
       const hDeg = Math.round(vent.hue * 360);
-      grad.addColorStop(0, `hsla(${hDeg}, 90%, 65%, 0.35)`);
-      grad.addColorStop(0.5, `hsla(${hDeg}, 80%, 45%, 0.12)`);
+      grad.addColorStop(0, `hsla(${hDeg}, 90%, 65%, ${(0.35 * Math.min(1.5, vFactor)).toFixed(2)})`);
+      grad.addColorStop(0.5, `hsla(${hDeg}, 80%, 45%, ${(0.12 * Math.min(1.5, vFactor)).toFixed(2)})`);
       grad.addColorStop(1, 'transparent');
 
       ctx.fillStyle = grad;
@@ -287,8 +293,18 @@ export class OceanRenderer {
       ctx.arc(vx, vy, vr * 2, 0, Math.PI * 2);
       ctx.fill();
 
+      // Convective thermal shimmer wave for surging vents
+      if (vFactor > 1.05) {
+        const pulseR = vr * (1.2 + 0.35 * Math.sin(time * 0.005 + i));
+        ctx.strokeStyle = `hsla(${hDeg}, 95%, 75%, ${(0.22 * Math.min(1.0, vFactor - 1.0)).toFixed(2)})`;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(vx, vy, pulseR, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
       // Vent core orifice
-      ctx.fillStyle = `hsla(${hDeg}, 95%, 75%, 0.8)`;
+      ctx.fillStyle = `hsla(${hDeg}, 95%, 75%, ${(0.80 * Math.min(1.2, vFactor)).toFixed(2)})`;
       ctx.beginPath();
       ctx.arc(vx, vy, Math.max(3, vr * 0.25), 0, Math.PI * 2);
       ctx.fill();
@@ -431,6 +447,17 @@ export class OceanRenderer {
 
     drawCellMembranePath(ctx, morph.shape, rx, ry, time, org.id);
     ctx.fill();
+
+    // E.1. Nomarski DIC (Differential Interference Contrast) Optical Relief
+    const dicGrad = ctx.createLinearGradient(-rx * 0.75, -ry * 0.75, rx * 0.75, ry * 0.75);
+    dicGrad.addColorStop(0, 'rgba(255, 255, 255, 0.28)'); // Upper-left refractive highlight
+    dicGrad.addColorStop(0.38, 'transparent');
+    dicGrad.addColorStop(0.68, 'transparent');
+    dicGrad.addColorStop(1, 'rgba(0, 0, 0, 0.35)');       // Lower-right differential shadow
+    ctx.fillStyle = dicGrad;
+    drawCellMembranePath(ctx, morph.shape, rx, ry, time, org.id);
+    ctx.fill();
+
     ctx.stroke();
 
     // F. Predatory Rostrum & Mandibles (If Apex Hunter)
@@ -828,6 +855,91 @@ export class OceanRenderer {
     ctx.lineWidth = 1;
     ctx.stroke();
 
+    // 5. Dendritic Frost Crystals during Glacial Periods (Phase 3)
+    if (this.climate && this.climate.frost > 0.5) {
+      this.drawDendriticFrost(ctx, cx, cy, cr, zoom, this.climate.frost);
+    }
+
+    ctx.restore();
+  }
+
+  // Dendritic ice crystallization growing inward from the meniscus during glacial cooling
+  drawDendriticFrost(ctx, cx, cy, cr, zoom, frost) {
+    if (frost <= 0.5) return;
+
+    ctx.save();
+    const frostPix = frost * zoom;
+    const spineCount = 64;
+    const now = performance.now();
+
+    // 1. Soft glacial ice-shelf halo ring
+    const innerHaloR = Math.max(0, cr - frostPix * 1.15);
+    const iceGrad = ctx.createRadialGradient(cx, cy, innerHaloR, cx, cy, cr);
+    iceGrad.addColorStop(0, 'rgba(180, 240, 255, 0.0)');
+    iceGrad.addColorStop(0.45, 'rgba(180, 245, 255, 0.14)');
+    iceGrad.addColorStop(0.85, 'rgba(215, 250, 255, 0.36)');
+    iceGrad.addColorStop(1.0, 'rgba(235, 255, 255, 0.55)');
+    ctx.fillStyle = iceGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+    ctx.arc(cx, cy, innerHaloR, 0, Math.PI * 2, true);
+    ctx.fill();
+
+    // 2. Dendritic branching fractal needles
+    ctx.lineCap = 'round';
+    for (let k = 0; k < spineCount; k++) {
+      const angle = (k / spineCount) * Math.PI * 2;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+
+      // Procedural height noise with harmonic variations
+      const noise = 0.72 + 0.28 * Math.sin(k * 4.3 + 1.1) + 0.14 * Math.sin(k * 8.9 + now * 0.001);
+      const needleLen = frostPix * noise;
+      if (needleLen < 2) continue;
+
+      const baseX = cx + cosA * cr;
+      const baseY = cy + sinA * cr;
+      const tipX = cx + cosA * (cr - needleLen);
+      const tipY = cy + sinA * (cr - needleLen);
+
+      // Shimmering crystalline colors
+      const shimmer = Math.sin(now * 0.003 + k * 1.7) * 0.15;
+      ctx.strokeStyle = `rgba(224, 250, 255, ${(0.65 + shimmer).toFixed(2)})`;
+      ctx.lineWidth = Math.max(1.0, 1.6 * zoom);
+
+      // Main needle
+      ctx.beginPath();
+      ctx.moveTo(baseX, baseY);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+
+      // Diamond-white needle tip
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, Math.max(1.0, 1.4 * zoom), 0, Math.PI * 2);
+      ctx.fill();
+
+      // Lateral secondary branches at ±60° (hexagonal ice crystal lattice)
+      if (needleLen > 12 * zoom) {
+        const branchDist = needleLen * 0.45;
+        const bMidX = cx + cosA * (cr - branchDist);
+        const bMidY = cy + sinA * (cr - branchDist);
+        const bLen = needleLen * 0.32;
+
+        const ang1 = angle + Math.PI - Math.PI / 3;
+        const ang2 = angle + Math.PI + Math.PI / 3;
+
+        ctx.strokeStyle = `rgba(186, 230, 253, ${(0.45 + shimmer).toFixed(2)})`;
+        ctx.lineWidth = Math.max(0.8, 1.1 * zoom);
+
+        ctx.beginPath();
+        ctx.moveTo(bMidX, bMidY);
+        ctx.lineTo(bMidX + Math.cos(ang1) * bLen, bMidY + Math.sin(ang1) * bLen);
+        ctx.moveTo(bMidX, bMidY);
+        ctx.lineTo(bMidX + Math.cos(ang2) * bLen, bMidY + Math.sin(ang2) * bLen);
+        ctx.stroke();
+      }
+    }
     ctx.restore();
   }
 
@@ -941,6 +1053,11 @@ export class OceanRenderer {
       ctx.fillStyle = 'rgba(255, 170, 0, 0.85)';
       ctx.font = '9px "JetBrains Mono", monospace';
       ctx.fillText(`VENT #${v + 1} [82°C]`, vx + vr * 0.5, vy - vr * 1.3);
+    }
+
+    // 6. Dendritic Frost Crystals during Glacial Periods in Lab Mode
+    if (this.climate && this.climate.frost > 0.5) {
+      this.drawDendriticFrost(ctx, cx, cy, cr, zoom, this.climate.frost);
     }
 
     ctx.restore();
