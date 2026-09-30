@@ -394,20 +394,43 @@ export class Organism {
   }
 
   // Full detailed report for the Inspector / Bio-Card
-  getDetailedProfile(speciesName = 'Aetheobiont') {
-    let diet = 'Herbivore / Autotroph';
-    if (this.carnivory > 0.6) diet = 'Apex Carnivore';
-    else if (this.carnivory > 0.3) diet = 'Omnivore';
+  getDetailedProfile(species = null) {
+    const speciesNameLa = species ? (species.nameLa || `Species #${this.speciesId}`) : 'Aetheobiont';
+    const speciesNameRu = species ? (species.nameRu || species.nameLa) : 'Эфиробионт';
+    const speciesNameEn = species ? (species.nameEn || species.nameLa) : 'Aetheobiont';
 
-    let behavior = 'Grazing peacefully';
-    if (this.carnivory > 0.5) behavior = 'Stalking prey';
-    else if (this.energy > this.genome.splitThreshold * 0.85) behavior = 'Preparing for mitosis';
-    else if (this.energy < 25) behavior = 'Starving, seeking nutrients';
+    let dietType = 'grazer';
+    if (this.carnivory > 0.35) {
+      dietType = 'hunter';
+    } else if (this.carnivory < 0.1 && this.size > 7.5) {
+      dietType = 'filter';
+    } else {
+      dietType = 'grazer';
+    }
+
+    let behaviorType = 'grazing';
+    if (this.carnivory > 0.35) {
+      behaviorType = 'hunting';
+    } else if (this.energy > this.genome.splitThreshold * 0.85) {
+      behaviorType = 'mitosis';
+    } else if (this.energy < 30) {
+      behaviorType = 'starving';
+    } else if (dietType === 'filter') {
+      behaviorType = 'filtering';
+    } else {
+      behaviorType = 'grazing';
+    }
 
     return {
       id: this.id,
       speciesId: this.speciesId,
-      speciesName,
+      speciesName: speciesNameLa,
+      speciesNameRu,
+      speciesNameEn,
+      dietType,
+      behaviorType,
+      diet: dietType === 'hunter' ? 'Apex Hunter' : (dietType === 'filter' ? 'Filter Feeder' : 'Grazer'),
+      behavior: behaviorType,
       generation: this.generation,
       parentId: this.parentId,
       ageTicks: this.age,
@@ -415,8 +438,6 @@ export class Organism {
       energy: Math.round(this.energy),
       maxEnergy: CONFIG.MAX_ORGANISM_ENERGY,
       splitThreshold: Math.round(this.genome.splitThreshold),
-      diet,
-      behavior,
       kills: this.kills,
       childrenCount: this.childrenCount,
       size: Math.round(this.size * 10) / 10,

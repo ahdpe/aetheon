@@ -805,7 +805,8 @@ body.mode-lab .interactive-hint {
 
 .inspector-common-name {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--accent-cyan);
+  font-weight: 500;
   margin-top: -6px;
 }
 
@@ -838,9 +839,40 @@ body.mode-lab .interactive-hint {
 .status-pill {
   background: rgba(0, 255, 136, 0.1);
   color: var(--accent-emerald);
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.status-pill.status-hunting {
+  background: rgba(244, 63, 94, 0.2);
+  color: #fb7185;
+  border: 1px solid rgba(244, 63, 94, 0.4);
+}
+
+.status-pill.status-mitosis {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+.status-pill.status-starving {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.status-pill.status-filtering {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.status-pill.status-grazing {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
 }
 
 .energy-bar-wrap {
@@ -1046,10 +1078,17 @@ body.mode-lab .interactive-hint {
 }
 
 .codex-chip.chip-grazer.active {
-  background: rgba(6, 182, 212, 0.25);
-  border-color: #06b6d4;
+  background: rgba(16, 185, 129, 0.25);
+  border-color: #10b981;
   color: #ffffff;
-  box-shadow: 0 0 12px rgba(6, 182, 212, 0.35);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+}
+
+.codex-chip.chip-filter.active {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: #f59e0b;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
 }
 
 .codex-chip.chip-extinct.active {

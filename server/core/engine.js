@@ -346,7 +346,7 @@ export class SimulationEngine {
     const org = this.organisms.find(o => o.id === id);
     if (!org) return null;
     const species = this.lineage.getSpecies(org.speciesId);
-    return org.getDetailedProfile(species ? species.nameLa : 'Aetheobiont');
+    return org.getDetailedProfile(species);
   }
 
   // Pack low-latency 10 Hz broadcast packet for clients

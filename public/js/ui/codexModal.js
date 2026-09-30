@@ -17,6 +17,7 @@ export class CodexModal {
     this.countAlive = document.getElementById('count-alive');
     this.countHunter = document.getElementById('count-hunter');
     this.countGrazer = document.getElementById('count-grazer');
+    this.countFilter = document.getElementById('count-filter');
     this.countExtinct = document.getElementById('count-extinct');
 
     this.currentFilter = 'all';
@@ -120,22 +121,26 @@ export class CodexModal {
 
   updateFilterCounts() {
     if (!this.allSpecies) return;
+    const isFilter = (s) => (s.carnivory <= 0.35 && s.carnivory < 0.1 && (s.size || 6) > 7.5);
     const total = this.allSpecies.length;
     const alive = this.allSpecies.filter(s => s.population > 0 && !s.extinctTime).length;
     const hunter = this.allSpecies.filter(s => s.carnivory > 0.35).length;
-    const grazer = this.allSpecies.filter(s => s.carnivory <= 0.35).length;
+    const filter = this.allSpecies.filter(isFilter).length;
+    const grazer = this.allSpecies.filter(s => s.carnivory <= 0.35 && !isFilter(s)).length;
     const extinct = this.allSpecies.filter(s => s.extinctTime !== null || s.population === 0).length;
 
     if (this.countAll) this.countAll.textContent = total;
     if (this.countAlive) this.countAlive.textContent = alive;
     if (this.countHunter) this.countHunter.textContent = hunter;
     if (this.countGrazer) this.countGrazer.textContent = grazer;
+    if (this.countFilter) this.countFilter.textContent = filter;
     if (this.countExtinct) this.countExtinct.textContent = extinct;
   }
 
   applyFilterAndRender() {
     if (!this.speciesGrid || !this.allSpecies) return;
     const isRu = i18n.getLang() === 'ru';
+    const isFilterSp = (s) => (s.carnivory <= 0.35 && s.carnivory < 0.1 && (s.size || 6) > 7.5);
 
     // 1. Filter by category
     let list = this.allSpecies;
@@ -144,7 +149,9 @@ export class CodexModal {
     } else if (this.currentFilter === 'hunter') {
       list = list.filter(s => s.carnivory > 0.35);
     } else if (this.currentFilter === 'grazer') {
-      list = list.filter(s => s.carnivory <= 0.35);
+      list = list.filter(s => s.carnivory <= 0.35 && !isFilterSp(s));
+    } else if (this.currentFilter === 'filter') {
+      list = list.filter(isFilterSp);
     } else if (this.currentFilter === 'extinct') {
       list = list.filter(s => s.extinctTime !== null || s.population === 0);
     }

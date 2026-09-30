@@ -57,6 +57,7 @@ export const DICTIONARY = {
     filter_alive: 'Alive in Droplet',
     filter_hunter: 'Apex Hunters',
     filter_grazer: 'Grazers',
+    filter_filter: 'Filter Feeders',
     filter_extinct: 'Extinct',
     search_placeholder: 'Search species by name...',
     no_species_found: 'No species found matching this filter.'
@@ -118,7 +119,8 @@ export const DICTIONARY = {
     filter_all: 'Все виды',
     filter_alive: 'В чаше сейчас',
     filter_hunter: 'Хищники',
-    filter_grazer: 'Травоядные',
+    filter_grazer: 'Пастбищники',
+    filter_filter: 'Фильтраторы',
     filter_extinct: 'Вымершие',
     search_placeholder: 'Поиск вида по имени...',
     no_species_found: 'Видов по выбранному фильтру не найдено.'
