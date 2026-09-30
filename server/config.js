@@ -7,15 +7,27 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+function resolveVeniceUrl() {
+  if (process.env.VENICE_API_URL && process.env.VENICE_API_URL.trim()) {
+    const url = process.env.VENICE_API_URL.trim();
+    return url.endsWith('/chat/completions') ? url : `${url.replace(/\/+$/, '')}/chat/completions`;
+  }
+  if (process.env.VENICE_BASE_URL && process.env.VENICE_BASE_URL.trim()) {
+    const base = process.env.VENICE_BASE_URL.trim().replace(/\/+$/, '');
+    return `${base}/chat/completions`;
+  }
+  return 'https://api.venice.ai/api/v1/chat/completions';
+}
+
 export const CONFIG = {
   PORT: parseInt(process.env.PORT || '3000', 10),
   HOST: process.env.HOST || '0.0.0.0',
   
   // AI Observer
   VENICE_API_KEY: process.env.VENICE_API_KEY || '',
-  VENICE_API_URL: process.env.VENICE_API_URL || 'https://api.venice.ai/api/v1/chat/completions',
+  VENICE_API_URL: resolveVeniceUrl(),
   VENICE_MODEL: process.env.VENICE_MODEL || 'llama-3.3-70b',
-  AI_OBSERVER_INTERVAL_MS: (parseInt(process.env.AI_OBSERVER_INTERVAL_MIN || '25', 10)) * 60 * 1000,
+  AI_OBSERVER_INTERVAL_MS: (parseInt(process.env.AI_OBSERVER_INTERVAL_MIN || '20', 10)) * 60 * 1000,
   
   // Simulation Constants
   TICK_RATE_HZ: parseInt(process.env.TICK_RATE_HZ || '10', 10),

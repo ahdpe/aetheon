@@ -25,7 +25,18 @@ const MIME_TYPES = {
 
 // Create zero-dependency lightweight HTTP server
 const server = http.createServer((req, res) => {
-  let reqPath = req.url.split('?')[0];
+  const rawUrl = req.url.split('?')[0];
+  if (rawUrl === '/aetheon') {
+    res.writeHead(301, { Location: '/aetheon/' });
+    res.end();
+    return;
+  }
+
+  let reqPath = rawUrl;
+  // Support both root "/" and subpath "/aetheon" reverse proxies
+  if (reqPath.startsWith('/aetheon')) {
+    reqPath = reqPath.slice('/aetheon'.length);
+  }
   if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
   console.log('[HTTP]', req.method, reqPath);
 

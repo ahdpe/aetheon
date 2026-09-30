@@ -140,8 +140,58 @@ async function run() {
   await page.keyboard.press('Escape');
   await new Promise(r => setTimeout(r, 300));
 
-  const isClosed = await page.evaluate(() => !document.getElementById('about-dialog')?.hasAttribute('open'));
-  console.log('[Browser Test] About Modal closed successfully:', isClosed);
+  // Test Codex Modal (Journal timeline & Species)
+  console.log('[Browser Test] Clicking Codex button (#btn-codex)...');
+  await page.click('#btn-codex');
+  await new Promise(r => setTimeout(r, 600));
+
+  console.log('[Browser Test] Switching to Journal tab (#tab-journal-btn)...');
+  await page.click('#tab-journal-btn');
+  await new Promise(r => setTimeout(r, 600));
+
+  const codexStatus = await page.evaluate(() => {
+    const dialog = document.getElementById('codex-dialog');
+    const journalTab = document.getElementById('tab-journal-content');
+    const cards = journalTab?.querySelectorAll('.journal-card')?.length || 0;
+    const insights = journalTab?.querySelectorAll('.journal-insight-box')?.length || 0;
+    const badges = journalTab?.querySelectorAll('.journal-badge')?.length || 0;
+    return {
+      isOpen: dialog?.hasAttribute('open'),
+      cardCount: cards,
+      insightCount: insights,
+      badgeCount: badges
+    };
+  });
+  console.log('[Browser Test] Codex Journal Status:', codexStatus);
+
+  await page.screenshot({ path: 'screenshot_journal_test.png' });
+  console.log('[Browser Test] Saved screenshot_journal_test.png');
+
+  // Close Codex Modal
+  console.log('[Browser Test] Closing Codex modal...');
+  await page.keyboard.press('Escape');
+  await new Promise(r => setTimeout(r, 300));
+
+  // Re-open About modal and take screenshot of AI Architecture card
+  console.log('[Browser Test] Opening About modal for verification...');
+  await page.click('#btn-about');
+  await new Promise(r => setTimeout(r, 400));
+  await page.screenshot({ path: 'screenshot_about_overview.png' });
+  console.log('[Browser Test] Saved screenshot_about_overview.png');
+
+  // Switch to Math tab and take screenshot of Section 08
+  await page.click('#tab-about-math-btn');
+  await new Promise(r => setTimeout(r, 400));
+  await page.evaluate(() => {
+    const mathContent = document.getElementById('tab-about-math-content');
+    if (mathContent) mathContent.scrollTop = mathContent.scrollHeight;
+  });
+  await new Promise(r => setTimeout(r, 300));
+  await page.screenshot({ path: 'screenshot_about_math_sec8.png' });
+  console.log('[Browser Test] Saved screenshot_about_math_sec8.png');
+
+  await page.keyboard.press('Escape');
+  await new Promise(r => setTimeout(r, 300));
 
   console.log('[Browser Test] Console messages logged:', consoleMessages.length);
   console.log('[Browser Test] Page errors logged:', pageErrors.length);
@@ -152,7 +202,7 @@ async function run() {
     console.error('[Browser Test] FAILED with page errors:', pageErrors);
     process.exit(1);
   } else {
-    console.log('[Browser Test] SUCCESS!');
+    console.log('[Browser Test] SUCCESS! All tests passed perfectly.');
     process.exit(0);
   }
 }

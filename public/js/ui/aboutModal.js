@@ -118,6 +118,36 @@ export class AboutModal {
           </div>
         </div>
 
+        <div class="ai-architecture-card">
+          <div class="ai-card-badge">ДВУХУРОВНЕВЫЙ ИСКУССТВЕННЫЙ ИНТЕЛЛЕКТ</div>
+          <h3 class="ai-card-title">Как взаимодействуют два уровня интеллекта в Aetheon</h3>
+          <div class="ai-layers-container">
+            <div class="ai-layer-box swarm">
+              <span class="ai-layer-tag">Уровень 1 • Микромир</span>
+              <div class="ai-layer-name">Роевой ИИ и Эволюционная био-кибернетика (ALife)</div>
+              <p class="ai-layer-desc">
+                Сотни существ живут в реальном физическом времени на сервере. Каждый организм обладает <strong>12-мерным геномом</strong> и автономно принимает решения: 
+                рассчитывает градиенты диффузии (хемотаксис Келлера-Сегеля), избегает токсичных зон, синхронизирует реснички в стаях (модель Курамото) и охотится. 
+                Здесь нет единого кукловода — сложное коллективное поведение рождается спонтанно из локальных законов физики и мутаций Коши.
+              </p>
+            </div>
+            <div class="ai-layer-box cognitive">
+              <span class="ai-layer-tag">Уровень 2 • Макромир</span>
+              <div class="ai-layer-name">Когнитивный Мета-Наблюдатель (LLM Xenobiologist via Venice AI)</div>
+              <p class="ai-layer-desc">
+                Большая нейросетевая языковая модель (LLM) выступает в роли внешнего ученого-естествоиспытателя. Она считывает телеметрию биосферы 
+                первого уровня (рождаемость, генетическую кластеризацию, фазы вымирания и видообразования). ИИ классифицирует новые виды, дает им латинские 
+                биноминальные имена (например, <em>Vibrionox velox</em>) и пишет захватывающие научно-популярные очерки для журнала наблюдений.
+              </p>
+            </div>
+          </div>
+          <div class="ai-bridge-box">
+            <strong>🔗 Био-кибернетический мост:</strong> Уровень 1 непрерывно создает физическую реальность капли, а Уровень 2 сжимает потоки 
+            числовых матриц в осмысленные концепции, таксономическое древо и понятные человеку истории. Вмешательство зрителя (сброс спор фитоманны или возмущение течений) 
+            изменяет баланс на Уровне 1, что немедленно осмысливается и протоколируется Уровнем 2.
+          </div>
+        </div>
+
         <div class="how-it-works-box">
           <h3 class="section-title">Как взаимодействовать с миром:</h3>
           <div class="controls-list">
@@ -190,6 +220,36 @@ export class AboutModal {
             <p class="feature-desc">
               Peaceful grazers absorb ambient nutrients, while apex hunters stalk prey. Kleiber scaling and metabolic dissipation prevent runaway overpopulation.
             </p>
+          </div>
+        </div>
+
+        <div class="ai-architecture-card">
+          <div class="ai-card-badge">DUAL-LAYER ARTIFICIAL INTELLIGENCE</div>
+          <h3 class="ai-card-title">How Two Interconnected AI Layers Operate in Aetheon</h3>
+          <div class="ai-layers-container">
+            <div class="ai-layer-box swarm">
+              <span class="ai-layer-tag">Layer 1 • Micro-Scale</span>
+              <div class="ai-layer-name">Swarm Intelligence & ALife Evolutionary Dynamics</div>
+              <p class="ai-layer-desc">
+                Hundreds of entities simulated in real-time server physics. Each individual carries a <strong>12D continuous genome</strong> and acts autonomously: 
+                sampling substrate gradients (Keller-Segel chemotaxis), evading toxic wastes, synchronizing cilia through hydrodynamic phase coupling (Kuramoto model), 
+                and hunting prey. There is no central controller — intelligent swarm behaviors emerge organically from local rules and Cauchy mutations.
+              </p>
+            </div>
+            <div class="ai-layer-box cognitive">
+              <span class="ai-layer-tag">Layer 2 • Macro-Scale</span>
+              <div class="ai-layer-name">Cognitive LLM Xenobiologist Observer (via Venice AI)</div>
+              <p class="ai-layer-desc">
+                A high-order neuro-symbolic Large Language Model acts as an external naturalist. It continuously inspects macro-telemetry from Layer 1 
+                (speciation clades, trophic shifts, extinction bottlenecks). The LLM performs taxonomy, assigns formal Latin binomials 
+                (e.g., <em>Vibrionox velox</em>), Russian & English common names, and crafts engaging documentary chronicles with explanatory insights.
+              </p>
+            </div>
+          </div>
+          <div class="ai-bridge-box">
+            <strong>🔗 The Bio-Cybernetic Bridge:</strong> Layer 1 continuously manifests the ground-truth physical reality, while Layer 2 compresses high-dimensional 
+            numeric phase spaces into semantic concepts, taxonomy, and human-readable chronicles. User interaction (dropping phytomanna spores) 
+            disrupts Layer 1, provoking evolutionary adaptations that are synthesized and chronicled by Layer 2.
           </div>
         </div>
 
@@ -474,6 +534,52 @@ export class AboutModal {
             <li><strong>Клиентский рендеринг (60–120 FPS):</strong> Браузер выполняет эрмитову интерполяцию координат между серверными пакетами, обеспечивая безупречную плавность движения.</li>
           </ul>
         </article>
+
+        <!-- 08. Двухуровневая архитектура ИИ -->
+        <article class="math-section">
+          <div class="section-header">
+            <span class="sec-num">08</span>
+            <h3 class="sec-title">Двухуровневая гибридная архитектура ИИ (Hierarchical Neuro-Symbolic ALife)</h3>
+          </div>
+          <p>
+            Архитектура AETHEON объединяет два взаимодополняющих вычислительных уровня искусственного интеллекта: 
+            <strong>низкоуровневый децентрализованный роевой интеллект (Sub-symbolic Swarm ALife)</strong> и 
+            <strong>высокоуровневый когнитивный мета-анализатор (Cognitive LLM Xenobiologist via Venice AI)</strong>.
+          </p>
+          <div class="formula-box">
+            <div class="formula-label">ПРОСТРАНСТВО МИКРО-СОСТОЯНИЙ СИСТЕМЫ (УРОВЕНЬ 1):</div>
+            <div class="math-eq">
+              S(t) = { (<strong>x</strong><sub>i</sub>, <strong>v</strong><sub>i</sub>, <strong>g</strong><sub>i</sub>, E<sub>i</sub>, φ<sub>i</sub>) }<sub>i=1..N(t)</sub> &nbsp; ∈ ℝ<sup>N(t) × 17</sup>
+            </div>
+            <div class="formula-vars">
+              <div>Каждый из N(t) организмов обладает непрерывным 12D-геномом <strong>g</strong><sub>i</sub>, фазой ресничек φ<sub>i</sub>, вектором скорости <strong>v</strong><sub>i</sub> и уровнем энергии E<sub>i</sub>. Эволюция состояний подчинена нелинейным уравнениям механики и хемотаксиса без централизованного планирования.</div>
+            </div>
+          </div>
+          <div class="formula-box">
+            <div class="formula-label">ОПЕРАТОР МАКРО-СЖАТИЯ И ПАРАМЕТРИЗАЦИИ БИОСФЕРЫ:</div>
+            <div class="math-eq">
+              Φ(t) = T(S(t)) = [ N(t), K<sub>species</sub>, H'(t), ⟨E⟩, Σ<sub>gene</sub>, P<sub>trophic</sub> ] &nbsp; ∈ ℝ<sup>D</sup>
+            </div>
+            <div class="formula-vars">
+              <div><strong>H'(t) = − ∑ p<sub>s</sub> ln(p<sub>s</sub>):</strong> Информационная энтропия Шеннона по активным видам.</div>
+              <div><strong>Σ<sub>gene</sub>:</strong> Ковариационная матрица 12-мерных аллелей, определяющая степень генетической дивергенции.</div>
+              <div><strong>P<sub>trophic</sub>:</strong> Баланс биомассы между консументами (автотрофами) и редуцентами/хищниками.</div>
+            </div>
+          </div>
+          <div class="formula-box">
+            <div class="formula-label">ИНФЕРЕНС КОГНИТИВНОГО НАБЛЮДАТЕЛЯ (УРОВЕНЬ 2 - VENICE AI / JEV / LLAMA):</div>
+            <div class="math-eq">
+              F<sub>LLM</sub>( Φ(t) | θ<sub>Venice</sub> ) ⟶ ( T<sub>taxa</sub>, &nbsp; J<sub>narrative</sub>, &nbsp; I<sub>insight</sub> )
+            </div>
+            <div class="formula-vars">
+              <div>Языковая модель принимает вектор сжатых метрик Φ(t), выявляет устойчивые кластеры в фенотипическом пространстве и выполняет семантическую классификацию: генерирует биномиальное наименование (латынь), русское и английское название, художественное описание экологической ниши и практический вывод (Insight) для исследователя.</div>
+            </div>
+          </div>
+          <p>
+            Этот двухтактный цикл реализует <strong>нейро-символический симбиоз</strong>: микродинамика непрерывной физики порождает эмерджентную сложность, 
+            а когнитивный ИИ переводит эту математическую энтропию в язык человеческих смыслов и научных хроник.
+          </p>
+        </article>
       </div>
     `;
   }
@@ -693,7 +799,54 @@ export class AboutModal {
             <li><strong>Client Frame Interpolation (60–120 FPS):</strong> The Canvas renderer computes smooth Hermite spline motion between server ticks.</li>
           </ul>
         </article>
+
+        <!-- 08. Dual-Layer AI Architecture -->
+        <article class="math-section">
+          <div class="section-header">
+            <span class="sec-num">08</span>
+            <h3 class="sec-title">Dual-Layer Hierarchical AI Architecture (Neuro-Symbolic ALife)</h3>
+          </div>
+          <p>
+            AETHEON integrates two complementary computational intelligence layers: 
+            a <strong>low-level decentralized swarm intelligence (Sub-symbolic Swarm ALife)</strong> and 
+            a <strong>high-level cognitive meta-observer (Cognitive LLM Xenobiologist via Venice AI)</strong>.
+          </p>
+          <div class="formula-box">
+            <div class="formula-label">MICRO-SCALE STATE PHASE SPACE (LAYER 1):</div>
+            <div class="math-eq">
+              S(t) = { (<strong>x</strong><sub>i</sub>, <strong>v</strong><sub>i</sub>, <strong>g</strong><sub>i</sub>, E<sub>i</sub>, φ<sub>i</sub>) }<sub>i=1..N(t)</sub> &nbsp; ∈ ℝ<sup>N(t) × 17</sup>
+            </div>
+            <div class="formula-vars">
+              <div>Each of the N(t) organisms evolves under a 12-dimensional continuous genome <strong>g</strong><sub>i</sub>, cilia oscillator phase φ<sub>i</sub>, velocity <strong>v</strong><sub>i</sub>, and internal energy E<sub>i</sub>. Behaviors emerge autonomously via local PDEs without global orchestration.</div>
+            </div>
+          </div>
+          <div class="formula-box">
+            <div class="formula-label">MACRO-SCALE TELEMETRY PROJECTION OPERATOR:</div>
+            <div class="math-eq">
+              Φ(t) = T(S(t)) = [ N(t), K<sub>species</sub>, H'(t), ⟨E⟩, Σ<sub>gene</sub>, P<sub>trophic</sub> ] &nbsp; ∈ ℝ<sup>D</sup>
+            </div>
+            <div class="formula-vars">
+              <div><strong>H'(t) = − ∑ p<sub>s</sub> ln(p<sub>s</sub>):</strong> Shannon diversity index over active genetic clades.</div>
+              <div><strong>Σ<sub>gene</sub>:</strong> Genetic allele covariance matrix quantifying speciation distance.</div>
+              <div><strong>P<sub>trophic</sub>:</strong> Trophic ratio between autotrophic primary producers and apex predators.</div>
+            </div>
+          </div>
+          <div class="formula-box">
+            <div class="formula-label">COGNITIVE INFERENCE MAPPING (LAYER 2 - VENICE AI / JEV / LLAMA):</div>
+            <div class="math-eq">
+              F<sub>LLM</sub>( Φ(t) | θ<sub>Venice</sub> ) ⟶ ( T<sub>taxa</sub>, &nbsp; J<sub>narrative</sub>, &nbsp; I<sub>insight</sub> )
+            </div>
+            <div class="formula-vars">
+              <div>The large language model receives compressed telemetry vector Φ(t), isolates stable phenotypic clusters, and synthesizes semantic taxonomy: formal Latin binomial, vernacular Russian and English names, narrative behavioral chronicle, and ecological insights.</div>
+            </div>
+          </div>
+          <p>
+            This closed-loop system realizes a <strong>neuro-symbolic ALife paradigm</strong>: micro-scale continuous physics yields raw emergent complexity, 
+            while the macro-scale cognitive model translates entropy into structured science and narrative history.
+          </p>
+        </article>
       </div>
     `;
   }
 }
+

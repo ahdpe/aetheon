@@ -95,7 +95,9 @@ class AetheonApp {
       wsUrl = 'ws://localhost:3000';
     } else {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      wsUrl = `${protocol}//${window.location.host}`;
+      let subpath = window.location.pathname.replace(/\/index\.html$/, '');
+      if (!subpath.endsWith('/')) subpath += '/';
+      wsUrl = `${protocol}//${window.location.host}${subpath}`;
     }
 
     console.log(`[Aetheon] Connecting to canonical world stream: ${wsUrl}`);

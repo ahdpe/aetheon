@@ -100,16 +100,43 @@ export class CodexModal {
       this.journalTimeline.innerHTML = '';
       journalEntries.forEach(entry => {
         const item = document.createElement('div');
-        item.className = `journal-item ${entry.type === 'epoch' ? 'epoch' : ''}`;
+        const isEpoch = entry.type === 'epoch';
+        const isSpecies = entry.type === 'species';
+        item.className = `journal-card ${isEpoch ? 'epoch' : ''} ${isSpecies ? 'species' : ''}`;
 
+        const icon = entry.icon || (isEpoch ? '🌅' : (isSpecies ? '🧬' : '📜'));
+        const badge = isRu ? (entry.badgeRu || entry.badgeEn) : (entry.badgeEn || entry.badgeRu);
         const title = isRu ? (entry.titleRu || entry.titleEn) : entry.titleEn;
         const content = isRu ? (entry.contentRu || entry.contentEn) : entry.contentEn;
+        const insight = isRu ? (entry.insightRu || entry.insightEn) : (entry.insightEn || entry.insightRu);
         const timeStr = new Date(entry.timestamp).toLocaleTimeString();
 
+        const badgeHtml = badge ? `<span class="journal-badge">${badge}</span>` : '';
+        const insightHtml = insight ? `
+          <div class="journal-insight-box">
+            <span class="insight-lamp">💡</span>
+            <div class="insight-body">
+              <span class="insight-tag">${isRu ? 'Что это значит:' : 'Why this matters:'}</span>
+              <span class="insight-text">${insight}</span>
+            </div>
+          </div>
+        ` : '';
+
         item.innerHTML = `
-          <div class="journal-title">${title}</div>
-          <div class="journal-content">${content}</div>
-          <div class="journal-time">${timeStr}</div>
+          <div class="journal-card-header">
+            <div class="journal-icon-wrap">
+              <span class="journal-icon">${icon}</span>
+            </div>
+            <div class="journal-header-info">
+              <div class="journal-meta-row">
+                ${badgeHtml}
+                <span class="journal-time">${timeStr}</span>
+              </div>
+              <div class="journal-title">${title}</div>
+            </div>
+          </div>
+          <div class="journal-story">${content}</div>
+          ${insightHtml}
         `;
         this.journalTimeline.appendChild(item);
       });
