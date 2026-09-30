@@ -146,9 +146,21 @@
         <button class="close-btn drawer-close-btn" id="btn-close-journal" aria-label="Close Journal Feed">✕</button>
       </div>
     </div>
+    <div class="drawer-tabs">
+      <button class="drawer-tab-btn active" id="tab-journal-feed-btn">
+        <span class="tab-icon">⚡</span> <span data-i18n="journal_tab_feed">Хроника событий</span>
+      </button>
+      <button class="drawer-tab-btn" id="tab-journal-atlas-btn">
+        <span class="tab-icon">🗺️</span> <span data-i18n="journal_tab_atlas">Ежедневный Атлас Мира</span>
+        <span class="atlas-badge" id="atlas-count-badge">1</span>
+      </button>
+    </div>
     <div class="drawer-body">
       <div class="drawer-timeline" id="drawer-timeline">
         <!-- Live Chronicle Cards rendered dynamically -->
+      </div>
+      <div class="drawer-atlas hidden" id="drawer-atlas">
+        <!-- Daily Illustrated World Atlas entries rendered dynamically -->
       </div>
     </div>
   </aside>

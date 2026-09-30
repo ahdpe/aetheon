@@ -29,7 +29,31 @@ export class AINaturalist {
   }
 
   addEntry(entry) {
-    entry.id = this.journalEntries.length + 1;
+    if (!entry) return;
+
+    // Strict title and semantic deduplication
+    const norm = (s) => (s || '').toLowerCase().replace(/[^a-zа-я0-9]/gi, '');
+    const newTitleEn = norm(entry.titleEn);
+    const newTitleRu = norm(entry.titleRu);
+
+    const isDuplicate = this.journalEntries.some(existing => {
+      const exTitleEn = norm(existing.titleEn);
+      const exTitleRu = norm(existing.titleRu);
+      if (newTitleEn && exTitleEn && (newTitleEn === exTitleEn || exTitleEn.includes(newTitleEn) || newTitleEn.includes(exTitleEn))) {
+        return true;
+      }
+      if (newTitleRu && exTitleRu && (newTitleRu === exTitleRu || exTitleRu.includes(newTitleRu) || newTitleRu.includes(exTitleRu))) {
+        return true;
+      }
+      return false;
+    });
+
+    if (isDuplicate) {
+      console.log(`[AINaturalist] Suppressed duplicate journal dispatch: "${entry.titleEn || entry.titleRu}"`);
+      return;
+    }
+
+    entry.id = Date.now();
     this.journalEntries.unshift(entry); // newest first
     if (this.journalEntries.length > 60) {
       this.journalEntries.pop();
@@ -50,15 +74,18 @@ export class AINaturalist {
   // Periodic observation check with JEV decision gatekeeper
   async checkObservation(engineStats) {
     const now = Date.now();
+    const minutesSinceLastDispatch = (now - this.lastObservationTime) / 60000;
 
-    // 1. Identify newly stabilized species needing taxonomic christening
-    const allSpecies = this.lineageManager.getAllSpecies();
-    const unchronicled = allSpecies.find(s => !s.aiChronicle && s.totalCount > 10 && s.population > 1);
+    // 1. Identify newly stabilized species needing taxonomic christening (requires min 5 min cooldown)
+    if (minutesSinceLastDispatch >= 5) {
+      const allSpecies = this.lineageManager.getAllSpecies();
+      const unchronicled = allSpecies.find(s => !s.aiChronicle && s.totalCount > 12 && s.population > 2);
 
-    if (unchronicled) {
-      await this.chronicleSpecies(unchronicled, engineStats);
-      this.lastObservationTime = now;
-      return true;
+      if (unchronicled) {
+        await this.chronicleSpecies(unchronicled, engineStats);
+        this.lastObservationTime = now;
+        return true;
+      }
     }
 
     // 2. Rate limit JEV screening interval
@@ -69,7 +96,6 @@ export class AINaturalist {
     this.lastJevScreenTime = now;
 
     // 3. Minimum cooldown between published journal entries (8 minutes)
-    const minutesSinceLastDispatch = (now - this.lastObservationTime) / 60000;
     if (minutesSinceLastDispatch < 8) {
       return false;
     }
@@ -372,6 +398,7 @@ JSON ONLY, NO MARKDOWN.`;
 
     if (isVeniceAvailable) {
       try {
+        const recentTitles = this.journalEntries.slice(0, 5).map(e => `"${e.titleEn}" / "${e.titleRu}"`).join(', ');
         const prompt = `Live field observation of the microscopic aquarium AETHEON:
 - Editorial Theme: ${themeGuidance}
 - Recent hunts / predation strikes: ${stats.recentKills || 0}
@@ -381,11 +408,13 @@ JSON ONLY, NO MARKDOWN.`;
 - Top Apex Hunter: "${stats.topPredatorNameRu || stats.topPredatorNameEn || 'Охотник'}"
 - Active population: ${stats.organismCount} organisms across ${stats.speciesCount} species
 - Generation milestone: #${stats.generation}
+- RECENT TITLES TO NEVER REPEAT: ${recentTitles || 'None'}
 
 CRITICAL RULES:
 1. NEVER start with 'В недрах AETHEON', 'В сердце AETHEON', 'In the depths of AETHEON', 'A vibrant tapestry', or 'A kaleidoscope of life'.
 2. NEVER use the phrase 'Это значит, что' or 'This means that'.
-3. Describe the EXACT current drama based on the field data and editorial theme above:
+3. DO NOT repeat words from recent titles. You MUST invent a completely fresh, unique headline and original metaphor.
+4. Describe the EXACT current drama based on the field data and editorial theme above:
    - Make it cinematic, thrilling, and accessible for general audiences.
 4. "insightRu" / "insightEn": 1 brief scientific takeaway (without saying "это значит"), OR empty string "" if not strictly needed.
 

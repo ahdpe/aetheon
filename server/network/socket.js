@@ -39,7 +39,8 @@ export class NetworkManager {
         journal: this.engine.naturalist.getRecentEntries(30),
         species: this.engine.lineage.getRecentSpecies(12),
         visitors: this.clients.size,
-        thumbnail: Array.from(this.engine.grid.getThumbnail(48)) // 48x48 initial chemical field
+        thumbnail: Array.from(this.engine.grid.getThumbnail(48)), // 48x48 initial chemical field
+        atlas: this.engine.atlas ? this.engine.atlas.getAllEntries() : []
       };
 
       ws.send(JSON.stringify(initialPayload));
@@ -90,6 +91,11 @@ export class NetworkManager {
         type: 'codex_data',
         species: this.engine.lineage.getAllSpecies(),
         journal: this.engine.naturalist.journalEntries
+      }));
+    } else if (msg.type === 'get_atlas') {
+      ws.send(JSON.stringify({
+        type: 'atlas_data',
+        entries: this.engine.atlas ? this.engine.atlas.getAllEntries() : []
       }));
     }
   }

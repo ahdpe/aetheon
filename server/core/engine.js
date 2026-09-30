@@ -5,6 +5,7 @@ import { Organism } from './organism.js';
 import { LineageManager } from './lineage.js';
 import { ColonyManager } from './colonies.js';
 import { ClimateEngine } from './climate.js';
+import { AtlasManager } from './atlasManager.js';
 import { AINaturalist } from '../ai/naturalist.js';
 import { PersistenceManager } from './persistence.js';
 
@@ -22,6 +23,7 @@ export class SimulationEngine {
     this.naturalist = new AINaturalist(this.lineage);
     this.persistence = new PersistenceManager();
     this.colonies = new ColonyManager();
+    this.atlas = new AtlasManager(this);
     
     // Active visitor-created nutrient blooms
     this.nutrientBlooms = [];
@@ -61,6 +63,9 @@ export class SimulationEngine {
           o.y = CY + Math.sin(ang) * (maxR - 20);
         }
       }
+    }
+    if (this.atlas) {
+      this.atlas.init();
     }
   }
 
@@ -281,6 +286,11 @@ export class SimulationEngine {
       }).catch(err => {
         console.error('[Engine] Observation check error:', err);
       });
+    }
+
+    // 8.5. Check 24-hour daily atlas cycle (every 200 ticks)
+    if (this.ticks % 200 === 0 && this.atlas) {
+      this.atlas.checkDailyCycle();
     }
 
     // 9. Periodic persistence autosave (every 10 mins)

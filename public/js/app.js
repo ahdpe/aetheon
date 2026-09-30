@@ -159,6 +159,9 @@ class AetheonApp {
         this.updateTicker(msg.journal[0]);
         this.journalDrawer.setEntries(msg.journal);
       }
+      if (msg.atlas && msg.atlas.length > 0) {
+        this.journalDrawer.setAtlasEntries(msg.atlas);
+      }
     } else if (msg.type === 'tick') {
       this.renderer.onServerTick(msg);
       if (msg.visitors !== undefined) this.updateVisitors(msg.visitors);
@@ -196,6 +199,16 @@ class AetheonApp {
         this.updateTicker(msg.entry);
         this.journalDrawer.addLiveEntry(msg.entry);
         sound.playDroplet(1200);
+      }
+    } else if (msg.type === 'atlas_data') {
+      if (msg.entries) {
+        this.journalDrawer.setAtlasEntries(msg.entries);
+      }
+    } else if (msg.type === 'atlas_entry') {
+      if (msg.entry) {
+        const cur = this.journalDrawer.atlasEntries || [];
+        cur.unshift(msg.entry);
+        this.journalDrawer.setAtlasEntries(cur);
       }
     }
   }

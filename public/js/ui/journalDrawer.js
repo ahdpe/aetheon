@@ -7,17 +7,24 @@ export class JournalDrawer {
     this.drawer = document.getElementById('journal-drawer');
     this.backdrop = document.getElementById('drawer-backdrop');
     this.timeline = document.getElementById('drawer-timeline');
+    this.atlasPane = document.getElementById('drawer-atlas');
     this.expandBtn = document.getElementById('btn-expand-journal');
     this.closeBtn = document.getElementById('btn-close-journal');
     this.footer = document.getElementById('interactive-footer');
     this.topJournalBtn = document.getElementById('btn-journal');
     this.liveHeaderBtn = document.getElementById('btn-live-header');
     this.countBadge = document.getElementById('journal-count-badge');
+    this.atlasBadge = document.getElementById('atlas-count-badge');
     this.unreadDot = document.getElementById('journal-unread-dot');
     this.openSpeciesBtn = document.getElementById('btn-open-codex-species');
 
+    this.tabFeedBtn = document.getElementById('tab-journal-feed-btn');
+    this.tabAtlasBtn = document.getElementById('tab-journal-atlas-btn');
+
     this.isOpen = false;
+    this.activeTab = 'feed'; // 'feed' | 'atlas'
     this.entries = [];
+    this.atlasEntries = [];
 
     this.setupListeners();
   }
@@ -48,7 +55,11 @@ export class JournalDrawer {
 
     this.backdrop?.addEventListener('click', () => this.close());
 
-    // 4. Switch from Journal to Species Codex
+    // 4. Drawer Tabs Switching (Feed vs Atlas)
+    this.tabFeedBtn?.addEventListener('click', () => this.switchTab('feed'));
+    this.tabAtlasBtn?.addEventListener('click', () => this.switchTab('atlas'));
+
+    // 5. Switch from Journal to Species Codex
     this.openSpeciesBtn?.addEventListener('click', () => {
       this.close();
       if (this.app?.codexModal) {
@@ -57,7 +68,7 @@ export class JournalDrawer {
       }
     });
 
-    // 5. Keyboard shortcut: J
+    // 6. Keyboard shortcut: J
     window.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (e.key === 'j' || e.key === 'J' || e.key === 'о' || e.key === 'О') {
@@ -67,7 +78,7 @@ export class JournalDrawer {
       }
     });
 
-    // 6. Mobile swipe down to close
+    // 7. Mobile swipe down to close
     let touchStartY = 0;
     this.drawer?.addEventListener('touchstart', (e) => {
       touchStartY = e.touches[0].clientY;
@@ -116,15 +127,62 @@ export class JournalDrawer {
     }
   }
 
+  switchTab(tab) {
+    this.activeTab = tab;
+    if (tab === 'feed') {
+      this.tabFeedBtn?.classList.add('active');
+      this.tabAtlasBtn?.classList.remove('active');
+      this.timeline?.classList.remove('hidden');
+      this.atlasPane?.classList.add('hidden');
+    } else {
+      this.tabAtlasBtn?.classList.add('active');
+      this.tabFeedBtn?.classList.remove('active');
+      this.timeline?.classList.add('hidden');
+      this.atlasPane?.classList.remove('hidden');
+      this.renderAtlas();
+    }
+    sound.playDroplet(750);
+  }
+
   setEntries(entries) {
     if (!Array.isArray(entries)) return;
-    this.entries = entries;
+    const norm = (s) => (s || '').toLowerCase().replace(/[^a-zа-я0-9]/gi, '');
+    const seen = new Set();
+    const clean = [];
+    for (const e of entries) {
+      const k = norm(e.titleEn || e.titleRu);
+      if (!seen.has(k)) {
+        seen.add(k);
+        clean.push(e);
+      }
+    }
+    this.entries = clean;
     this.updateCountBadge();
-    this.render();
+    if (this.activeTab === 'feed') {
+      this.render();
+    }
+  }
+
+  setAtlasEntries(entries) {
+    if (!Array.isArray(entries)) return;
+    this.atlasEntries = entries;
+    if (this.atlasBadge) {
+      this.atlasBadge.textContent = entries.length;
+      this.atlasBadge.style.display = entries.length > 0 ? 'inline-flex' : 'none';
+    }
+    if (this.activeTab === 'atlas') {
+      this.renderAtlas();
+    }
   }
 
   addLiveEntry(entry) {
     if (!entry) return;
+    const norm = (s) => (s || '').toLowerCase().replace(/[^a-zа-я0-9]/gi, '');
+    const key = norm(entry.titleEn || entry.titleRu);
+    if (this.entries.some(e => norm(e.titleEn || e.titleRu) === key)) {
+      return; // Suppress duplicate
+    }
+
     this.entries.unshift(entry);
     if (this.entries.length > 60) this.entries.pop();
 
@@ -135,7 +193,9 @@ export class JournalDrawer {
       this.unreadDot.classList.remove('hidden');
     }
 
-    this.render(true); // render with animation
+    if (this.activeTab === 'feed') {
+      this.render(true); // render with animation
+    }
   }
 
   updateCountBadge() {
@@ -175,7 +235,7 @@ export class JournalDrawer {
       let rawInsight = isRu ? (entry.insightRu || entry.insightEn) : (entry.insightEn || entry.insightRu);
       let insight = (rawInsight && rawInsight.trim().length > 0) ? rawInsight.trim() : null;
 
-      // Clean redundant 'Это значит, что' or 'This means that' prefixes to avoid duplication with the tag
+      // Clean redundant prefixes
       if (insight) {
         insight = insight.replace(/^(это значит,\s*что|это означает,\s*что|this means that,?\s*)/i, '').trim();
         if (insight.length > 0) {
@@ -213,6 +273,108 @@ export class JournalDrawer {
         ${insightHtml}
       `;
       this.timeline.appendChild(item);
+    });
+  }
+
+  renderAtlas() {
+    if (!this.atlasPane) return;
+    const isRu = i18n.getLang() === 'ru';
+    this.atlasPane.innerHTML = '';
+
+    if (!this.atlasEntries || this.atlasEntries.length === 0) {
+      this.atlasPane.innerHTML = `
+        <div class="atlas-empty-state">
+          <span class="empty-icon">🗺️</span>
+          <p>${i18n.t('atlas_empty')}</p>
+        </div>
+      `;
+      return;
+    }
+
+    this.atlasEntries.forEach((entry) => {
+      const card = document.createElement('div');
+      card.className = 'atlas-card glass-panel';
+
+      const title = isRu ? (entry.titleRu || entry.titleEn) : entry.titleEn;
+      const summary = isRu ? (entry.summaryRu || entry.summaryEn) : entry.summaryEn;
+      const m = entry.metrics || {};
+      const dominant = isRu ? (m.dominantSpeciesRu || m.dominantSpeciesEn) : m.dominantSpeciesEn;
+      const apex = isRu ? (m.apexHunterRu || m.apexHunterEn) : m.apexHunterEn;
+
+      card.innerHTML = `
+        <div class="atlas-card-header">
+          <div class="atlas-day-pill">
+            <span class="atlas-day-badge">${i18n.t('atlas_day_badge')} ${entry.day}</span>
+            <span class="atlas-date">${entry.date || ''}</span>
+          </div>
+          <h3 class="atlas-day-title">${title}</h3>
+        </div>
+
+        <div class="atlas-map-container">
+          <div class="atlas-map-view">
+            ${entry.svgMap || ''}
+          </div>
+          <div class="atlas-map-caption">
+            <span>🔬 ${i18n.t('atlas_survey_title')} • Ø 1240 μm</span>
+            <span>DAY ${entry.day}</span>
+          </div>
+        </div>
+
+        <div class="atlas-metrics-grid">
+          <div class="atlas-metric-chip">
+            <span class="chip-icon">👥</span>
+            <div class="chip-data">
+              <span class="chip-val">${m.population || 280}</span>
+              <span class="chip-lbl">${i18n.t('atlas_metric_pop')}</span>
+            </div>
+          </div>
+          <div class="atlas-metric-chip">
+            <span class="chip-icon">🧬</span>
+            <div class="chip-data">
+              <span class="chip-val">${m.speciesCount || 40}</span>
+              <span class="chip-lbl">${i18n.t('atlas_metric_species')}</span>
+            </div>
+          </div>
+          <div class="atlas-metric-chip">
+            <span class="chip-icon">🪸</span>
+            <div class="chip-data">
+              <span class="chip-val">${m.reefCoverage || 0}%</span>
+              <span class="chip-lbl">${i18n.t('atlas_metric_reefs')}</span>
+            </div>
+          </div>
+          <div class="atlas-metric-chip">
+            <span class="chip-icon">🔗</span>
+            <div class="chip-data">
+              <span class="chip-val">${m.coloniesCount || 0}</span>
+              <span class="chip-lbl">${i18n.t('atlas_metric_colonies')}</span>
+            </div>
+          </div>
+          <div class="atlas-metric-chip">
+            <span class="chip-icon">👑</span>
+            <div class="chip-data">
+              <span class="chip-val">${dominant || '—'}</span>
+              <span class="chip-lbl">${i18n.t('atlas_metric_dominant')}</span>
+            </div>
+          </div>
+          <div class="atlas-metric-chip">
+            <span class="chip-icon">🦈</span>
+            <div class="chip-data">
+              <span class="chip-val">${apex || '—'}</span>
+              <span class="chip-lbl">${i18n.t('atlas_metric_apex')}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="atlas-monograph-box">
+          <div class="monograph-header">
+            <span class="monograph-icon">📜</span>
+            <span class="monograph-author">${isRu ? 'Хроника эволюции от Venice AI' : 'Evolution Monograph by Venice AI'}</span>
+          </div>
+          <div class="monograph-content">${summary}</div>
+        </div>
+      `;
+
+      this.atlasPane.appendChild(card);
     });
   }
 }

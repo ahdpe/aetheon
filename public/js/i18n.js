@@ -62,7 +62,19 @@ export const DICTIONARY = {
     filter_filter: 'Filter Feeders',
     filter_extinct: 'Extinct',
     search_placeholder: 'Search species by name...',
-    no_species_found: 'No species found matching this filter.'
+    no_species_found: 'No species found matching this filter.',
+    journal_tab_feed: 'Live Dispatches',
+    journal_tab_atlas: 'Daily World Atlas',
+    atlas_empty: 'The first 24-hour cycle is being charted by the AI cartographer...',
+    atlas_day_badge: 'DAY',
+    atlas_survey_title: 'Topographic Biosphere Survey',
+    atlas_metric_pop: 'Population',
+    atlas_metric_species: 'Species',
+    atlas_metric_reefs: 'Reef Coverage',
+    atlas_metric_colonies: 'Superorganisms',
+    atlas_metric_dominant: 'Dominant Species',
+    atlas_metric_apex: 'Apex Hunter',
+    atlas_metric_temp: 'Mean Temp'
   },
   ru: {
     organisms: 'организмов',
@@ -127,7 +139,19 @@ export const DICTIONARY = {
     filter_filter: 'Фильтраторы',
     filter_extinct: 'Вымершие',
     search_placeholder: 'Поиск вида по имени...',
-    no_species_found: 'Видов по выбранному фильтру не найдено.'
+    no_species_found: 'Видов по выбранному фильтру не найдено.',
+    journal_tab_feed: 'Хроника событий',
+    journal_tab_atlas: 'Ежедневный Атлас Мира',
+    atlas_empty: 'Первый 24-часовой цикл картографируется искусственным интеллектом...',
+    atlas_day_badge: 'ДЕНЬ',
+    atlas_survey_title: 'Топографическая карта биосферы',
+    atlas_metric_pop: 'Популяция',
+    atlas_metric_species: 'Видов',
+    atlas_metric_reefs: 'Покрытие рифами',
+    atlas_metric_colonies: 'Суперорганизмы',
+    atlas_metric_dominant: 'Доминирующий вид',
+    atlas_metric_apex: 'Верховный хищник',
+    atlas_metric_temp: 'Температура'
   }
 };
 
