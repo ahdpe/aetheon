@@ -575,9 +575,23 @@ export class OceanRenderer {
     const detailCount = Math.min(25, candidates.length);
 
     ctx.font = '9px "JetBrains Mono", monospace';
+    const placedLabels = [];
 
-    for (let k = 0; k < detailCount; k++) {
+    for (let k = 0; k < candidates.length; k++) {
+      if (placedLabels.length >= 20) break;
       const { curr, sx, sy } = candidates[k];
+
+      // Avoid overlapping labels
+      let collides = false;
+      for (let p = 0; p < placedLabels.length; p++) {
+        if (Math.hypot(sx - placedLabels[p].sx, sy - placedLabels[p].sy) < 40) {
+          collides = true;
+          break;
+        }
+      }
+      if (collides) continue;
+      placedLabels.push({ sx, sy });
+
       const isHunter = curr.carnivory > 0.4;
 
       // Sensory Field

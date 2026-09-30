@@ -340,6 +340,10 @@ body.mode-lab .lab-ribbon {
   transition: opacity 0.8s ease;
 }
 
+body.mode-lab .interactive-hint {
+  display: none !important;
+}
+
 .hint-pill {
   display: flex;
   align-items: center;

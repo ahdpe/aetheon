@@ -106,11 +106,18 @@ export class Organism {
     // 2. Chemical gradient sensing (Chemotaxis)
     const chem = grid.sample(this.x, this.y);
     
-    // Desired steering vector
+    // Desired steering vector from chemical field
     let steerX = chem.gradNutrientX * this.genome.chemotaxisNutrient + chem.gradWasteX * this.genome.chemotaxisWaste;
     let steerY = chem.gradNutrientY * this.genome.chemotaxisNutrient + chem.gradWasteY * this.genome.chemotaxisWaste;
 
-    // Carnivores track nearby smaller prey; herbivores evade carnivores
+    // Direct interactions with nearby neighbors
+    let nearestPredator = null;
+    let nearestPredatorDist = 9999;
+    let nearestPrey = null;
+    let nearestPreyDist = 9999;
+    let separationX = 0;
+    let separationY = 0;
+
     if (nearbyNeighbors.length > 0) {
       for (let i = 0; i < nearbyNeighbors.length; i++) {
         const other = nearbyNeighbors[i];
@@ -126,67 +133,88 @@ export class Organism {
         const d2 = dx * dx + dy * dy;
         const d = Math.sqrt(d2) || 0.01;
 
-        if (this.carnivory > 0.4 && other.size < this.size * 0.85) {
-          // Attracted to prey
-          steerX += (dx / d) * 1.5;
-          steerY += (dy / d) * 1.5;
-        } else if (this.carnivory < 0.3 && other.carnivory > 0.4 && other.size > this.size) {
-          // Repelled by predator (fleeing reflex)
-          steerX -= (dx / d) * 2.5;
-          steerY -= (dy / d) * 2.5;
-        } else if (this.genome.adhesion > 0.3 && other.speciesId === this.speciesId && d < this.size * 2.5) {
-          // Multicellular cohesion
-          steerX += (dx / d) * 0.4;
-          steerY += (dy / d) * 0.4;
+        // A. Elastic volume exclusion (prevent awkward overlapping clumps)
+        const minDist = (this.size + other.size) * 1.1;
+        if (d < minDist) {
+          const push = (minDist - d) / minDist;
+          separationX -= (dx / d) * push * 2.0;
+          separationY -= (dy / d) * push * 2.0;
+        }
+
+        // B. Identify single nearest threat / prey to avoid force cancellation
+        if (this.carnivory < 0.35 && other.carnivory > 0.4 && other.size > this.size && d < nearestPredatorDist) {
+          nearestPredatorDist = d;
+          nearestPredator = { dx, dy, d };
+        } else if (this.carnivory > 0.4 && other.size < this.size * 0.85 && d < nearestPreyDist) {
+          nearestPreyDist = d;
+          nearestPrey = { dx, dy, d };
         }
       }
     }
 
-    // Add ciliary rhythmic swimming pulsation
-    const ciliaryPulse = 0.5 + 0.5 * Math.sin(this.phase);
-    const speedMultiplier = 0.6 + 0.4 * ciliaryPulse;
-
-    // Apply steering forces with inertia
-    const steerMag = Math.sqrt(steerX * steerX + steerY * steerY);
-    if (steerMag > 0.001) {
-      steerX /= steerMag;
-      steerY /= steerMag;
-      this.heading = Math.atan2(steerY, steerX);
-    } else {
-      // Gentle wander
-      this.heading += (Math.random() - 0.5) * 0.3;
+    // Apply fleeing force if predator is near
+    if (nearestPredator && nearestPredator.d < this.size * 5.0) {
+      steerX -= (nearestPredator.dx / nearestPredator.d) * 3.5;
+      steerY -= (nearestPredator.dy / nearestPredator.d) * 3.5;
     }
+
+    // Apply pursuit force if prey is near
+    if (nearestPrey && nearestPrey.d < this.size * 4.0) {
+      steerX += (nearestPrey.dx / nearestPrey.d) * 2.5;
+      steerY += (nearestPrey.dy / nearestPrey.d) * 2.5;
+    }
+
+    // Add separation force
+    steerX += separationX;
+    steerY += separationY;
+
+    // Smooth angular turning with inertia (prevent rapid 180° twitching)
+    const steerMag = Math.sqrt(steerX * steerX + steerY * steerY);
+    if (steerMag > 0.05) {
+      const targetHeading = Math.atan2(steerY, steerX);
+      let angleDiff = targetHeading - this.heading;
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      this.heading += Math.max(-0.25, Math.min(0.25, angleDiff * 0.2));
+    } else {
+      // Gentle forward wander
+      this.heading += (Math.random() - 0.5) * 0.08;
+    }
+
+    // Continuous rhythmic ciliary propulsion
+    const ciliaryPulse = 0.5 + 0.5 * Math.sin(this.phase);
+    const speedMultiplier = 0.7 + 0.5 * ciliaryPulse;
 
     const targetVx = Math.cos(this.heading) * this.maxSpeed * speedMultiplier;
     const targetVy = Math.sin(this.heading) * this.maxSpeed * speedMultiplier;
 
-    this.vx += (targetVx - this.vx) * 0.25;
-    this.vy += (targetVy - this.vy) * 0.25;
+    this.vx += (targetVx - this.vx) * 0.2;
+    this.vy += (targetVy - this.vy) * 0.2;
 
-    // Fluid drag & damping
-    this.vx *= 0.94;
-    this.vy *= 0.94;
+    // Gentle fluid damping
+    this.vx *= 0.98;
+    this.vy *= 0.98;
 
     this.x = (this.x + this.vx + CONFIG.WORLD_SIZE) % CONFIG.WORLD_SIZE;
     this.y = (this.y + this.vy + CONFIG.WORLD_SIZE) % CONFIG.WORLD_SIZE;
 
     // 3. Metabolism & Feeding
-    // Base metabolic rate scales with volume (r^2) + speed
     const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-    const metabolicCost = (CONFIG.BASE_METABOLIC_RATE * (this.size * 0.18) + (currentSpeed * currentSpeed) * 0.04) / this.genome.metabolismEfficiency;
+    const predatorPenalty = this.carnivory > 0.4 ? 1.8 : 1.0;
+    const metabolicCost = ((CONFIG.BASE_METABOLIC_RATE * (this.size * 0.15) + (currentSpeed * currentSpeed) * 0.03) * predatorPenalty) / this.genome.metabolismEfficiency;
     this.energy -= metabolicCost;
 
     // Graze nutrients from the chemical substrate
-    if (this.carnivory < 0.7) {
-      const intakeLimit = (1.0 - this.carnivory) * (this.size * 0.15);
+    if (this.carnivory < 0.6) {
+      const intakeLimit = (1.0 - this.carnivory) * (this.size * 0.25);
       const consumed = grid.consumeAndExcrete(
         this.x, 
         this.y, 
         intakeLimit, 
-        0.35, // waste ratio
-        0.05 * ciliaryPulse // luminescence signal
+        0.3, // waste ratio
+        0.06 * ciliaryPulse // luminescence signal
       );
-      this.energy += consumed * 14.0 * this.genome.metabolismEfficiency;
+      this.energy += consumed * 18.0 * this.genome.metabolismEfficiency;
     }
 
     // Cap maximum energy

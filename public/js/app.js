@@ -257,5 +257,5 @@ class AetheonApp {
 
 // Boot application
 window.addEventListener('DOMContentLoaded', () => {
-  new AetheonApp();
+  window.aetheonApp = new AetheonApp();
 });

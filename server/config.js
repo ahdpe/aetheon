@@ -21,10 +21,10 @@ export const CONFIG = {
   TICK_RATE_HZ: parseInt(process.env.TICK_RATE_HZ || '10', 10),
   TICK_INTERVAL_MS: 1000 / parseInt(process.env.TICK_RATE_HZ || '10', 10),
   GRID_SIZE: parseInt(process.env.GRID_SIZE || '128', 10), // 128x128 chemical grid
-  WORLD_SIZE: 1000.0, // Continuous virtual coordinates [0, WORLD_SIZE)
+  WORLD_SIZE: 1400.0, // Continuous virtual coordinates [0, WORLD_SIZE)
   
-  MAX_ORGANISMS: parseInt(process.env.MAX_ORGANISMS || '1000', 10),
-  MIN_ORGANISMS: 180, // Spontaneous biogenesis triggers if population drops below this
+  MAX_ORGANISMS: parseInt(process.env.MAX_ORGANISMS || '300', 10),
+  MIN_ORGANISMS: 140, // Spontaneous biogenesis triggers if population drops below this
   
   // Persistence
   PERSIST_INTERVAL_MS: (parseInt(process.env.PERSIST_INTERVAL_MIN || '10', 10)) * 60 * 1000,
