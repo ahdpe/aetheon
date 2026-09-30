@@ -22,14 +22,26 @@ export class ChemicalGrid {
   }
 
   initVents() {
-    // Symmetrically arranged vents inside the circular petri chamber (R_grid ~ 56.7)
-    this.vents = [
-      { x: Math.floor(this.size * 0.35), y: Math.floor(this.size * 0.35), radius: 6, power: 0.65, hue: 0.12 }, // Amber vent (top-left)
-      { x: Math.floor(this.size * 0.65), y: Math.floor(this.size * 0.35), radius: 7, power: 0.75, hue: 0.52 }, // Cyan vent (top-right)
-      { x: Math.floor(this.size * 0.50), y: Math.floor(this.size * 0.72), radius: 8, power: 0.85, hue: 0.38 }, // Phosphor vent (bottom-center)
-      { x: Math.floor(this.size * 0.30), y: Math.floor(this.size * 0.58), radius: 5, power: 0.55, hue: 0.78 }, // Violet vent (mid-left)
-      { x: Math.floor(this.size * 0.70), y: Math.floor(this.size * 0.58), radius: 5, power: 0.50, hue: 0.95 }  // Rose vent (mid-right)
-    ];
+    // Symmetrically arranged vents in a regular pentagon inside the circular chamber
+    const cx = this.size * 0.5;
+    const cy = this.size * 0.5;
+    const ventDist = this.size * 0.25; // ~32 grid units from center (chamber R is ~56.7)
+
+    const ventHues = [0.12, 0.52, 0.95, 0.38, 0.78]; // Amber, Cyan, Rose, Phosphor, Violet
+
+    this.vents = [];
+    for (let i = 0; i < 5; i++) {
+      const angle = (i * 2 * Math.PI) / 5 - Math.PI * 0.5; // Top vent at 12 o'clock
+      const vx = Math.round(cx + Math.cos(angle) * ventDist);
+      const vy = Math.round(cy + Math.sin(angle) * ventDist);
+      this.vents.push({
+        x: vx,
+        y: vy,
+        radius: 7,
+        power: 0.70,
+        hue: ventHues[i]
+      });
+    }
   }
 
   seedInitialConditions() {

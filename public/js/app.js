@@ -161,7 +161,7 @@ class AetheonApp {
       this.updateVisitors(msg.count);
     } else if (msg.type === 'visitor_ripple') {
       // Another user tapped the water!
-      this.renderer.addRipple(msg.x, msg.y, 'rgba(0, 240, 255, 0.65)', 50);
+      this.renderer.spawnFoodBloom(msg.x, msg.y);
     } else if (msg.type === 'inspect_result') {
       this.inspector.updateProfile(msg.profile);
     } else if (msg.type === 'codex_data') {

@@ -19,6 +19,10 @@ export class SimulationEngine {
     this.naturalist = new AINaturalist(this.lineage);
     this.persistence = new PersistenceManager();
     
+    // Active visitor-created nutrient blooms
+    this.nutrientBlooms = [];
+    this.nextBloomId = 1;
+
     // Scratch buffer for spatial queries
     this.neighborScratch = [];
     this.eventsBuffer = []; // Broadcast events (births, deaths, predation strikes)
@@ -73,6 +77,18 @@ export class SimulationEngine {
   step() {
     this.ticks++;
 
+    // 0. Advance active visitor nutrient blooms
+    for (let b = this.nutrientBlooms.length - 1; b >= 0; b--) {
+      const bloom = this.nutrientBlooms[b];
+      bloom.age++;
+      if (bloom.age % 4 === 0) {
+        this.grid.injectDrop(bloom.x, bloom.y, 0.4, bloom.radius);
+      }
+      if (bloom.age >= bloom.maxAge || bloom.energy <= 0) {
+        this.nutrientBlooms.splice(b, 1);
+      }
+    }
+
     // 1. Advance chemical diffusion & vents
     this.grid.step();
 
@@ -94,8 +110,8 @@ export class SimulationEngine {
       // Query nearby neighbors for phase coupling & predation
       this.spatialHash.query(org.x, org.y, org.size * 3.5, this.neighborScratch);
       
-      // Step organism physics and metabolism
-      org.step(this.grid, this.neighborScratch);
+      // Step organism physics, metabolism, and food sensing
+      org.step(this.grid, this.neighborScratch, this.nutrientBlooms);
 
       // Predation checks (carnivores attack smaller neighbors)
       if (org.carnivory > 0.4) {
@@ -180,10 +196,20 @@ export class SimulationEngine {
   // Handle external visitor perturbation (dropping nutrients, stirring water)
   injectInteraction(type, x, y, options = {}) {
     if (type === 'nutrient_drop') {
-      this.grid.injectDrop(x, y, 1.2, 35);
-      return { success: true, type: 'nutrient_drop', x, y };
+      const bloom = {
+        id: this.nextBloomId++,
+        x,
+        y,
+        energy: 280.0, // Substantial nutritional bounty
+        radius: 85.0,  // Visually rich dispersion radius
+        maxAge: 300,   // ~30 seconds active lifespan
+        age: 0
+      };
+      this.nutrientBlooms.push(bloom);
+      this.grid.injectDrop(x, y, 3.5, 85);
+      return { success: true, type: 'nutrient_drop', x, y, bloom };
     } else if (type === 'thermal_burst') {
-      this.grid.injectDrop(x, y, 2.5, 60);
+      this.grid.injectDrop(x, y, 4.0, 110);
       return { success: true, type: 'thermal_burst', x, y };
     }
     return { success: false };
@@ -248,7 +274,14 @@ export class SimulationEngine {
       t: this.ticks,
       n: this.organisms.length,
       orgs: Array.from(orgData), // JSON-serializable array
-      events: this.eventsBuffer.slice(0, 20)
+      events: this.eventsBuffer.slice(0, 20),
+      blooms: this.nutrientBlooms.map(b => ({
+        id: b.id,
+        x: Math.round(b.x),
+        y: Math.round(b.y),
+        r: Math.round(b.radius),
+        e: Math.round(b.energy)
+      }))
     };
   }
 }

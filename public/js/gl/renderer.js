@@ -31,8 +31,10 @@ export class OceanRenderer {
     // Ambient fluid particles
     this.particles = new ParticleSystem(1000, this.worldSize, this.chamber);
     
-    // Interaction ripples
+    // Interaction ripples & food particles
     this.ripples = [];
+    this.foodParticles = [];
+    this.serverBlooms = [];
     this.vents = [];
     this.isLabMode = false;
     
@@ -92,6 +94,30 @@ export class OceanRenderer {
     });
   }
 
+  // Spawn rich glowing phytomanna / nutrient spore cluster
+  spawnFoodBloom(wx, wy, count = 24) {
+    const hueBase = 0.23; // Emerald-golden bioluminescent nutrition
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 2.0 + 0.4;
+      const dist = Math.random() * 22;
+      this.foodParticles.push({
+        x: wx + Math.cos(angle) * dist,
+        y: wy + Math.sin(angle) * dist,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: Math.random() * 2.8 + 2.5,
+        alpha: 1.0,
+        maxLife: Math.random() * 500 + 750, // ~15-20 seconds of active floating food
+        life: 0,
+        hue: hueBase + (Math.random() - 0.5) * 0.08
+      });
+    }
+
+    // Emerald feeding pulse ripple
+    this.addRipple(wx, wy, 'rgba(163, 230, 53, 0.95)', 95);
+  }
+
   updateThumbnail(rawThumb) {
     if (!rawThumb || rawThumb.length < 48 * 48 * 3) return;
     const data = this.thumbImgData.data;
@@ -142,6 +168,10 @@ export class OceanRenderer {
           carnivory: stride >= 10 ? raw[ptr + 9] : 0.1
         });
       }
+    }
+
+    if (packet.blooms) {
+      this.serverBlooms = packet.blooms;
     }
 
     if (packet.thumbnail) {
@@ -271,6 +301,9 @@ export class OceanRenderer {
       this.drawOrganism(ctx, sx, sy, radius, curr, heading, isSelected, time);
     }
 
+    // 7.5. Render Nutrient Blooms & Floating Phytomanna Spores
+    this.renderFoodBlooms(ctx, toScreenX, toScreenY, camZoom, time, currentList);
+
     // 8. Render Interaction Ripples
     for (let r = this.ripples.length - 1; r >= 0; r--) {
       const rip = this.ripples[r];
@@ -384,6 +417,159 @@ export class OceanRenderer {
     }
 
     ctx.restore();
+  }
+
+  // Render active nutrient blooms and floating phytomanna food particles
+  renderFoodBlooms(ctx, toScreenX, toScreenY, camZoom, time, organisms) {
+    const w = this.camera.viewportW;
+    const h = this.camera.viewportH;
+
+    // A. Render Active Server Nutrient Blooms (Bioluminescent clouds)
+    for (let b = 0; b < this.serverBlooms.length; b++) {
+      const bloom = this.serverBlooms[b];
+      const bx = toScreenX(bloom.x);
+      const by = toScreenY(bloom.y);
+      const br = bloom.r * camZoom;
+
+      // Soft ambient nutrient diffusion cloud
+      const pulse = 1.0 + Math.sin(time * 0.005 + bloom.id) * 0.08;
+      const grad = ctx.createRadialGradient(bx, by, 0, bx, by, br * pulse);
+      grad.addColorStop(0, 'rgba(163, 230, 53, 0.25)');
+      grad.addColorStop(0.5, 'rgba(132, 204, 22, 0.09)');
+      grad.addColorStop(1, 'transparent');
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(bx, by, br * pulse, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Lab Mode Scientific HUD Reticle
+      if (this.isLabMode) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(bx, by, br, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(163, 230, 53, 0.65)';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+        // Center reticle
+        ctx.beginPath();
+        ctx.arc(bx, by, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#bef264';
+        ctx.fill();
+
+        // Label
+        ctx.font = '9px "JetBrains Mono", monospace';
+        const label = `✦ NUTRIENT BLOOM [${Math.round(bloom.e)} cal] • ACTIVE ATTRACTOR`;
+        ctx.fillStyle = 'rgba(6, 18, 10, 0.85)';
+        const tw = ctx.measureText(label).width;
+        ctx.fillRect(bx - tw * 0.5 - 4, by - br - 16, tw + 8, 14);
+        ctx.strokeStyle = 'rgba(163, 230, 53, 0.7)';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(bx - tw * 0.5 - 4, by - br - 16, tw + 8, 14);
+
+        ctx.fillStyle = '#bef264';
+        ctx.fillText(label, bx - tw * 0.5, by - br - 6);
+        ctx.restore();
+      }
+
+      // Maintain floating particles around active bloom
+      if (this.foodParticles.length < 20 && Math.random() < 0.12) {
+        const ang = Math.random() * Math.PI * 2;
+        const d = Math.random() * bloom.r * 0.65;
+        this.foodParticles.push({
+          x: bloom.x + Math.cos(ang) * d,
+          y: bloom.y + Math.sin(ang) * d,
+          vx: (Math.random() - 0.5) * 0.4,
+          vy: (Math.random() - 0.5) * 0.4,
+          size: Math.random() * 2.5 + 2.0,
+          alpha: 1.0,
+          maxLife: 450,
+          life: 0,
+          hue: 0.23 + (Math.random() - 0.5) * 0.06
+        });
+      }
+    }
+
+    // B. Drifting Nutrient Spores Physics & Drawing
+    for (let i = this.foodParticles.length - 1; i >= 0; i--) {
+      const p = this.foodParticles[i];
+      p.life++;
+      if (p.life >= p.maxLife || p.alpha <= 0) {
+        this.foodParticles.splice(i, 1);
+        continue;
+      }
+
+      // Physics damping & fluid drift
+      p.vx *= 0.96;
+      p.vy *= 0.96;
+      const drift = time * 0.0012 + p.x * 0.01;
+      p.x += p.vx + Math.cos(drift) * 0.22;
+      p.y += p.vy + Math.sin(drift) * 0.22;
+
+      // Soft bounce on chamber boundary
+      const ch = this.chamber;
+      if (ch) {
+        const dx = p.x - ch.cx;
+        const dy = p.y - ch.cy;
+        const dist = Math.hypot(dx, dy);
+        if (dist > ch.r - 8) {
+          const nx = dx / dist;
+          const ny = dy / dist;
+          p.x = ch.cx + nx * (ch.r - 8);
+          p.y = ch.cy + ny * (ch.r - 8);
+          p.vx -= nx * 0.5;
+          p.vy -= ny * 0.5;
+        }
+      }
+
+      // Grazing check against nearby organisms
+      let consumed = false;
+      for (let o = 0; o < organisms.length; o++) {
+        const org = organisms[o];
+        const odx = org.x - p.x;
+        const ody = org.y - p.y;
+        const eatDist = (org.size + p.size) * 1.1;
+        if (odx * odx + ody * ody < eatDist * eatDist) {
+          consumed = true;
+          break;
+        }
+      }
+
+      if (consumed) {
+        this.foodParticles.splice(i, 1);
+        continue;
+      }
+
+      const sx = toScreenX(p.x);
+      const sy = toScreenY(p.y);
+      if (sx < -20 || sx > w + 20 || sy < -20 || sy > h + 20) continue;
+
+      // Opacity calculation (gentle fade in and fade out)
+      const lifeRatio = p.life / p.maxLife;
+      const fade = lifeRatio > 0.75 ? (1.0 - lifeRatio) / 0.25 : Math.min(1.0, p.life / 20);
+      const alpha = p.alpha * fade;
+      const sz = p.size * camZoom;
+
+      // Bioluminescent Emerald Halo
+      const haloGrad = ctx.createRadialGradient(sx, sy, sz * 0.2, sx, sy, sz * 3.2);
+      haloGrad.addColorStop(0, `rgba(190, 242, 100, ${(0.65 * alpha).toFixed(2)})`);
+      haloGrad.addColorStop(0.5, `rgba(132, 204, 22, ${(0.22 * alpha).toFixed(2)})`);
+      haloGrad.addColorStop(1, 'transparent');
+
+      ctx.fillStyle = haloGrad;
+      ctx.beginPath();
+      ctx.arc(sx, sy, sz * 3.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Crystalline nutrient core
+      ctx.fillStyle = `rgba(254, 252, 232, ${(0.95 * alpha).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, Math.max(1.4, sz * 0.65), 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   // Beautiful living surface tension meniscus & dark optical field

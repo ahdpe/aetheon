@@ -115,11 +115,13 @@ export class InputController {
     const wx = worldPt.x;
     const wy = worldPt.y;
 
+    // Immediately spawn food bloom locally for 0ms instant feedback
+    this.renderer.spawnFoodBloom(wx, wy);
+
     // Send to server
     this.client.sendInteraction('nutrient_drop', wx, wy);
 
-    // Audio chirp & visual water ripple
+    // Audio chirp
     sound.playDroplet(650 + Math.random() * 200);
-    this.renderer.addRipple(wx, wy, 'rgba(0, 240, 255, 0.85)', 65);
   }
 }

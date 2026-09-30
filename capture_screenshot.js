@@ -14,15 +14,30 @@ async function takeScreenshot() {
   // Wait 1.5 seconds for animation to settle
   await new Promise(r => setTimeout(r, 1500));
 
+  // Click on canvas to drop nutrient food bloom in upper-left
+  console.log('Clicking canvas to drop food in upper-left (400, 320)...');
+  await page.mouse.click(400, 320);
+  await new Promise(r => setTimeout(r, 800));
+
+  // Click canvas again in bottom-right (820, 520)
+  console.log('Clicking canvas to drop food in bottom-right (820, 520)...');
+  await page.mouse.click(820, 520);
+  await new Promise(r => setTimeout(r, 1500));
+
   await page.screenshot({ path: 'public/screenshot_zen.png' });
-  console.log('Zen screenshot saved to public/screenshot_zen.png');
+  console.log('Zen screenshot with food blooms saved to public/screenshot_zen.png');
 
   // Click Lab button
   await page.click('#btn-mode-toggle');
   await new Promise(r => setTimeout(r, 1000));
 
+  // Click canvas in Lab mode to see the scientific reticle
+  console.log('Clicking canvas in Lab mode (640, 400)...');
+  await page.mouse.click(640, 400);
+  await new Promise(r => setTimeout(r, 1500));
+
   await page.screenshot({ path: 'public/screenshot_lab.png' });
-  console.log('Lab screenshot saved to public/screenshot_lab.png');
+  console.log('Lab screenshot with food blooms saved to public/screenshot_lab.png');
 
   await browser.close();
 }

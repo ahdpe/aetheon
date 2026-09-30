@@ -87,7 +87,7 @@ export class Organism {
   }
 
   // Step 10 Hz physics, chemistry, Kuramoto oscillator, and metabolism
-  step(grid, nearbyNeighbors) {
+  step(grid, nearbyNeighbors, nutrientBlooms = []) {
     this.age++;
 
     // 1. Advance Kuramoto phase oscillator
@@ -109,6 +109,37 @@ export class Organism {
     // Desired steering vector from chemical field
     let steerX = chem.gradNutrientX * this.genome.chemotaxisNutrient + chem.gradWasteX * this.genome.chemotaxisWaste;
     let steerY = chem.gradNutrientY * this.genome.chemotaxisNutrient + chem.gradWasteY * this.genome.chemotaxisWaste;
+
+    // 2.5. Active Visitor Food Scent Luring (Sensory horizon up to 480 μm!)
+    if (nutrientBlooms && nutrientBlooms.length > 0 && this.carnivory < 0.65) {
+      let closestBloom = null;
+      let closestDist = 480.0; // Broad sensory range across the petri dish!
+
+      for (let b = 0; b < nutrientBlooms.length; b++) {
+        const bloom = nutrientBlooms[b];
+        const d = Math.hypot(bloom.x - this.x, bloom.y - this.y);
+        if (d < closestDist) {
+          closestDist = d;
+          closestBloom = bloom;
+        }
+      }
+
+      if (closestBloom) {
+        // Strong, irresistible lure pull towards user-dropped food
+        const lureStrength = Math.pow(1.0 - closestDist / 480.0, 1.2) * 4.2;
+        const dx = closestBloom.x - this.x;
+        const dy = closestBloom.y - this.y;
+        steerX += (dx / closestDist) * lureStrength;
+        steerY += (dy / closestDist) * lureStrength;
+
+        // If organism arrives at the food bloom, graze directly from the bounty
+        if (closestDist < closestBloom.radius + this.size) {
+          const bite = Math.min(closestBloom.energy, 3.5);
+          closestBloom.energy -= bite;
+          this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 1.8);
+        }
+      }
+    }
 
     // Direct interactions with nearby neighbors
     let nearestPredator = null;
