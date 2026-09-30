@@ -159,12 +159,12 @@ export class Organism {
         const d2 = dx * dx + dy * dy;
         const d = Math.sqrt(d2) || 0.01;
 
-        // A. Elastic volume exclusion (prevent awkward overlapping clumps)
-        const minDist = (this.size + other.size) * 1.1;
+        // A. Elastic volume exclusion (prevent awkward overlapping clumps & clumping)
+        const minDist = (this.size + other.size) * 1.35;
         if (d < minDist) {
           const push = (minDist - d) / minDist;
-          separationX -= (dx / d) * push * 2.0;
-          separationY -= (dy / d) * push * 2.0;
+          separationX -= (dx / d) * push * 2.8;
+          separationY -= (dy / d) * push * 2.8;
         }
 
         // B. Identify single nearest threat / prey to avoid force cancellation
@@ -229,7 +229,8 @@ export class Organism {
       let angleDiff = targetHeading - this.heading;
       while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
       while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-      this.heading += Math.max(-0.25, Math.min(0.25, angleDiff * 0.2));
+      const maxTurn = (distCenter > R - margin) ? 0.45 : 0.28;
+      this.heading += Math.max(-maxTurn, Math.min(maxTurn, angleDiff * 0.25));
     } else {
       // Gentle forward wander
       this.heading += (Math.random() - 0.5) * 0.08;

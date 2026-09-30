@@ -146,8 +146,66 @@ export class ChemicalGrid {
     return { gx, gy, ix: Math.floor(gx), iy: Math.floor(gy) };
   }
 
-  // Bilinear sampling of chemical concentrations at arbitrary continuous world coordinates
+  // Continuous bilinear sampling of a specific chemical channel
+  sampleVal(wx, wy, channel = 'nutrients') {
+    const scale = this.size / CONFIG.WORLD_SIZE;
+    const clampedX = Math.max(0, Math.min(CONFIG.WORLD_SIZE - 0.01, wx));
+    const clampedY = Math.max(0, Math.min(CONFIG.WORLD_SIZE - 0.01, wy));
+    const x = clampedX * scale;
+    const y = clampedY * scale;
+
+    const x0 = Math.floor(x);
+    const y0 = Math.floor(y);
+    const x1 = Math.min(this.size - 1, x0 + 1);
+    const y1 = Math.min(this.size - 1, y0 + 1);
+
+    const fx = x - x0;
+    const fy = y - y0;
+
+    const arr = this[channel];
+    const N = this.size;
+    const v00 = arr[y0 * N + x0];
+    const v10 = arr[y0 * N + x1];
+    const v01 = arr[y1 * N + x0];
+    const v11 = arr[y1 * N + x1];
+
+    return (v00 * (1 - fx) + v10 * fx) * (1 - fy) + (v01 * (1 - fx) + v11 * fx) * fy;
+  }
+
+  // Isotropic bilinear sampling and symmetric central difference gradients
+  // Completely eliminates directional bias and self-induced diagonal drift
   sample(wx, wy) {
+    const nut = this.sampleVal(wx, wy, 'nutrients');
+    const wst = this.sampleVal(wx, wy, 'waste');
+    const sig = this.sampleVal(wx, wy, 'signal');
+
+    // Symmetric central difference with span delta = 16 μm (~1.5 grid cells)
+    const delta = 16.0;
+    const nutX1 = this.sampleVal(wx + delta, wy, 'nutrients');
+    const nutX0 = this.sampleVal(wx - delta, wy, 'nutrients');
+    const nutY1 = this.sampleVal(wx, wy + delta, 'nutrients');
+    const nutY0 = this.sampleVal(wx, wy - delta, 'nutrients');
+
+    const wstX1 = this.sampleVal(wx + delta, wy, 'waste');
+    const wstX0 = this.sampleVal(wx - delta, wy, 'waste');
+    const wstY1 = this.sampleVal(wx, wy + delta, 'waste');
+    const wstY0 = this.sampleVal(wx, wy - delta, 'waste');
+
+    const inv2D = 1.0 / (2.0 * delta);
+
+    return {
+      nutrient: nut,
+      waste: wst,
+      signal: sig,
+      gradNutrientX: (nutX1 - nutX0) * inv2D * 18.0,
+      gradNutrientY: (nutY1 - nutY0) * inv2D * 18.0,
+      gradWasteX: (wstX1 - wstX0) * inv2D * 18.0,
+      gradWasteY: (wstY1 - wstY0) * inv2D * 18.0
+    };
+  }
+
+  // Smooth bilinear consumption of nutrients and excretion of waste + signal
+  consumeAndExcrete(wx, wy, amount, wasteRatio = 0.5, signalAmount = 0.1) {
     const scale = this.size / CONFIG.WORLD_SIZE;
     const clampedX = Math.max(0, Math.min(CONFIG.WORLD_SIZE - 0.01, wx));
     const clampedY = Math.max(0, Math.min(CONFIG.WORLD_SIZE - 0.01, wy));
@@ -168,41 +226,35 @@ export class ChemicalGrid {
     const i01 = y1 * N + x0;
     const i11 = y1 * N + x1;
 
-    // Bilinear interpolation weights
     const w00 = (1 - fx) * (1 - fy);
     const w10 = fx * (1 - fy);
     const w01 = (1 - fx) * fy;
     const w11 = fx * fy;
 
-    return {
-      nutrient: this.nutrients[i00] * w00 + this.nutrients[i10] * w10 + this.nutrients[i01] * w01 + this.nutrients[i11] * w11,
-      waste: this.waste[i00] * w00 + this.waste[i10] * w10 + this.waste[i01] * w01 + this.waste[i11] * w11,
-      signal: this.signal[i00] * w00 + this.signal[i10] * w10 + this.signal[i01] * w01 + this.signal[i11] * w11,
-      // Gradient vector of nutrients (for chemotaxis steering)
-      gradNutrientX: (this.nutrients[i10] - this.nutrients[i00]),
-      gradNutrientY: (this.nutrients[i01] - this.nutrients[i00]),
-      gradWasteX: (this.waste[i10] - this.waste[i00]),
-      gradWasteY: (this.waste[i01] - this.waste[i00])
-    };
-  }
+    const avail = this.nutrients[i00] * w00 + this.nutrients[i10] * w10 + this.nutrients[i01] * w01 + this.nutrients[i11] * w11;
+    const consumed = Math.min(avail, amount);
 
-  // Consume nutrients at a continuous world point and excrete waste + signal
-  consumeAndExcrete(wx, wy, amount, wasteRatio = 0.5, signalAmount = 0.1) {
-    const { ix, iy } = this.worldToGrid(wx, wy);
-    const idx = iy * this.size + ix;
-    
-    const available = this.nutrients[idx];
-    const consumed = Math.min(available, amount);
-    this.nutrients[idx] -= consumed;
-    
-    // Excrete waste (byproduct of metabolism)
-    this.waste[idx] = Math.min(2.0, this.waste[idx] + consumed * wasteRatio);
-    
-    // Emit luminescence/signal trail
-    if (signalAmount > 0) {
-      this.signal[idx] = Math.min(2.0, this.signal[idx] + signalAmount);
+    if (consumed > 0 && avail > 0) {
+      const frac = consumed / avail;
+      this.nutrients[i00] = Math.max(0, this.nutrients[i00] - this.nutrients[i00] * w00 * frac);
+      this.nutrients[i10] = Math.max(0, this.nutrients[i10] - this.nutrients[i10] * w10 * frac);
+      this.nutrients[i01] = Math.max(0, this.nutrients[i01] - this.nutrients[i01] * w01 * frac);
+      this.nutrients[i11] = Math.max(0, this.nutrients[i11] - this.nutrients[i11] * w11 * frac);
+
+      const wasteTotal = consumed * wasteRatio;
+      this.waste[i00] = Math.min(2.0, this.waste[i00] + wasteTotal * w00);
+      this.waste[i10] = Math.min(2.0, this.waste[i10] + wasteTotal * w10);
+      this.waste[i01] = Math.min(2.0, this.waste[i01] + wasteTotal * w01);
+      this.waste[i11] = Math.min(2.0, this.waste[i11] + wasteTotal * w11);
+
+      if (signalAmount > 0) {
+        this.signal[i00] = Math.min(2.0, this.signal[i00] + signalAmount * w00);
+        this.signal[i10] = Math.min(2.0, this.signal[i10] + signalAmount * w10);
+        this.signal[i01] = Math.min(2.0, this.signal[i01] + signalAmount * w01);
+        this.signal[i11] = Math.min(2.0, this.signal[i11] + signalAmount * w11);
+      }
     }
-    
+
     return consumed;
   }
 
