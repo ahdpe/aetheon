@@ -62,23 +62,45 @@ export class AINaturalist {
     }
 
     // 2. Rate limit JEV screening interval
-    const screeningInterval = CONFIG.JEV_SCREENING_INTERVAL_MS || 25000;
+    const screeningInterval = CONFIG.JEV_SCREENING_INTERVAL_MS || 60000;
     if (now - this.lastJevScreenTime < screeningInterval) {
       return false;
     }
     this.lastJevScreenTime = now;
 
-    // 3. Screen ecosystem dynamics with JEV micro-decisions
+    // 3. Minimum cooldown between published journal entries (8 minutes)
     const minutesSinceLastDispatch = (now - this.lastObservationTime) / 60000;
+    if (minutesSinceLastDispatch < 8) {
+      return false;
+    }
+
+    // 4. Local pre-screen: skip JEV call entirely if nothing noteworthy
+    const kills = engineStats.recentKills || 0;
+    const births = engineStats.recentBirths || 0;
+    const speciations = engineStats.recentSpeciations || 0;
+    const colonyCount = engineStats.colonyCount || 0;
+
+    const hasSignificantEvent = kills >= 4 || births >= 8 || speciations > 0 || colonyCount > 0;
+    const longSilence = minutesSinceLastDispatch >= 15;
+
+    if (!hasSignificantEvent && !longSilence) {
+      return false; // Nothing worth screening — save the API call
+    }
+
+    // 5. Screen ecosystem dynamics with JEV micro-decisions
     const jevVerdict = await this.screenWithJev(engineStats, minutesSinceLastDispatch);
 
     if (jevVerdict && jevVerdict.shouldPublish) {
+      // Extra confidence gate: low-confidence JEV publish requires longer silence
+      if (jevVerdict.confidence < 0.6 && minutesSinceLastDispatch < 15) {
+        return false; // Low confidence + recent publish → skip
+      }
       await this.chronicleEcosystem(engineStats, jevVerdict);
       this.lastObservationTime = now;
       return true;
     }
 
-    // 4. Safety fallback if JEV is offline/unreachable and maximum quiet interval has elapsed
+    // 6. Safety fallback if JEV is offline/unreachable and maximum quiet interval has elapsed
     if (!jevVerdict && (now - this.lastObservationTime >= CONFIG.AI_OBSERVER_INTERVAL_MS)) {
       await this.chronicleEcosystem(engineStats, null);
       this.lastObservationTime = now;
@@ -503,15 +525,57 @@ OUTPUT VALID JSON ONLY.`;
     const content = data.choices?.[0]?.message?.content;
     if (!content) return null;
 
-    // Robust JSON extraction (handles markdown ```json blocks gracefully)
-    try {
-      return JSON.parse(content);
-    } catch (e) {
-      const match = content.match(/\{[\s\S]*\}/);
-      if (match) {
-        return JSON.parse(match[0]);
-      }
-      throw e;
-    }
+    return cleanAndParseJson(content);
   }
+}
+
+function cleanAndParseJson(content) {
+  if (!content || typeof content !== 'string') return null;
+  // 1. Strip markdown code fences
+  let cleaned = content.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+
+  // 2. Direct parse attempt
+  try {
+    return JSON.parse(cleaned);
+  } catch (_) {}
+
+  // 3. Extract outermost { ... }
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    cleaned = jsonMatch[0];
+    try {
+      return JSON.parse(cleaned);
+    } catch (_) {}
+
+    // 4. Fix unquoted emojis or values like "icon": 🦈,
+    let fixed = cleaned.replace(/("icon"\s*:\s*)([^\s",\{\}\[\]]+)(\s*[,}\n])/g, '$1"$2"$3');
+    try {
+      return JSON.parse(fixed);
+    } catch (_) {}
+
+    // 5. Remove trailing commas before } or ]
+    fixed = fixed.replace(/,\s*([\}\]])/g, '$1');
+    try {
+      return JSON.parse(fixed);
+    } catch (_) {}
+  }
+
+  // 6. Regex field extraction fallback
+  const extractField = (key) => {
+    const re = new RegExp(`"${key}"\\s*:\\s*"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"`, 'i');
+    const m = content.match(re);
+    if (m) return m[1];
+    const re2 = new RegExp(`"${key}"\\s*:\\s*([^,\\n\\}]+)`, 'i');
+    const m2 = content.match(re2);
+    if (m2) return m2[1].replace(/^["']|["']$/g, '').trim();
+    return null;
+  };
+
+  const obj = {};
+  const keys = ['nameLa', 'nameEn', 'nameRu', 'icon', 'titleEn', 'titleRu', 'storyEn', 'storyRu', 'insightEn', 'insightRu', 'badgeEn', 'badgeRu'];
+  for (const k of keys) {
+    const val = extractField(k);
+    if (val !== null) obj[k] = val;
+  }
+  return Object.keys(obj).length >= 2 ? obj : null;
 }

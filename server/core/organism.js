@@ -53,7 +53,7 @@ export class Organism {
       splitThreshold: isPredator ? 220.0 + Math.random() * 40 : 80.0 + Math.random() * 30,
       metabolismEfficiency: 0.9 + Math.random() * 0.25,
       mutationRate: 0.05 + Math.random() * 0.05,
-      adhesion: Math.random() * 0.5
+      adhesion: isPredator ? Math.random() * 0.35 : 0.3 + Math.random() * 0.6
     };
   }
 
@@ -194,6 +194,21 @@ export class Organism {
     steerX += separationX;
     steerY += separationY;
 
+    // 2.7. Substrate Deflection (Reefs & Bio-Architecture)
+    if (grid.getSubstrate) {
+      const subDensity = grid.getSubstrate(this.x, this.y);
+      if (subDensity > 0.25) {
+        const gradSub = grid.getSubstrateGradient(this.x, this.y);
+        const push = (subDensity - 0.25) * 4.2;
+        // Repel away from dense reef along gradient
+        steerX -= gradSub.dx * push;
+        steerY -= gradSub.dy * push;
+        // Mineral friction / drag inside shoals
+        this.vx *= (1.0 - Math.min(0.20, subDensity * 0.25));
+        this.vy *= (1.0 - Math.min(0.20, subDensity * 0.25));
+      }
+    }
+
     // Option 1: Soft Surface Tension & Inward Chamber Steering
     const CX = CONFIG.CHAMBER_CENTER_X;
     const CY = CONFIG.CHAMBER_CENTER_Y;
@@ -288,6 +303,11 @@ export class Organism {
         0.06 * ciliaryPulse // luminescence signal
       );
       this.energy += consumed * 5.4 * this.genome.metabolismEfficiency;
+
+      // Filter-feeders and grazers continuously precipitate mineral grains
+      if (grid.depositSubstrate && this.carnivory < 0.35 && consumed > 0.04) {
+        grid.depositSubstrate(this.x, this.y, 0.0008 * (this.size / 10), this.size * 0.7);
+      }
     }
 
     // Cap maximum energy
@@ -315,6 +335,10 @@ export class Organism {
         this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + gainedEnergy);
         this.kills++;
         grid.consumeAndExcrete(this.x, this.y, 0, 0.8, 0.4);
+        if (grid.depositSubstrate) {
+          // Battleground mineral precipitate: organic carcass leaves calcite traces
+          grid.depositSubstrate(prey.x, prey.y, 0.05 * (prey.size / 8), prey.size * 0.9);
+        }
         return { killed: true, preyId: prey.id };
       } else {
         // Predatory strike & bite: tears away vital energy from prey

@@ -3,6 +3,7 @@ import { ChemicalGrid } from './chemicalGrid.js';
 import { SpatialHash } from './spatialHash.js';
 import { Organism } from './organism.js';
 import { LineageManager } from './lineage.js';
+import { ColonyManager } from './colonies.js';
 import { AINaturalist } from '../ai/naturalist.js';
 import { PersistenceManager } from './persistence.js';
 
@@ -18,6 +19,7 @@ export class SimulationEngine {
     this.lineage = new LineageManager();
     this.naturalist = new AINaturalist(this.lineage);
     this.persistence = new PersistenceManager();
+    this.colonies = new ColonyManager();
     
     // Active visitor-created nutrient blooms
     this.nutrientBlooms = [];
@@ -177,6 +179,10 @@ export class SimulationEngine {
             y: child.y,
             speciesId: child.speciesId
           });
+          // Multicellular bonding: if parent has high adhesion, child stays attached
+          if (org.genome.adhesion > 0.6) {
+            this.colonies.formBond(org, child);
+          }
         }
       }
 
@@ -185,11 +191,25 @@ export class SimulationEngine {
         deadSet.add(org.id);
         // Dissolve organism mass back into nutrients
         this.grid.injectDrop(org.x, org.y, org.size * 0.25, org.size * 1.5);
+        // Necro-calcification: deposit structural bio-calcite into substrate
+        if (this.grid.depositSubstrate) {
+          this.grid.depositSubstrate(org.x, org.y, 0.08 * (org.size / 10), org.size * 1.1);
+        }
       }
     }
 
+    // 3.5. Colony Bond Physics: spring forces, alignment, shared metabolism
+    const orgsById = new Map();
+    for (let i = 0; i < this.organisms.length; i++) {
+      orgsById.set(this.organisms[i].id, this.organisms[i]);
+    }
+    this.colonies.applyBondPhysics(orgsById);
+
     // 4. Remove deceased organisms
     if (deadSet.size > 0) {
+      for (const deadId of deadSet) {
+        this.colonies.removeOrganism(deadId);
+      }
       this.organisms = this.organisms.filter(o => !deadSet.has(o.id));
     }
 
@@ -330,7 +350,9 @@ export class SimulationEngine {
       dominantSpeciesNameEn: dominantSpecies ? (dominantSpecies.nameEn || dominantSpecies.nameLa) : null,
       dominantCount: dominantSpecies ? dominantSpecies.population : 0,
       topPredatorNameRu: apexHunterSpecies ? (apexHunterSpecies.nameRu || apexHunterSpecies.nameLa) : null,
-      topPredatorNameEn: apexHunterSpecies ? (apexHunterSpecies.nameEn || apexHunterSpecies.nameLa) : null
+      topPredatorNameEn: apexHunterSpecies ? (apexHunterSpecies.nameEn || apexHunterSpecies.nameLa) : null,
+      reefCoverage: this.grid.getReefCoverage ? this.grid.getReefCoverage() : 0,
+      ...this.colonies.getStats()
     };
   }
 
@@ -378,7 +400,8 @@ export class SimulationEngine {
         y: Math.round(b.y),
         r: Math.round(b.radius),
         e: Math.round(b.energy)
-      }))
+      })),
+      colonies: this.colonies.getBondPairs()
     };
   }
 }

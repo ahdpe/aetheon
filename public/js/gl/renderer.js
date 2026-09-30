@@ -36,9 +36,10 @@ export class OceanRenderer {
     this.ripples = [];
     this.foodParticles = [];
     this.serverBlooms = [];
+    this.colonyBonds = [];
     this.vents = [];
     this.isLabMode = false;
-    
+
     // Chemical thumbnail buffer for fluid field
     this.thumbCanvas = document.createElement('canvas');
     this.thumbCanvas.width = 48;
@@ -120,25 +121,45 @@ export class OceanRenderer {
   }
 
   updateThumbnail(rawThumb) {
-    if (!rawThumb || rawThumb.length < 48 * 48 * 3) return;
+    if (!rawThumb) return;
+    const isRGBA = rawThumb.length >= 48 * 48 * 4;
+    const isRGB = rawThumb.length >= 48 * 48 * 3;
+    if (!isRGB) return;
+
     const data = this.thumbImgData.data;
     let srcPtr = 0;
     let dstPtr = 0;
+    let maxSub = 0;
 
     for (let i = 0; i < 48 * 48; i++) {
       const nut = rawThumb[srcPtr++];
       const wst = rawThumb[srcPtr++];
       const sig = rawThumb[srcPtr++];
+      const sub = isRGBA ? rawThumb[srcPtr++] : 0;
+      if (sub > maxSub) maxSub = sub;
 
-      // Map chemicals to oceanic palette:
-      // Nutrients: Cyan/Emerald glow
-      // Waste: Deep violet/rust
-      // Signal: Electric bioluminescent highlight
-      data[dstPtr++] = Math.min(255, wst * 1.2 + sig * 0.4);       // R
-      data[dstPtr++] = Math.min(255, nut * 0.9 + sig * 0.6);       // G
-      data[dstPtr++] = Math.min(255, nut * 1.4 + sig * 1.2 + 25);  // B
-      data[dstPtr++] = 120; // Translucent fluid overlay
+      if (sub > 18) {
+        // Bio-calcite Coral Reef & Living Mineral Architecture (Stigmergy)
+        // Transitions from emerald-cyan calcified shoals to glowing bone-white / limestone ridges
+        const subNorm = sub / 255;
+        const reefR = Math.min(255, Math.floor(wst * 0.3 + sub * 0.75 + (subNorm > 0.5 ? 65 : 0)));
+        const reefG = Math.min(255, Math.floor(nut * 0.4 + sub * 0.95 + 45));
+        const reefB = Math.min(255, Math.floor(nut * 0.7 + sub * 0.85 + 75));
+        const alpha = Math.min(235, 120 + Math.floor(subNorm * 115));
+
+        data[dstPtr++] = reefR;
+        data[dstPtr++] = reefG;
+        data[dstPtr++] = reefB;
+        data[dstPtr++] = alpha;
+      } else {
+        // Ambient oceanic chemical field
+        data[dstPtr++] = Math.min(255, wst * 1.2 + sig * 0.4);       // R
+        data[dstPtr++] = Math.min(255, nut * 0.9 + sig * 0.6);       // G
+        data[dstPtr++] = Math.min(255, nut * 1.4 + sig * 1.2 + 25);  // B
+        data[dstPtr++] = 120; // Translucent fluid overlay
+      }
     }
+    this.hasReefs = maxSub > 25;
     this.thumbCtx.putImageData(this.thumbImgData, 0, 0);
   }
 
@@ -173,6 +194,10 @@ export class OceanRenderer {
 
     if (packet.blooms) {
       this.serverBlooms = packet.blooms;
+    }
+
+    if (packet.colonies) {
+      this.colonyBonds = packet.colonies;
     }
 
     if (packet.thumbnail) {
@@ -226,13 +251,21 @@ export class OceanRenderer {
 
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.globalAlpha = this.isLabMode ? 0.70 : 0.35;
+    ctx.globalAlpha = this.isLabMode ? 0.70 : 0.42;
     
     const wsPix = this.worldSize * camZoom;
     const originX = toScreenX(0);
     const originY = toScreenY(0);
 
     ctx.drawImage(this.thumbCanvas, originX, originY, wsPix, wsPix);
+
+    // Bioluminescent mineral bloom for calcified coral structures
+    if (this.hasReefs && !this.isLabMode) {
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = 0.28;
+      ctx.drawImage(this.thumbCanvas, originX, originY, wsPix, wsPix);
+      ctx.globalCompositeOperation = 'source-over';
+    }
     ctx.restore();
 
     // 4. Render Hydrothermal Vents
@@ -300,6 +333,11 @@ export class OceanRenderer {
       const isSelected = this.camera.trackedEntityId === curr.id;
 
       this.drawOrganism(ctx, sx, sy, radius, curr, heading, isSelected, time);
+    }
+
+    // 7.2. Colony Intercellular Bonds (Multicellular Membrane Filaments)
+    if (this.colonyBonds.length > 0) {
+      this.renderColonyBonds(ctx, toScreenX, toScreenY, camZoom, time);
     }
 
     // 7.5. Render Nutrient Blooms & Floating Phytomanna Spores
@@ -453,6 +491,148 @@ export class OceanRenderer {
       ctx.moveTo(0, -targetR - 5); ctx.lineTo(0, -targetR + 5);
       ctx.moveTo(0, targetR - 5); ctx.lineTo(0, targetR + 5);
       ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  // Render intercellular membrane bonds between organisms in multicellular colonies
+  renderColonyBonds(ctx, toScreenX, toScreenY, camZoom, time) {
+    const w = this.camera.viewportW;
+    const h = this.camera.viewportH;
+    const bonds = this.colonyBonds;
+    if (!bonds || bonds.length === 0) return;
+
+    ctx.save();
+
+    // Count bonds per organism for collective glow detection
+    const bondCountMap = new Map();
+    for (let i = 0; i < bonds.length; i++) {
+      const bond = bonds[i];
+      bondCountMap.set(bond.a, (bondCountMap.get(bond.a) || 0) + 1);
+      bondCountMap.set(bond.b, (bondCountMap.get(bond.b) || 0) + 1);
+    }
+
+    // Sort bonds by distance to camera center for LOD
+    const centerSX = w * 0.5;
+    const centerSY = h * 0.5;
+    const bondData = [];
+
+    for (let i = 0; i < bonds.length; i++) {
+      const bond = bonds[i];
+      const orgA = this.currEntities.get(bond.a);
+      const orgB = this.currEntities.get(bond.b);
+      if (!orgA || !orgB) continue;
+
+      const ax = toScreenX(orgA.x);
+      const ay = toScreenY(orgA.y);
+      const bx = toScreenX(orgB.x);
+      const by = toScreenY(orgB.y);
+
+      // Cull bonds entirely offscreen
+      const midX = (ax + bx) * 0.5;
+      const midY = (ay + by) * 0.5;
+      if (midX < -100 || midX > w + 100 || midY < -100 || midY > h + 100) continue;
+
+      const distToCenter = Math.hypot(midX - centerSX, midY - centerSY);
+      bondData.push({ orgA, orgB, ax, ay, bx, by, midX, midY, distToCenter });
+    }
+
+    // Sort by distance to center
+    bondData.sort((a, b) => a.distToCenter - b.distToCenter);
+    const maxDetailed = 40;
+
+    // Pass 1: Batch draw all basic membrane filaments
+    ctx.lineWidth = Math.max(1.2, 1.8 * camZoom);
+    ctx.lineCap = 'round';
+
+    for (let i = 0; i < bondData.length; i++) {
+      const bd = bondData[i];
+      const avgHue = Math.round(((bd.orgA.hue + bd.orgB.hue) * 0.5) * 360);
+
+      // Organic undulating bezier curve
+      const dx = bd.bx - bd.ax;
+      const dy = bd.by - bd.ay;
+      const dist = Math.hypot(dx, dy) || 1;
+      const nx = -dy / dist; // perpendicular
+      const ny = dx / dist;
+      const wave = Math.sin(time * 0.004 + bd.orgA.id * 0.7) * Math.min(12, dist * 0.15);
+
+      const cpx = bd.midX + nx * wave;
+      const cpy = bd.midY + ny * wave;
+
+      // Membrane glow
+      ctx.strokeStyle = `hsla(${avgHue}, 80%, 60%, 0.35)`;
+      ctx.lineWidth = Math.max(2.5, 3.5 * camZoom);
+      ctx.beginPath();
+      ctx.moveTo(bd.ax, bd.ay);
+      ctx.quadraticCurveTo(cpx, cpy, bd.bx, bd.by);
+      ctx.stroke();
+
+      // Core filament
+      ctx.strokeStyle = `hsla(${avgHue}, 90%, 75%, 0.55)`;
+      ctx.lineWidth = Math.max(1.0, 1.5 * camZoom);
+      ctx.beginPath();
+      ctx.moveTo(bd.ax, bd.ay);
+      ctx.quadraticCurveTo(cpx, cpy, bd.bx, bd.by);
+      ctx.stroke();
+
+      // Pass 2: Animated cytoplasmic flow dots (detailed, nearest bonds only)
+      if (i < maxDetailed && dist > 8) {
+        const dotCount = Math.min(4, Math.max(2, Math.floor(dist / 20)));
+        for (let d = 0; d < dotCount; d++) {
+          // Parametric position along bezier, animated
+          const baseT = (d + 1) / (dotCount + 1);
+          const flowT = (baseT + (time * 0.0008 + bd.orgA.id * 0.3) % 1.0) % 1.0;
+
+          // Quadratic bezier point
+          const t1 = 1 - flowT;
+          const px = t1 * t1 * bd.ax + 2 * t1 * flowT * cpx + flowT * flowT * bd.bx;
+          const py = t1 * t1 * bd.ay + 2 * t1 * flowT * cpy + flowT * flowT * bd.by;
+
+          const dotR = Math.max(1.2, 2.0 * camZoom);
+          ctx.fillStyle = `hsla(${(avgHue + 30) % 360}, 95%, 85%, 0.75)`;
+          ctx.beginPath();
+          ctx.arc(px, py, dotR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Collective colony glow for organisms with 3+ bonds
+      if (i < maxDetailed) {
+        const countA = bondCountMap.get(bd.orgA.id) || 0;
+        const countB = bondCountMap.get(bd.orgB.id) || 0;
+        if (countA >= 3 || countB >= 3) {
+          const glowOrg = countA >= countB ? bd.orgA : bd.orgB;
+          const gx = countA >= countB ? bd.ax : bd.bx;
+          const gy = countA >= countB ? bd.ay : bd.by;
+          const glowR = Math.max(15, glowOrg.size * camZoom * 2.5);
+
+          const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, glowR);
+          const glowHue = Math.round(glowOrg.hue * 360);
+          grad.addColorStop(0, `hsla(${glowHue}, 90%, 70%, 0.18)`);
+          grad.addColorStop(1, 'transparent');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(gx, gy, glowR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // Lab mode: colony bond telemetry labels
+    if (this.isLabMode && bondData.length > 0) {
+      ctx.font = '8px "JetBrains Mono", monospace';
+      const labelLimit = Math.min(8, bondData.length);
+      for (let i = 0; i < labelLimit; i++) {
+        const bd = bondData[i];
+        const label = `[BOND] Sp.${bd.orgA.speciesId}↔Sp.${bd.orgB.speciesId}`;
+        const tw = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(6, 12, 26, 0.85)';
+        ctx.fillRect(bd.midX - tw * 0.5 - 2, bd.midY - 6, tw + 4, 11);
+        ctx.fillStyle = '#80ffcc';
+        ctx.fillText(label, bd.midX - tw * 0.5, bd.midY + 3);
+      }
     }
 
     ctx.restore();

@@ -42,7 +42,9 @@ export class PersistenceManager {
           genome: org.genome
         })),
         speciesList: engine.lineage.getAllSpecies(),
-        journalEntries: engine.naturalist.journalEntries
+        journalEntries: engine.naturalist.journalEntries,
+        substrateBase64: (engine.grid && engine.grid.substrate) ? Buffer.from(engine.grid.substrate.buffer).toString('base64') : null,
+        colonyData: engine.colonies ? engine.colonies.getSerializableData() : []
       };
 
       const tempPath = `${this.filePath}.tmp`;
@@ -84,6 +86,18 @@ export class PersistenceManager {
         engine.naturalist.journalEntries = data.journalEntries;
       }
 
+      if (data.substrateBase64 && engine.grid && engine.grid.substrate) {
+        try {
+          const buf = Buffer.from(data.substrateBase64, 'base64');
+          if (buf.byteLength === engine.grid.substrate.byteLength) {
+            engine.grid.substrate.set(new Float32Array(buf.buffer, buf.byteOffset, engine.grid.substrate.length));
+            console.log('[Persistence] Successfully restored bio-calcite substrate reef matrix.');
+          }
+        } catch (e) {
+          console.warn('[Persistence] Substrate restoration failed:', e.message);
+        }
+      }
+
       if (data.organisms && Array.isArray(data.organisms)) {
         engine.organisms = data.organisms.map(saved => {
           const org = new Organism(
@@ -107,6 +121,20 @@ export class PersistenceManager {
       }
 
       console.log(`[Persistence] Resumed world from snapshot! Age: ${Math.floor((Date.now() - engine.genesisTime) / (1000 * 60))} mins, Pop: ${engine.organisms.length}`);
+
+      // Restore multicellular colonies (must happen after organisms are loaded)
+      if (data.colonyData && engine.colonies) {
+        const orgsById = new Map();
+        for (const org of engine.organisms) {
+          orgsById.set(org.id, org);
+        }
+        engine.colonies.restoreFromData(data.colonyData, orgsById);
+        const cs = engine.colonies.getStats();
+        if (cs.colonyCount > 0) {
+          console.log(`[Persistence] Restored ${cs.colonyCount} multicellular colonies (${cs.totalBondedOrganisms} bonded organisms).`);
+        }
+      }
+
       return true;
     } catch (err) {
       console.error('[Persistence] Error loading snapshot, starting fresh:', err.message);

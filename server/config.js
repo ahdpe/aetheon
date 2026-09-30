@@ -40,7 +40,7 @@ export const CONFIG = {
   VENICE_DECISIONS_URL: resolveVeniceDecisionsUrl(),
   VENICE_MODEL: process.env.VENICE_MODEL || 'openai-gpt-4o-mini-2024-07-18',
   JEV_MODEL: process.env.JEV_MODEL || 'jev-latest',
-  JEV_SCREENING_INTERVAL_MS: (parseInt(process.env.JEV_SCREENING_INTERVAL_SEC || '25', 10)) * 1000,
+  JEV_SCREENING_INTERVAL_MS: (parseInt(process.env.JEV_SCREENING_INTERVAL_SEC || '60', 10)) * 1000,
   AI_OBSERVER_INTERVAL_MS: (parseInt(process.env.AI_OBSERVER_INTERVAL_MIN || '15', 10)) * 60 * 1000,
   
   // Simulation Constants
