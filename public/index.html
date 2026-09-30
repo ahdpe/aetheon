@@ -25,10 +25,11 @@
         <span class="brand-symbol">◈</span>
         <h1 class="brand-title">AETHEON</h1>
       </div>
-      <div class="live-badge" title="Canonical 24/7 world stream">
+      <button class="live-badge interactive-badge" id="btn-live-header" title="Хроника эволюции (День X)" aria-label="Open Evolution Chronicle">
         <span class="live-pulse"></span>
         <span class="live-text" id="live-indicator">LIVE • DAY 1</span>
-      </div>
+        <span class="btn-badge-dot hidden" id="journal-unread-dot"></span>
+      </button>
       <div class="stats-counter" id="stats-counter" aria-live="polite">
         <span class="stat-item"><strong id="stat-organisms">--</strong> <span data-i18n="organisms">organisms</span></span>
         <span class="stat-sep">•</span>
@@ -50,53 +51,34 @@
         <span id="visitor-count">1</span>
       </div>
 
+
       <!-- Mode Toggle: Zen vs Research Lab -->
-      <button class="hud-btn" id="btn-mode-toggle" aria-label="Toggle Lab Mode" title="Toggle Research Lab Mode (R)">
-        <svg class="icon icon-lab" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M10 2v7.31L4.1 19.33A2 2 0 0 0 5.8 22h12.4a2 2 0 0 0 1.7-2.67L14 9.31V2h-4z"></path>
-          <path d="M8.5 2h7"></path>
-          <path d="M7 16h10"></path>
-        </svg>
+      <button class="hud-btn hud-btn-lab" id="btn-mode-toggle" aria-label="Toggle Lab Mode" title="Toggle Research Lab Mode (R)">
+        <span class="btn-icon">🧪</span>
         <span class="btn-label" id="label-mode" data-i18n="mode_lab">Lab</span>
       </button>
 
-      <!-- Field Codex (Species Encyclopedia & AI Journal) -->
-      <button class="hud-btn" id="btn-codex" aria-label="Open Field Codex" title="Open Field Codex (C)">
-        <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-        </svg>
+      <!-- Field Codex (Species Encyclopedia) -->
+      <button class="hud-btn hud-btn-codex" id="btn-codex" aria-label="Open Field Codex" title="Open Species Codex (C)">
+        <span class="btn-icon">🧬</span>
         <span class="btn-label" data-i18n="codex_title">Codex</span>
       </button>
 
       <!-- About & Architecture Modal -->
-      <button class="hud-btn" id="btn-about" aria-label="About & Mathematics" title="About & Architecture (A)">
-        <svg class="icon icon-about" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="12" y1="16" x2="12" y2="12"></line>
-          <line x1="12" y1="8" x2="12.01" y2="8"></line>
-        </svg>
+      <button class="hud-btn hud-btn-about" id="btn-about" aria-label="About & Mathematics" title="About & Architecture (A)">
+        <span class="btn-icon">ℹ️</span>
         <span class="btn-label" data-i18n="about_btn">About</span>
       </button>
 
       <!-- Audio Toggle -->
-      <button class="hud-btn" id="btn-audio" aria-label="Toggle Sound" title="Toggle Ambient Audio (M)">
-        <svg class="icon icon-sound-off" id="icon-sound-off" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="1" y1="1" x2="23" y2="23"></line>
-          <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
-          <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
-          <line x1="12" y1="19" x2="12" y2="23"></line>
-          <line x1="8" y1="23" x2="16" y2="23"></line>
-        </svg>
-        <svg class="icon icon-sound-on hidden" id="icon-sound-on" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-        </svg>
+      <button class="hud-btn hud-btn-audio" id="btn-audio" aria-label="Toggle Sound" title="Toggle Ambient Audio (M)">
+        <span class="btn-icon" id="audio-icon">🔇</span>
         <span class="btn-label" id="label-audio" data-i18n="sound_off">Sound</span>
       </button>
 
-      <!-- Language Toggle (EN / RU) -->
-      <button class="hud-btn hud-btn-lang" id="btn-lang" aria-label="Switch Language">
+      <!-- Prominent Language Switcher Button (EN / RU) -->
+      <button class="hud-btn hud-btn-lang" id="btn-lang" aria-label="Switch Language" title="Switch Language (L)">
+        <span class="lang-icon">🌐</span>
         <span class="lang-flag" id="lang-indicator">RU</span>
       </button>
     </div>
@@ -123,20 +105,52 @@
   <div class="interactive-hint" id="interactive-hint">
     <div class="hint-pill glass-panel">
       <span class="hint-icon">✦</span>
-      <span id="hint-text" data-i18n="hint_intro">Tap to drop nutrients • Drag to stir currents • Click any creature to inspect</span>
+      <span id="hint-text" data-i18n="hint_intro">Tap: feed • Drag: move view • Pinch: zoom • Click creature: inspect</span>
     </div>
   </div>
 
-  <!-- Bottom AI Naturalist Ticker -->
-  <footer class="hud-footer glass-panel" role="contentinfo">
-    <div class="ticker-prefix">
-      <span class="ticker-badge" data-i18n="naturalist_tag">XENOBIOLOGIST</span>
-      <span class="ticker-epoch" id="ticker-epoch">Epoch I: Primordial Genesis</span>
+  <!-- Bottom AI Naturalist Live Chronicle Bar (Interactive) -->
+  <footer class="hud-footer glass-panel interactive-footer" id="interactive-footer" role="region" aria-label="AI Naturalist Chronicle Bar">
+    <div class="footer-left">
+      <div class="ticker-prefix">
+        <span class="ticker-badge" data-i18n="naturalist_tag">XENOBIOLOGIST</span>
+        <span class="ticker-epoch" id="ticker-epoch">Epoch I: Primordial Genesis</span>
+      </div>
+      <div class="ticker-content" id="ticker-text" aria-live="polite">
+        Observing fluid equilibrium... Resonators are clustering around mineral vents.
+      </div>
     </div>
-    <div class="ticker-content" id="ticker-text" aria-live="polite">
-      Observing fluid equilibrium... Resonators are clustering around mineral vents.
-    </div>
+    <button class="footer-expand-btn" id="btn-expand-journal" aria-label="Open Full Journal Feed">
+      <span class="expand-btn-text" data-i18n="open_journal_feed">▲ Читать журнал</span>
+      <span class="expand-btn-badge" id="journal-count-badge">12</span>
+    </button>
   </footer>
+
+  <!-- Slide-up Live Chronicle Drawer / Feed (The Main Journal Stream) -->
+  <aside class="journal-drawer glass-panel" id="journal-drawer" aria-label="Live Evolution Chronicle Feed">
+    <div class="drawer-drag-handle" id="drawer-drag-handle">
+      <span class="drag-bar"></span>
+    </div>
+    <div class="drawer-header">
+      <div class="drawer-title-wrap">
+        <span class="drawer-icon">📜</span>
+        <div>
+          <h2 class="drawer-title" data-i18n="journal_drawer_title">Журнал натуралиста • Хроника эволюции</h2>
+          <span class="drawer-subtitle" data-i18n="journal_drawer_subtitle">Живые наблюдения и хроника от Venice AI (LLaMA 3.3 70B)</span>
+        </div>
+      </div>
+      <div class="drawer-header-actions">
+        <button class="drawer-action-btn" id="btn-open-codex-species" data-i18n="btn_species_catalog">🧬 Кодекс видов</button>
+        <button class="close-btn drawer-close-btn" id="btn-close-journal" aria-label="Close Journal Feed">✕</button>
+      </div>
+    </div>
+    <div class="drawer-body">
+      <div class="drawer-timeline" id="drawer-timeline">
+        <!-- Live Chronicle Cards rendered dynamically -->
+      </div>
+    </div>
+  </aside>
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
 
   <!-- Organism Inspector / Bio-Card (Appears when clicking an organism) -->
   <aside class="bio-inspector glass-panel hidden" id="bio-inspector" aria-label="Organism Scanner">
@@ -190,29 +204,54 @@
     </div>
   </aside>
 
-  <!-- Species Codex & AI Journal Modal Dialog -->
+  <!-- Species Codex (Lineage Catalog) Modal Dialog -->
   <dialog class="codex-dialog glass-panel" id="codex-dialog" aria-labelledby="codex-modal-title">
     <div class="modal-header">
-      <div class="modal-tabs">
-        <button class="tab-btn active" id="tab-species-btn" data-i18n="tab_species">Species Codex</button>
-        <button class="tab-btn" id="tab-journal-btn" data-i18n="tab_journal">Naturalist Journal</button>
+      <div class="modal-title-wrap">
+        <span class="modal-icon">🧬</span>
+        <h2 class="modal-title" id="codex-modal-title" data-i18n="tab_species">Species Codex</h2>
       </div>
       <button class="close-btn" id="codex-close-btn" aria-label="Close Dialog">&times;</button>
     </div>
 
-    <!-- Tab 1: Species Encyclopedia -->
-    <div class="modal-body tab-content active" id="tab-species-content">
+    <!-- Species Encyclopedia Content -->
+    <div class="modal-body">
       <div class="codex-intro" data-i18n="codex_intro">
         Continuous catalog of all lineages that have emerged, adapted, or gone extinct since Genesis.
       </div>
-      <div class="species-grid" id="species-grid">
-        <!-- Rendered dynamically -->
-      </div>
-    </div>
 
-    <!-- Tab 2: AI Field Journal -->
-    <div class="modal-body tab-content" id="tab-journal-content">
-      <div class="journal-timeline" id="journal-timeline">
+      <!-- Codex Filter & Search Toolbar -->
+      <div class="codex-filter-bar" id="codex-filter-bar">
+        <div class="filter-chips-group">
+          <button class="codex-chip active" data-filter="all">
+            <span class="chip-label" data-i18n="filter_all">Все виды</span>
+            <span class="chip-count" id="count-all">0</span>
+          </button>
+          <button class="codex-chip chip-alive" data-filter="alive">
+            <span class="chip-label" data-i18n="filter_alive">🟢 В чаше сейчас</span>
+            <span class="chip-count" id="count-alive">0</span>
+          </button>
+          <button class="codex-chip chip-hunter" data-filter="hunter">
+            <span class="chip-label" data-i18n="filter_hunter">🗡️ Хищники</span>
+            <span class="chip-count" id="count-hunter">0</span>
+          </button>
+          <button class="codex-chip chip-grazer" data-filter="grazer">
+            <span class="chip-label" data-i18n="filter_grazer">🌾 Травоядные</span>
+            <span class="chip-count" id="count-grazer">0</span>
+          </button>
+          <button class="codex-chip chip-extinct" data-filter="extinct">
+            <span class="chip-label" data-i18n="filter_extinct">💀 Вымершие</span>
+            <span class="chip-count" id="count-extinct">0</span>
+          </button>
+        </div>
+        <div class="codex-search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="codex-search" class="codex-search-input" placeholder="Поиск вида..." data-i18n-placeholder="search_placeholder" autocomplete="off" spellcheck="false">
+          <button class="search-clear-btn hidden" id="codex-search-clear" aria-label="Clear search">✕</button>
+        </div>
+      </div>
+
+      <div class="species-grid" id="species-grid">
         <!-- Rendered dynamically -->
       </div>
     </div>

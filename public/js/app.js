@@ -4,6 +4,7 @@ import { OceanRenderer } from './gl/renderer.js';
 import { BioInspector } from './ui/inspector.js';
 import { CodexModal } from './ui/codexModal.js';
 import { AboutModal } from './ui/aboutModal.js';
+import { JournalDrawer } from './ui/journalDrawer.js';
 import { InputController } from './ui/controls.js';
 
 class AetheonApp {
@@ -12,11 +13,13 @@ class AetheonApp {
     this.renderer = new OceanRenderer(this.canvas);
     this.socket = null;
     this.isConnected = false;
+    this.journalEntries = [];
 
     // UI Modules
     this.inspector = new BioInspector(this, this.renderer);
     this.codexModal = new CodexModal(this);
     this.aboutModal = new AboutModal();
+    this.journalDrawer = new JournalDrawer(this);
     this.controls = new InputController(this.canvas, this.renderer, this.inspector, this.codexModal, this, this.aboutModal);
 
     this.init();
@@ -86,6 +89,16 @@ class AetheonApp {
       if (modeLabel) {
         modeLabel.textContent = isLab ? i18n.t('mode_zen') : i18n.t('mode_lab');
       }
+      if (this.journalEntries && this.journalEntries.length > 0) {
+        this.updateTicker(this.journalEntries[0]);
+      }
+      this.journalDrawer?.render();
+      if (this.codexModal && this.codexModal.activeSpecies.length > 0) {
+        this.codexModal.renderData(this.codexModal.activeSpecies);
+      }
+      if (this.lastStats) {
+        this.updateStats(this.lastStats);
+      }
     });
   }
 
@@ -142,7 +155,9 @@ class AetheonApp {
       this.updateStats(msg.stats);
       this.updateVisitors(msg.visitors);
       if (msg.journal && msg.journal.length > 0) {
+        this.journalEntries = msg.journal;
         this.updateTicker(msg.journal[0]);
+        this.journalDrawer.setEntries(msg.journal);
       }
     } else if (msg.type === 'tick') {
       this.renderer.onServerTick(msg);
@@ -170,11 +185,24 @@ class AetheonApp {
       this.inspector.updateProfile(msg.profile);
     } else if (msg.type === 'codex_data') {
       this.codexModal.renderData(msg.species, msg.journal);
+      if (msg.journal && msg.journal.length > 0) {
+        this.journalEntries = msg.journal;
+        this.journalDrawer.setEntries(msg.journal);
+      }
+    } else if (msg.type === 'journal_entry') {
+      if (msg.entry) {
+        this.journalEntries = this.journalEntries || [];
+        this.journalEntries.unshift(msg.entry);
+        this.updateTicker(msg.entry);
+        this.journalDrawer.addLiveEntry(msg.entry);
+        sound.playDroplet(1200);
+      }
     }
   }
 
   updateStats(stats) {
     if (!stats) return;
+    this.lastStats = stats;
     const statOrg = document.getElementById('stat-organisms');
     const statSp = document.getElementById('stat-species');
     const statGen = document.getElementById('stat-generation');

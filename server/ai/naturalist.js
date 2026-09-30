@@ -32,6 +32,13 @@ export class AINaturalist {
     if (this.journalEntries.length > 60) {
       this.journalEntries.pop();
     }
+    if (typeof this.onNewEntry === 'function') {
+      try {
+        this.onNewEntry(entry);
+      } catch (err) {
+        console.error('[AINaturalist] Error in onNewEntry callback:', err);
+      }
+    }
   }
 
   getRecentEntries(limit = 15) {
@@ -42,18 +49,20 @@ export class AINaturalist {
   async checkObservation(engineStats) {
     const now = Date.now();
     if (now - this.lastObservationTime < CONFIG.AI_OBSERVER_INTERVAL_MS) {
-      return;
+      return false;
     }
     this.lastObservationTime = now;
 
     // Identify candidate species needing AI taxonomy
     const allSpecies = this.lineageManager.getAllSpecies();
-    const unchronicled = allSpecies.find(s => !s.aiChronicle && s.totalCount > 12 && s.population > 2);
+    const unchronicled = allSpecies.find(s => !s.aiChronicle && s.totalCount > 10 && s.population > 1);
 
     if (unchronicled) {
       await this.chronicleSpecies(unchronicled, engineStats);
+      return true;
     } else {
       await this.chronicleEcosystem(engineStats);
+      return true;
     }
   }
 
@@ -198,23 +207,35 @@ JSON ONLY, NO MARKDOWN.`;
 
     if (isVeniceAvailable) {
       try {
-        const prompt = `Current status of the microscopic living aquarium AETHEON:
-- Organisms alive: ${stats.organismCount}
-- Number of active species: ${stats.speciesCount}
-- Max Generation: ${stats.generation}
-- Simulation Day: ${stats.ageDays + 1}
-- Mean Energy: ${Math.round(stats.meanEnergy || 50)}
+        const prompt = `Live field observation of the microscopic aquarium AETHEON:
+- Recent hunts / predation strikes: ${stats.recentKills || 0}
+- Recent cell divisions (mitosis): ${stats.recentBirths || 0}
+- Recent speciation branches: ${stats.recentSpeciations || 0}
+- Dominant lineage: "${stats.dominantSpeciesNameEn || 'Grazer'}" (${stats.dominantCount || 0} organisms)
+- Top Apex Hunter: "${stats.topPredatorNameEn || 'Solitary stalkers'}"
+- Active population: ${stats.organismCount} organisms across ${stats.speciesCount} species
+- Generation milestone: #${stats.generation}
 
-Write a thrilling, poetic 2-sentence dispatch as a nature documentary narrator for everyday visitors.
+CRITICAL RULES:
+1. NEVER start with 'In the depths of AETHEON', 'A vibrant tapestry', 'In the microscopic realm', or 'A kaleidoscope of life'.
+2. NEVER use the phrase 'Это значит, что' or 'This means that'.
+3. Describe the EXACT current drama based on the field data above:
+   - If hunts happened (${stats.recentKills || 0} kills), narrate the predator strikes and grazers fleeing toward the vents.
+   - If births surged (${stats.recentBirths || 0} divisions), narrate the sudden bloom, crowding, and fight for mineral plumes.
+   - If speciation happened (${stats.recentSpeciations || 0}), narrate how a new lineage split away.
+4. "insightRu" / "insightEn": 1 brief scientific takeaway (without saying "это значит"), OR empty string "" if not strictly needed.
+
 JSON format ONLY:
 {
-  "icon": "emoji (e.g. 🌅, 🌾, 🐺, 🌋, ⚖️)",
-  "titleEn": "Short title with emoji in English",
-  "titleRu": "Краткий заголовок с эмодзи на русском",
-  "storyEn": "2 vivid sentences describing the drama in the water in English.",
-  "storyRu": "2 ярких предложения о жизни в капле на русском.",
-  "insightEn": "1 simple sentence explaining what this means.",
-  "insightRu": "1 простое предложение: что это значит простыми словами."
+  "icon": "emoji fitting the story (e.g. ⚔️, 🌪️, 🌾, 🧬, 🌋, ⚡)",
+  "badgeEn": "Short 2-word badge in English (e.g. 'Predator Surge', 'Thermal Bloom', 'Mitosis Wave')",
+  "badgeRu": "Короткий бейдж 2 слова на русском (напр. 'Охота хищника', 'Тепловой всплеск', 'Волна делений')",
+  "titleEn": "Unique engaging headline",
+  "titleRu": "Уникальный интригующий заголовок",
+  "storyEn": "2 vivid documentary sentences.",
+  "storyRu": "2 ярких, кинематографичных предложения на русском языке.",
+  "insightEn": "1 punchy scientific takeaway (or empty string)",
+  "insightRu": "1 емкий научный вывод (или пустая строка)"
 }`;
 
         const response = await this.queryVeniceAI({ prompt });
@@ -223,14 +244,14 @@ JSON format ONLY:
           this.addEntry({
             type: 'observation',
             icon: response.icon || '🌾',
-            badgeEn: 'Ecosystem Dispatch',
-            badgeRu: 'Хроника капли',
+            badgeEn: response.badgeEn || 'Ecosystem Dispatch',
+            badgeRu: response.badgeRu || 'Хроника капли',
             titleEn: response.titleEn || `Ecosystem Dispatch (Gen #${stats.generation || 1})`,
             titleRu: response.titleRu || `Сводка экосистемы (Поколение #${stats.generation || 1})`,
             contentEn: response.storyEn,
             contentRu: response.storyRu,
-            insightEn: response.insightEn || 'The ecosystem remains in vibrant continuous motion.',
-            insightRu: response.insightRu || 'Жизнь в капле продолжает свое непрерывное движение.',
+            insightEn: response.insightEn || '',
+            insightRu: response.insightRu || '',
             timestamp: Date.now()
           });
           return;
@@ -240,56 +261,60 @@ JSON format ONLY:
       }
     }
 
-    // Procedural narrative dispatches (engaging and accessible)
-    const dispatches = [
-      {
-        icon: '🌾',
-        badgeEn: 'Population Boom',
-        badgeRu: 'Демографический бум',
-        titleEn: '🌾 The Great Golden Harvest',
-        titleRu: '🌾 Великое изобилие в капле',
-        storyEn: `A celebration of life has gripped the micro-ocean! Over ${stats.organismCount} living creatures thrive across ${stats.speciesCount} distinct lineages. Shimmering clouds of green and amber illuminate every sector.`,
-        storyRu: `В микромире настоящий праздник жизни! Более ${stats.organismCount} созданий процветают, разделившись на ${stats.speciesCount} видов. Вокруг пяти источников кипят сияющие колонии, а течения разносят тепло по всей капле.`,
-        insightEn: `Resources are plentiful, sparking active cell divisions and intense evolutionary competition.`,
-        insightRu: `Ресурсов хватает всем, клетки активно делятся, а конкуренция за лучшие теплые места усиливается.`
-      },
-      {
-        icon: '🐺',
-        badgeEn: 'Hunting Season',
-        badgeRu: 'Охотничий сезон',
-        titleEn: '🐺 The Crimson Patrols',
-        titleRu: '🐺 Охотничий сезон в глубинах',
-        storyEn: `Tension stirs in the fluid: fast predatory solitons are patrolling the open channels. Gentle grazers cluster tightly near the warmth of the vents, evading the sharp strikes of crimson hunters.`,
-        storyRu: `В открытых течениях развернулась напряженная драма: стаи алых охотников патрулируют центр чаши. Мирные пастбищники сбиваются в защитные кольца у теплых жерл, спасаясь от резких выпадов преследователей.`,
-        insightEn: `Survival of the fittest in action: only the most alert and swift organisms will pass their genes forward.`,
-        insightRu: `Естественный отбор в действии: выживают самые чуткие и маневренные, передавая свои гены новому поколению.`
-      },
-      {
-        icon: '⚖️',
-        badgeEn: 'Dynamic Equilibrium',
-        badgeRu: 'Баланс природы',
-        titleEn: '⚖️ The Breathing Harmony',
-        titleRu: '⚖️ Дыхание природного равновесия',
-        storyEn: `Following bursts of expansion and hunting, a serene equilibrium settles across the water. Herbivores graze peacefully, predators rest in the currents, and the ocean breathes as a single unified organism.`,
-        storyRu: `После бурной волны деления и охоты в чаше наступила гармоничная тишина. Хищники сыты, пастбищники неспешно пасутся на теплом мелководье, и вся экосистема дышит как единый слаженный организм.`,
-        insightEn: `Nature has balanced its scales: birth rates and energy consumption have matched the steady output of the vents.`,
-        insightRu: `Природа восстановила баланс: рождаемость и аппетит колонии идеально совпали с мощностью гидротермальных жерл.`
-      }
-    ];
+    // Adaptive procedural narrative dispatches (based on real recent events)
+    let icon = '⚖️';
+    let badgeEn = 'Equilibrium';
+    let badgeRu = 'Баланс капли';
+    let titleEn = 'Dynamic Equilibrium';
+    let titleRu = 'Баланс природы в капле';
+    let storyEn = `Organisms drift peacefully along the hydrothermal currents, filtering vital minerals and sustaining steady metabolic balance.`;
+    let storyRu = `Обитатели капли плавно скользят вдоль теплых течений, фильтруя минеральные соли и поддерживая размеренный метаболический баланс.`;
+    let insightEn = `Steady nutrient supply maintains population stability across all active niches.`;
+    let insightRu = `Равномерный приток минералов предотвращает резкие колебания численности.`;
 
-    const pick = dispatches[Math.floor(Math.random() * dispatches.length)];
+    if ((stats.recentKills || 0) > 2) {
+      icon = '⚔️';
+      badgeEn = 'Predator Hunt';
+      badgeRu = 'Охота хищников';
+      titleEn = '⚔️ The Crimson Stalkers';
+      titleRu = `⚔️ Охотничий рейд: ${stats.topPredatorNameRu || 'Ловчие'}`;
+      storyEn = `Predators have struck with sudden speed in the open channels! Swift hunters darted through the currents, claiming ${stats.recentKills} prey and driving grazers back to the shelter of the mineral vents.`;
+      storyRu = `В открытых водных коридорах развернулась стремительная охота! Быстрые хищники нанесли ${stats.recentKills} точных ударов, заставив травоядных искать спасения у теплых минеральных жерл.`;
+      insightEn = `Active predation prevents overgrazing and exerts evolutionary pressure for greater speed and defensive reflexes.`;
+      insightRu = `Охота сдерживает перенаселение и стимулирует выработку защитной скорости у травоядных.`;
+    } else if ((stats.recentBirths || 0) > 8) {
+      icon = '🌾';
+      badgeEn = 'Colony Boom';
+      badgeRu = 'Всплеск делений';
+      titleEn = '🌾 Thermal Feeding Frenzy';
+      titleRu = `🌾 Демографический бум: ${stats.dominantSpeciesNameRu || 'Пастбищники'}`;
+      storyEn = `A sudden wave of ${stats.recentBirths} cell divisions has swept through the hydrothermal reefs! The colony has expanded to ${stats.organismCount} organisms, with shimmering clusters contesting the richest feeding plumes.`;
+      storyRu = `Теплые гидротермальные оазисы всколыхнула волна из ${stats.recentBirths} клеточных делений! Популяция выросла до ${stats.organismCount} особей, и вокруг жерл разгорелась плотная борьба за питательные шлейфы.`;
+      insightEn = `Abundant nutrient intake fuels exponential mitotic divisions, testing the carrying capacity of each thermal zone.`;
+      insightRu = `Избыток тепла и солей запускает митоз, проверяя пределы вместимости подводных оазисов.`;
+    } else if ((stats.recentSpeciations || 0) > 0) {
+      icon = '🧬';
+      badgeEn = 'Speciation';
+      badgeRu = 'Ветвление жизни';
+      titleEn = '🧬 Evolutionary Divergence';
+      titleRu = '🧬 Новое ответвление древа жизни';
+      storyEn = `Accumulated genetic mutations have triggered an evolutionary split! A divergent lineage with novel ciliary morphology has broken away to occupy an unexploited fluid zone.`;
+      storyRu = `Накопленные в поколениях мутации привели к видообразованию! Новая генетическая ветвь с измененным строением ресничек отделилась и осваивает свободный гидродинамический ярус.`;
+      insightEn = `Niche specialization reduces direct competition and expands the ecological complexity of the waters.`;
+      insightRu = `Освоение новых ниш снижает прямую конкуренцию и делает экосистему более устойчивой.`;
+    }
 
     this.addEntry({
       type: 'observation',
-      icon: pick.icon,
-      badgeEn: pick.badgeEn,
-      badgeRu: pick.badgeRu,
-      titleEn: `${pick.titleEn} (Gen #${stats.generation || 1})`,
-      titleRu: `${pick.titleRu} (Поколение #${stats.generation || 1})`,
-      contentEn: pick.storyEn,
-      contentRu: pick.storyRu,
-      insightEn: pick.insightEn,
-      insightRu: pick.insightRu,
+      icon,
+      badgeEn,
+      badgeRu,
+      titleEn: `${titleEn} (Gen #${stats.generation || 1})`,
+      titleRu: `${titleRu} (Поколение #${stats.generation || 1})`,
+      contentEn: storyEn,
+      contentRu: storyRu,
+      insightEn,
+      insightRu,
       timestamp: Date.now()
     });
   }

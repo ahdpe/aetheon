@@ -8,7 +8,7 @@ export const DICTIONARY = {
     codex_title: 'Codex',
     sound_on: 'Sound',
     sound_off: 'Sound',
-    hint_intro: 'Tap to drop nutrients • Drag to stir currents • Click any creature to inspect',
+    hint_intro: 'Tap: feed • Drag: move view • Pinch: zoom • Click creature: inspect',
     naturalist_tag: 'XENOBIOLOGIST',
     status: 'Status',
     energy: 'Energy',
@@ -45,7 +45,21 @@ export const DICTIONARY = {
     about_title: 'Architecture & Mathematics',
     about_tab_overview: 'Concept & Controls',
     about_tab_math: 'Mathematical Model (Full)',
-    btn_explore_math: 'Open Full Mathematical Model →'
+    btn_explore_math: 'Open Full Mathematical Model →',
+    nav_journal: 'Journal',
+    open_journal_feed: '▲ Open Journal',
+    journal_drawer_title: 'Naturalist Journal • Evolution Feed',
+    journal_drawer_subtitle: 'Live cognitive observations streamed from Venice AI (LLaMA 3.3 70B)',
+    btn_species_catalog: '🧬 Species Codex',
+    drawer_collapse: '▼ Collapse',
+    live_tooltip: 'Evolution Timeline & Journal',
+    filter_all: 'All Species',
+    filter_alive: 'Alive in Droplet',
+    filter_hunter: 'Apex Hunters',
+    filter_grazer: 'Grazers',
+    filter_extinct: 'Extinct',
+    search_placeholder: 'Search species by name...',
+    no_species_found: 'No species found matching this filter.'
   },
   ru: {
     organisms: 'организмов',
@@ -56,7 +70,7 @@ export const DICTIONARY = {
     codex_title: 'Кодекс',
     sound_on: 'Звук',
     sound_off: 'Звук',
-    hint_intro: 'Касание: добавить питание • Движение: создать течение • Клик по существу: анализ',
+    hint_intro: 'Касание: корм • Зажать и вести: перемещение • 2 пальца: масштаб • Клик: анализ',
     naturalist_tag: 'КСЕНОБИОЛОГ',
     status: 'Состояние',
     energy: 'Энергия',
@@ -93,7 +107,21 @@ export const DICTIONARY = {
     about_title: 'Архитектура и математика',
     about_tab_overview: 'Концепция и управление',
     about_tab_math: 'Математическая модель (полная)',
-    btn_explore_math: 'Развернуть полную математическую модель →'
+    btn_explore_math: 'Развернуть полную математическую модель →',
+    nav_journal: 'Журнал',
+    open_journal_feed: '▲ Читать журнал',
+    journal_drawer_title: 'Журнал натуралиста • Хроника эволюции',
+    journal_drawer_subtitle: 'Живые наблюдения и хроника от Venice AI (LLaMA 3.3 70B)',
+    btn_species_catalog: '🧬 Кодекс видов',
+    drawer_collapse: '▼ Свернуть',
+    live_tooltip: 'Хроника эволюции и журнал',
+    filter_all: 'Все виды',
+    filter_alive: 'В чаше сейчас',
+    filter_hunter: 'Хищники',
+    filter_grazer: 'Травоядные',
+    filter_extinct: 'Вымершие',
+    search_placeholder: 'Поиск вида по имени...',
+    no_species_found: 'Видов по выбранному фильтру не найдено.'
   }
 };
 
@@ -131,6 +159,15 @@ class I18nManager {
       const translation = this.t(key);
       if (translation) {
         el.textContent = translation;
+      }
+    });
+
+    const placeholderEls = document.querySelectorAll('[data-i18n-placeholder]');
+    placeholderEls.forEach(el => {
+      const key = el.getAttribute('data-i18n-placeholder');
+      const translation = this.t(key);
+      if (translation) {
+        el.placeholder = translation;
       }
     });
 

@@ -26,6 +26,14 @@ export class SimulationEngine {
     // Scratch buffer for spatial queries
     this.neighborScratch = [];
     this.eventsBuffer = []; // Broadcast events (births, deaths, predation strikes)
+
+    // Dynamic metrics window for AI Naturalist observations
+    this.recentWindow = {
+      kills: 0,
+      births: 0,
+      speciations: 0,
+      windowStartTime: Date.now()
+    };
     
     this.init();
   }
@@ -114,34 +122,62 @@ export class SimulationEngine {
       org.step(this.grid, this.neighborScratch, this.nutrientBlooms);
 
       // Predation checks (carnivores attack smaller neighbors)
-      if (org.carnivory > 0.4) {
+      // Predation checks (carnivores attack neighbors)
+      if (org.carnivory > 0.35) {
         for (let n = 0; n < this.neighborScratch.length; n++) {
           const prey = this.neighborScratch[n];
-          if (!deadSet.has(prey.id) && org.attemptPredation(prey, this.grid)) {
-            deadSet.add(prey.id);
-            this.eventsBuffer.push({
-              type: 'predation',
-              x: prey.x,
-              y: prey.y,
-              predatorId: org.id,
-              preyId: prey.id
-            });
-            break; // max 1 kill per tick
+          if (!deadSet.has(prey.id)) {
+            const strike = org.attemptPredation(prey, this.grid);
+            if (strike) {
+              this.recentWindow.kills++;
+              if (strike.killed) {
+                deadSet.add(prey.id);
+                this.eventsBuffer.push({
+                  type: 'predation',
+                  x: prey.x,
+                  y: prey.y,
+                  predatorId: org.id,
+                  preyId: prey.id
+                });
+              }
+              break; // max 1 strike per tick
+            }
           }
         }
       }
 
       // Check for cell division (Mitosis)
-      if (org.canReproduce() && (this.organisms.length + newChildren.length) < this.maxOrganisms) {
-        const childSpeciesId = this.lineage.evaluateSpeciation(org.genome, org.speciesId);
-        const child = org.reproduce(childSpeciesId);
-        newChildren.push(child);
-        this.eventsBuffer.push({
-          type: 'birth',
-          x: child.x,
-          y: child.y,
-          speciesId: child.speciesId
-        });
+      if (org.canReproduce()) {
+        let allowMitosis = false;
+        if ((this.organisms.length + newChildren.length) < this.maxOrganisms) {
+          allowMitosis = true;
+        } else if (this.organisms.length >= this.maxOrganisms && Math.random() < 0.25) {
+          // Turnover: cull an old or depleted organism to maintain generational turnover
+          for (let k = 0; k < this.organisms.length; k++) {
+            const cand = this.organisms[k];
+            if (!deadSet.has(cand.id) && cand !== org && (cand.age > 4000 || cand.energy < 30)) {
+              deadSet.add(cand.id);
+              allowMitosis = true;
+              break;
+            }
+          }
+        }
+
+        if (allowMitosis) {
+          const childSpeciesId = this.lineage.evaluateSpeciation(org.genome, org.speciesId);
+          if (childSpeciesId !== org.speciesId) {
+            this.recentWindow.speciations++;
+          }
+          this.recentWindow.births++;
+          const child = org.reproduce(childSpeciesId);
+          newChildren.push(child);
+          this.eventsBuffer.push({
+            type: 'birth',
+            x: child.x,
+            y: child.y,
+            speciesId: child.speciesId
+          });
+        }
       }
 
       // Natural death check
@@ -171,9 +207,33 @@ export class SimulationEngine {
         const vent = vents[Math.floor(Math.random() * vents.length)];
         const wx = vent.x * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 40;
         const wy = vent.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 40;
-        const isHunter = Math.random() < 0.12;
-        const sp = isHunter ? speciesList[2] : speciesList[Math.floor(Math.random() * 2)];
+        const isHunter = Math.random() < 0.15;
+        const sp = isHunter ? (speciesList[2] || speciesList[0]) : speciesList[Math.floor(Math.random() * 2)];
         this.organisms.push(new Organism(wx, wy, Organism.createRandomGenome(sp.hue, isHunter), 1, 0, sp.id));
+      }
+    }
+
+    // 6.5. Preserve Apex Predator Pack: ensure at least 14-20 hunters are actively swimming
+    let activeHunters = 0;
+    for (let i = 0; i < this.organisms.length; i++) {
+      if (this.organisms[i].carnivory > 0.35) activeHunters++;
+    }
+
+    if (activeHunters < 16) {
+      const neededHunters = 16 - activeHunters;
+      const vents = this.grid.vents;
+      let hunterSpecies = this.lineage.getSpecies(3); // Vibrionox vorax
+      if (!hunterSpecies) {
+        hunterSpecies = this.lineage.getAllSpecies().find(s => s.carnivory > 0.45) || this.lineage.getAllSpecies()[2];
+      }
+
+      for (let h = 0; h < neededHunters; h++) {
+        const vent = vents[Math.floor(Math.random() * vents.length)];
+        const wx = vent.x * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 80;
+        const wy = vent.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 80;
+        const org = new Organism(wx, wy, Organism.createRandomGenome(hunterSpecies.hue, true), 1, 0, hunterSpecies.id);
+        org.energy = 160.0;
+        this.organisms.push(org);
       }
     }
 
@@ -184,7 +244,13 @@ export class SimulationEngine {
 
     // 8. Trigger AI observations check
     if (this.ticks % 100 === 0) {
-      this.naturalist.checkObservation(this.getStats());
+      this.naturalist.checkObservation(this.getStats()).then(observed => {
+        if (observed) {
+          this.resetRecentWindow();
+        }
+      }).catch(err => {
+        console.error('[Engine] Observation check error:', err);
+      });
     }
 
     // 9. Periodic persistence autosave (every 10 mins)
@@ -230,9 +296,25 @@ export class SimulationEngine {
       }
     }
 
+    const liveSpecies = this.lineage.getAllSpecies().filter(s => s.population > 0);
+    let dominantSpecies = null;
+    let apexHunterSpecies = null;
+
+    for (let i = 0; i < liveSpecies.length; i++) {
+      const sp = liveSpecies[i];
+      if (!dominantSpecies || sp.population > dominantSpecies.population) {
+        dominantSpecies = sp;
+      }
+      if (sp.carnivory > 0.35) {
+        if (!apexHunterSpecies || sp.carnivory > apexHunterSpecies.carnivory) {
+          apexHunterSpecies = sp;
+        }
+      }
+    }
+
     return {
       organismCount: this.organisms.length,
-      speciesCount: this.lineage.getAllSpecies().filter(s => s.population > 0).length,
+      speciesCount: liveSpecies.length,
       generation: maxGen,
       ageFormatted: `${days}d ${hours}h ${mins}m`,
       ageDays: days,
@@ -240,8 +322,23 @@ export class SimulationEngine {
       epoch: this.naturalist.currentEpoch,
       epochNameEn: this.naturalist.epochNameEn,
       epochNameRu: this.naturalist.epochNameRu,
-      ticks: this.ticks
+      ticks: this.ticks,
+      recentKills: this.recentWindow.kills,
+      recentBirths: this.recentWindow.births,
+      recentSpeciations: this.recentWindow.speciations,
+      dominantSpeciesNameRu: dominantSpecies ? (dominantSpecies.nameRu || dominantSpecies.nameLa) : null,
+      dominantSpeciesNameEn: dominantSpecies ? (dominantSpecies.nameEn || dominantSpecies.nameLa) : null,
+      dominantCount: dominantSpecies ? dominantSpecies.population : 0,
+      topPredatorNameRu: apexHunterSpecies ? (apexHunterSpecies.nameRu || apexHunterSpecies.nameLa) : null,
+      topPredatorNameEn: apexHunterSpecies ? (apexHunterSpecies.nameEn || apexHunterSpecies.nameLa) : null
     };
+  }
+
+  resetRecentWindow() {
+    this.recentWindow.kills = 0;
+    this.recentWindow.births = 0;
+    this.recentWindow.speciations = 0;
+    this.recentWindow.windowStartTime = Date.now();
   }
 
   // Find an organism by ID for detailed profile inspection

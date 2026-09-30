@@ -273,13 +273,13 @@ export class Organism {
 
     // 3. Metabolism & Feeding
     const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-    const predatorPenalty = this.carnivory > 0.4 ? (2.2 + this.carnivory * 1.8) : 1.0;
-    const metabolicCost = ((CONFIG.BASE_METABOLIC_RATE * (this.size * 0.15) + (currentSpeed * currentSpeed) * 0.03) * predatorPenalty) / this.genome.metabolismEfficiency;
+    const predatorPenalty = this.carnivory > 0.35 ? (1.5 + this.carnivory * 0.8) : 1.0;
+    const metabolicCost = ((CONFIG.BASE_METABOLIC_RATE * (this.size * 0.12) + (currentSpeed * currentSpeed) * 0.02) * predatorPenalty) / this.genome.metabolismEfficiency;
     this.energy -= metabolicCost;
 
     // Graze nutrients from the chemical substrate
     if (this.carnivory < 0.6) {
-      const intakeLimit = (1.0 - this.carnivory) * (this.size * 0.25);
+      const intakeLimit = (1.0 - this.carnivory) * (this.size * 0.22);
       const consumed = grid.consumeAndExcrete(
         this.x, 
         this.y, 
@@ -287,7 +287,7 @@ export class Organism {
         0.3, // waste ratio
         0.06 * ciliaryPulse // luminescence signal
       );
-      this.energy += consumed * 21.0 * this.genome.metabolismEfficiency;
+      this.energy += consumed * 5.4 * this.genome.metabolismEfficiency;
     }
 
     // Cap maximum energy
@@ -296,24 +296,37 @@ export class Organism {
     }
   }
 
-  // Predation interaction: check if this organism can consume 'prey'
+  // Predation interaction: check if this organism can hunt or bite 'prey'
   attemptPredation(prey, grid) {
-    if (this.carnivory < 0.4 || prey === this) return false;
-    if (prey.size >= this.size * 0.8) return false; // Must be noticeably larger to consume
+    if (this.carnivory < 0.35 || prey === this) return false;
+    // Don't attack other apex hunters unless noticeably larger
+    if (prey.carnivory > 0.35 && prey.size >= this.size * 0.85) return false;
+    // Cannot hunt colossi more than 20% larger than hunter
+    if (prey.size > this.size * 1.2) return false;
 
     const dx = prey.x - this.x;
     const dy = prey.y - this.y;
+    const contactDist = (this.size + prey.size) * 0.75;
 
-    const contactDist = (this.size + prey.size) * 0.7;
     if (dx * dx + dy * dy <= contactDist * contactDist) {
-      // Successful predatory strike! (35% trophic conversion efficiency)
-      const gainedEnergy = prey.energy * 0.35;
-      this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + gainedEnergy);
-      this.kills++;
-      
-      // Excrete digestive plume into grid
-      grid.consumeAndExcrete(this.x, this.y, 0, 0.8, 0.4);
-      return true;
+      if (prey.size < this.size * 0.95 || prey.energy < 45.0) {
+        // Full ingestion / kill!
+        const gainedEnergy = Math.max(35.0, prey.energy * 0.45);
+        this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + gainedEnergy);
+        this.kills++;
+        grid.consumeAndExcrete(this.x, this.y, 0, 0.8, 0.4);
+        return { killed: true, preyId: prey.id };
+      } else {
+        // Predatory strike & bite: tears away vital energy from prey
+        const bite = Math.min(prey.energy * 0.45, 50.0);
+        prey.energy -= bite;
+        this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 0.7);
+        // Panic recoil for prey
+        const d = Math.hypot(dx, dy) || 1.0;
+        prey.vx += (dx / d) * 3.2;
+        prey.vy += (dy / d) * 3.2;
+        return { killed: false, preyId: prey.id };
+      }
     }
     return false;
   }

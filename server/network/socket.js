@@ -8,6 +8,16 @@ export class NetworkManager {
     this.clients = new Set();
     
     this.setupListeners();
+
+    // Broadcast live naturalist observations as they are written by AI
+    if (this.engine.naturalist) {
+      this.engine.naturalist.onNewEntry = (entry) => {
+        this.broadcast({
+          type: 'journal_entry',
+          entry
+        });
+      };
+    }
   }
 
   setupListeners() {
@@ -26,7 +36,7 @@ export class NetworkManager {
         },
         vents: this.engine.grid.vents,
         stats: this.engine.getStats(),
-        journal: this.engine.naturalist.getRecentEntries(10),
+        journal: this.engine.naturalist.getRecentEntries(30),
         species: this.engine.lineage.getRecentSpecies(12),
         visitors: this.clients.size,
         thumbnail: Array.from(this.engine.grid.getThumbnail(48)) // 48x48 initial chemical field

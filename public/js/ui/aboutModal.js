@@ -156,8 +156,12 @@ export class AboutModal {
               <span class="ctrl-text">Сбросить в воду споры фитоманны (еду). Травоядные в радиусе 480 мкм почуют запах и устремятся к кормушке.</span>
             </div>
             <div class="ctrl-item">
-              <span class="ctrl-key">Зажать и тянуть</span>
-              <span class="ctrl-text">Перемещение взгляда по микромиру или возмущение течения при быстром движении.</span>
+              <span class="ctrl-key">Зажать и водить</span>
+              <span class="ctrl-text">Плавное перемещение камеры (панорамирование) по всей микрокапле одним пальцем или курсором мыши.</span>
+            </div>
+            <div class="ctrl-item">
+              <span class="ctrl-key">2 пальца / Колесо</span>
+              <span class="ctrl-text">Масштабирование (Pinch-to-zoom): разведение и сведение двух пальцев на экране телефона или колесико мыши от общего обзора (0.35x) до клеточных структур (3.5x).</span>
             </div>
             <div class="ctrl-item">
               <span class="ctrl-key">Клик по организму</span>
@@ -261,8 +265,12 @@ export class AboutModal {
               <span class="ctrl-text">Drop glowing phytomanna spores. Grazers within a 480 μm sensory radius will smell the scent and swim over to feed.</span>
             </div>
             <div class="ctrl-item">
-              <span class="ctrl-key">Click & Drag</span>
-              <span class="ctrl-text">Pan the viewport across the chamber or stir hydrodynamic micro-currents.</span>
+              <span class="ctrl-key">Hold & Drag</span>
+              <span class="ctrl-text">Smooth camera panning across the entire water droplet with a single finger or mouse drag.</span>
+            </div>
+            <div class="ctrl-item">
+              <span class="ctrl-key">Two Fingers / Wheel</span>
+              <span class="ctrl-text">Pinch-to-zoom with two fingers on mobile or mouse wheel: smoothly scale from full droplet overview (0.35x) to cellular micro-structures (3.5x).</span>
             </div>
             <div class="ctrl-item">
               <span class="ctrl-key">Click on Organism</span>
