@@ -121,7 +121,7 @@ export class CodexModal {
 
   updateFilterCounts() {
     if (!this.allSpecies) return;
-    const isFilter = (s) => (s.carnivory <= 0.35 && s.carnivory < 0.1 && (s.size || 6) > 7.5);
+    const isFilter = (s) => (s.carnivory <= 0.35 && s.carnivory < 0.1 && (s.size || 3.5) > 4.0);
     const total = this.allSpecies.length;
     const alive = this.allSpecies.filter(s => s.population > 0 && !s.extinctTime).length;
     const hunter = this.allSpecies.filter(s => s.carnivory > 0.35).length;
@@ -140,7 +140,7 @@ export class CodexModal {
   applyFilterAndRender() {
     if (!this.speciesGrid || !this.allSpecies) return;
     const isRu = i18n.getLang() === 'ru';
-    const isFilterSp = (s) => (s.carnivory <= 0.35 && s.carnivory < 0.1 && (s.size || 6) > 7.5);
+    const isFilterSp = (s) => (s.carnivory <= 0.35 && s.carnivory < 0.1 && (s.size || 3.5) > 4.0);
 
     // 1. Filter by category
     let list = this.allSpecies;
@@ -195,7 +195,7 @@ export class CodexModal {
       const card = document.createElement('div');
       const isExtinct = sp.extinctTime !== null && sp.population === 0;
       const isHunter = (sp.carnivory > 0.35);
-      const isFilter = (sp.carnivory < 0.1 && (sp.size || 6) > 7.5);
+      const isFilter = (sp.carnivory < 0.1 && (sp.size || 3.5) > 4.0);
       
       card.className = `species-card ${isExtinct ? 'extinct' : ''} ${isHunter ? 'hunter-card' : ''}`;
 

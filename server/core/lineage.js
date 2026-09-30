@@ -18,7 +18,7 @@ export class LineageManager {
       descriptionRu: 'Мирный первичный продуцент с высоким хемотаксисом к термальным минеральным шлейфам.',
       hue: 0.52,
       carnivory: 0.05,
-      size: 6.0,
+      size: 3.5,
       speedMax: 1.5,
       chemotaxisNutrient: 1.2
     }, 0);
@@ -32,7 +32,7 @@ export class LineageManager {
       descriptionRu: 'Медлительный колониальный организм с высокой адгезией мембраны, образующий плотные кластеры.',
       hue: 0.12,
       carnivory: 0.0,
-      size: 7.5,
+      size: 4.2,
       speedMax: 1.0,
       chemotaxisNutrient: 0.9
     }, 0);
@@ -46,7 +46,7 @@ export class LineageManager {
       descriptionRu: 'Быстрый одиночный охотник с киральным биением ресничек и хищным фазовым расщеплением.',
       hue: 0.35,
       carnivory: 0.75,
-      size: 10.0,
+      size: 5.5,
       speedMax: 3.2,
       chemotaxisNutrient: 0.1
     }, 0);
@@ -84,7 +84,7 @@ export class LineageManager {
     const dHue = Math.abs(genome.hue - species.hue);
     const cyclicDHue = Math.min(dHue, 1.0 - dHue);
     const dCarnivory = Math.abs(genome.carnivory - species.carnivory);
-    const dSize = Math.abs(genome.size - species.size) / 10.0;
+    const dSize = Math.abs(genome.size - species.size) / 5.5;
     const dSpeed = Math.abs(genome.speedMax - species.speedMax) / 3.0;
 
     return Math.sqrt(

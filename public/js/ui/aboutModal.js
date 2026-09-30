@@ -8,8 +8,10 @@ export class AboutModal {
 
     this.tabOverviewBtn = document.getElementById('tab-about-overview-btn');
     this.tabMathBtn = document.getElementById('tab-about-math-btn');
+    this.tabRoadmapBtn = document.getElementById('tab-about-roadmap-btn');
     this.tabOverviewContent = document.getElementById('tab-about-overview-content');
     this.tabMathContent = document.getElementById('tab-about-math-content');
+    this.tabRoadmapContent = document.getElementById('tab-about-roadmap-content');
 
     this.setupListeners();
     this.renderContent();
@@ -32,6 +34,7 @@ export class AboutModal {
 
     this.tabOverviewBtn?.addEventListener('click', () => this.switchTab('overview'));
     this.tabMathBtn?.addEventListener('click', () => this.switchTab('math'));
+    this.tabRoadmapBtn?.addEventListener('click', () => this.switchTab('roadmap'));
 
     // Re-render text on language change
     window.addEventListener('aetheon-lang-changed', () => {
@@ -49,18 +52,16 @@ export class AboutModal {
   }
 
   switchTab(tab) {
-    if (tab === 'overview') {
-      this.tabOverviewBtn?.classList.add('active');
-      this.tabMathBtn?.classList.remove('active');
-      this.tabOverviewContent?.classList.add('active');
-      this.tabMathContent?.classList.remove('active');
-    } else {
-      this.tabMathBtn?.classList.add('active');
-      this.tabOverviewBtn?.classList.remove('active');
-      this.tabMathContent?.classList.add('active');
-      this.tabOverviewContent?.classList.remove('active');
-      if (this.tabMathContent) this.tabMathContent.scrollTop = 0;
-    }
+    this.tabOverviewBtn?.classList.toggle('active', tab === 'overview');
+    this.tabMathBtn?.classList.toggle('active', tab === 'math');
+    this.tabRoadmapBtn?.classList.toggle('active', tab === 'roadmap');
+
+    this.tabOverviewContent?.classList.toggle('active', tab === 'overview');
+    this.tabMathContent?.classList.toggle('active', tab === 'math');
+    this.tabRoadmapContent?.classList.toggle('active', tab === 'roadmap');
+
+    if (tab === 'math' && this.tabMathContent) this.tabMathContent.scrollTop = 0;
+    if (tab === 'roadmap' && this.tabRoadmapContent) this.tabRoadmapContent.scrollTop = 0;
   }
 
   renderContent() {
@@ -71,11 +72,18 @@ export class AboutModal {
       this.tabOverviewContent.innerHTML = isRu ? this.getOverviewHtmlRu() : this.getOverviewHtmlEn();
       const expBtn = this.tabOverviewContent.querySelector('#btn-expand-math');
       expBtn?.addEventListener('click', () => this.switchTab('math'));
+      const expRoadmapBtn = this.tabOverviewContent.querySelector('#btn-expand-roadmap');
+      expRoadmapBtn?.addEventListener('click', () => this.switchTab('roadmap'));
     }
 
     // Detailed Math HTML
     if (this.tabMathContent) {
       this.tabMathContent.innerHTML = isRu ? this.getMathHtmlRu() : this.getMathHtmlEn();
+    }
+
+    // Emergence Roadmap HTML
+    if (this.tabRoadmapContent) {
+      this.tabRoadmapContent.innerHTML = isRu ? this.getRoadmapHtmlRu() : this.getRoadmapHtmlEn();
     }
   }
 
@@ -172,6 +180,17 @@ export class AboutModal {
               <span class="ctrl-text">Переключить в <strong>Научный режим</strong>: измерительная сетка, полярные координаты, векторы тяги и границы привлечения.</span>
             </div>
           </div>
+        </div>
+
+        <div class="math-cta-card" style="margin-bottom: 1rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(6, 182, 212, 0.12)); border-color: rgba(16, 185, 129, 0.3);">
+          <div class="cta-left">
+            <div class="cta-tag" style="color: #34d399;">ЭВОЛЮЦИОННЫЙ ПОТЕНЦИАЛ 24/7</div>
+            <div class="cta-title">Куда эволюционирует мир за дни, недели и месяцы?</div>
+            <div class="cta-desc">Узнайте о био-терраформировании рифов, зарождении многоклеточных левиафанов, климатических кризисах и иллюстрированном Атласе Эпох.</div>
+          </div>
+          <button class="btn-expand-math" id="btn-expand-roadmap" style="background: linear-gradient(135deg, #10b981, #06b6d4); color: #022c22; border-color: #34d399; font-weight: 700;">
+            <span>🌟 Открыть Дорожную Карту Эмерджентности →</span>
+          </button>
         </div>
 
         <div class="math-cta-card">
@@ -281,6 +300,17 @@ export class AboutModal {
               <span class="ctrl-text">Toggle <strong>Research Instrument Mode</strong>: velocity vector fields, sensory horizons, range calipers, and polar coordinates.</span>
             </div>
           </div>
+        </div>
+
+        <div class="math-cta-card" style="margin-bottom: 1rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(6, 182, 212, 0.12)); border-color: rgba(16, 185, 129, 0.3);">
+          <div class="cta-left">
+            <div class="cta-tag" style="color: #34d399;">24/7 EVOLUTIONARY POTENTIAL</div>
+            <div class="cta-title">Where does the world evolve over days, weeks, and months?</div>
+            <div class="cta-desc">Explore bio-architectural reef accretion, multicellular leviathans, climatic phase shifts, and the Illustrated World Atlas.</div>
+          </div>
+          <button class="btn-expand-math" id="btn-expand-roadmap" style="background: linear-gradient(135deg, #10b981, #06b6d4); color: #022c22; border-color: #34d399; font-weight: 700;">
+            <span>🌟 Open Emergence Roadmap →</span>
+          </button>
         </div>
 
         <div class="math-cta-card">
@@ -853,6 +883,179 @@ export class AboutModal {
             while the macro-scale cognitive model translates entropy into structured science and narrative history.
           </p>
         </article>
+      </div>
+    `;
+  }
+
+  getRoadmapHtmlRu() {
+    return `
+      <div class="about-overview-wrap">
+        <div class="about-hero-card">
+          <div class="hero-badge">AETHEON 2.0 • ДОРОЖНАЯ КАРТА ЭМЕРДЖЕНТНОСТИ</div>
+          <h2 class="hero-title">Как капля превращается в живую планету</h2>
+          <p class="hero-lead">
+            В отличие от статичных анимаций или бесконечных повторов, <strong>Aetheon</strong> спроектирован для 
+            <strong>необратимой макро-эволюции (24/7)</strong>. Простые физико-химические правила на уровне микробов запускают 
+            качественные скачки сложности: от свободных бактерий — к коралловым лабиринтам, многоклеточным левиафанам и глобальным климатическим эпохам.
+          </p>
+        </div>
+
+        <div class="about-grid-3">
+          <div class="feature-card">
+            <div class="feature-icon">🪸</div>
+            <div class="feature-title">I. Био-Архитектура (Стигмергия)</div>
+            <p class="feature-desc">
+              Жизнь материально терраформирует среду. При гибели и метаболизме существа выделяют твердый био-кальцит. 
+              За дни и недели капля обрастает <strong>минеральными рифами, атоллыми барьерами и подводными гротами</strong>, которые физически огибают течения и разделяют мир на изолированные бухты.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">🐙</div>
+            <div class="feature-title">II. Многоклеточные Левиафаны</div>
+            <p class="feature-desc">
+              Появление генов мембранной адгезии (слипания). Клетки после митоза остаются связанными эластичными мостиками, объединяясь в 
+              <strong>волнообразные сифонофоры, вращающиеся сферы Вольвокса и живые ловчие сети</strong> с разделением труда: двигатели, панцирь и ловчие клетки.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">❄️</div>
+            <div class="feature-title">III. Планетарные Фазы и Климат</div>
+            <p class="feature-desc">
+              Среда реагирует на биосферу: колебания кислотности pH, перенаселение, вызывающее токсичные кризы, и термодинамические циклы оледенения, когда от стенок капли растут 
+              сверкающие дендриты кристаллов льда, сжимая жизненное пространство.
+            </p>
+          </div>
+        </div>
+
+        <div class="about-hero-card" style="margin-top: 1.5rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(6, 182, 212, 0.08)); border-color: rgba(16, 185, 129, 0.25);">
+          <div class="hero-badge">ЛЕТОПИСЬ И ХРОНИКА МИРА</div>
+          <h3 style="font-size: 1.25rem; font-weight: 700; color: #f3f4f6; margin-bottom: 0.5rem;">📜 Двухуровневый Журнал и Ежедневный Атлас</h3>
+          <p style="color: #9ca3af; font-size: 0.925rem; line-height: 1.6; margin-bottom: 0.75rem;">
+            Летопись избавлена от рутинного спама: сверхбыстрый ИИ <strong>TypeSafe JEV</strong> непрерывно сканирует метрики капли и пропускает в оперативную ленту только истинные исторические вехи.
+          </p>
+          <p style="color: #9ca3af; font-size: 0.925rem; line-height: 1.6;">
+            <strong>Ежедневный Иллюстрированный Атлас:</strong> раз в сутки формируется фундаментальный срез эволюции — 
+            топографическая карта рифов и ареалов обитания вместе с развернутым научно-художественным очерком развития биосферы за прошедший день.
+          </p>
+        </div>
+
+        <div class="math-section" style="margin-top: 1.5rem;">
+          <h3 class="math-sec-title">⏳ Хронология Развития: Чего ожидать от времени?</h3>
+          
+          <div class="about-grid-3" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+            <div class="feature-card" style="border-left: 3px solid #10b981;">
+              <div style="font-weight: 700; color: #10b981; font-size: 0.85rem; margin-bottom: 0.25rem;">ДЕНЬ 1 — 3</div>
+              <div class="feature-title" style="font-size: 1rem;">Первичный Рассвет</div>
+              <p class="feature-desc">Свободное пастбище у пяти минеральных жерл. Зарождение первых быстрых хищников и стабилизация стартовых видов.</p>
+            </div>
+
+            <div class="feature-card" style="border-left: 3px solid #06b6d4;">
+              <div style="font-weight: 700; color: #06b6d4; font-size: 0.85rem; margin-bottom: 0.25rem;">НЕДЕЛЯ 1</div>
+              <div class="feature-title" style="font-size: 1rem;">Рифовый Архипелаг</div>
+              <p class="feature-desc">Некро-минерализация формирует первые устойчивые барьеры из био-кальцита. Капля разделяется на автономные лагуны с уникальными условиями.</p>
+            </div>
+
+            <div class="feature-card" style="border-left: 3px solid #8b5cf6;">
+              <div style="font-weight: 700; color: #8b5cf6; font-size: 0.85rem; margin-bottom: 0.25rem;">НЕДЕЛЯ 2 — 3</div>
+              <div class="feature-title" style="font-size: 1rem;">Эра Многоклеточных</div>
+              <p class="feature-desc">Появление генов сцепления. Составные 20–60-клеточные гиганты вытесняют одиночек и устанавливают доминирование над открытыми водами.</p>
+            </div>
+
+            <div class="feature-card" style="border-left: 3px solid #f59e0b;">
+              <div style="font-weight: 700; color: #f59e0b; font-size: 0.85rem; margin-bottom: 0.25rem;">МЕСЯЦ 1+</div>
+              <div class="feature-title" style="font-size: 1rem;">Великие Планетарные Эпохи</div>
+              <p class="feature-desc">Глубокие катаклизмы: токсичные закисления, циклы оледенения, формирование древних окаменелых городов-мегалитов в толще воды.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  getRoadmapHtmlEn() {
+    return `
+      <div class="about-overview-wrap">
+        <div class="about-hero-card">
+          <div class="hero-badge">AETHEON 2.0 • EMERGENCE ROADMAP</div>
+          <h2 class="hero-title">How a Droplet Evolves into a Living Planet</h2>
+          <p class="hero-lead">
+            Unlike static animations or closed limit cycles, <strong>Aetheon</strong> is engineered for 
+            <strong>irreversible macroscopic 24/7 evolution</strong>. Simple cellular physical laws spontaneously trigger 
+            qualitative phase transitions: from free-floating solitary microbes to calcite coral labyrinths, multicellular superorganisms, and global climatic epochs.
+          </p>
+        </div>
+
+        <div class="about-grid-3">
+          <div class="feature-card">
+            <div class="feature-icon">🪸</div>
+            <div class="feature-title">I. Bio-Architecture (Stigmergy)</div>
+            <p class="feature-desc">
+              Life physically terraforms its fluid cosmos. Dying organisms and active filtration precipitate durable bio-calcite into the water. 
+              Over days and weeks, the droplet accretes <strong>calcified reefs, atolls, and subterranean sea caves</strong>, bending currents and isolating deep lagoons.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">🐙</div>
+            <div class="feature-title">II. Multicellular Superorganisms</div>
+            <p class="feature-desc">
+              Emergence of membrane adhesion genes. Dividing cells remain physically connected via viscoelastic bridges, assembling into 
+              <strong>undulating siphonophore serpents, rotary Volvox spheres, and predatory net rafts</strong> with internal division of labor.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">❄️</div>
+            <div class="feature-title">III. Planetary Medium & Climate Shifts</div>
+            <p class="feature-desc">
+              The water behaves as an active global organism: pH swings driven by population blooms, metabolic toxicity bottlenecks, and thermodynamic ice ages where 
+              crystalline frost dendrites creep inward from the meniscus boundary.
+            </p>
+          </div>
+        </div>
+
+        <div class="about-hero-card" style="margin-top: 1.5rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(6, 182, 212, 0.08)); border-color: rgba(16, 185, 129, 0.25);">
+          <div class="hero-badge">CHRONICLE & WORLD ATLAS</div>
+          <h3 style="font-size: 1.25rem; font-weight: 700; color: #f3f4f6; margin-bottom: 0.5rem;">📜 Dual-Tier Journal & Daily Illustrated Atlas</h3>
+          <p style="color: #9ca3af; font-size: 0.925rem; line-height: 1.6; margin-bottom: 0.75rem;">
+            The journal eliminates repetitive noise: the ultra-low-latency <strong>TypeSafe JEV</strong> micro-decision engine screens ecosystem metrics in milliseconds, admitting only genuine breakthroughs to the live stream.
+          </p>
+          <p style="color: #9ca3af; font-size: 0.925rem; line-height: 1.6;">
+            <strong>The Daily Illustrated World Atlas:</strong> Every 24 hours, the server renders a topographic biosphere survey (reefs, species ranges, current vectors) paired with an authoritative natural history monograph authored by AI.
+          </p>
+        </div>
+
+        <div class="math-section" style="margin-top: 1.5rem;">
+          <h3 class="math-sec-title">⏳ Evolutionary Horizon: What to Expect Over Time</h3>
+          
+          <div class="about-grid-3" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+            <div class="feature-card" style="border-left: 3px solid #10b981;">
+              <div style="font-weight: 700; color: #10b981; font-size: 0.85rem; margin-bottom: 0.25rem;">DAYS 1 — 3</div>
+              <div class="feature-title" style="font-size: 1rem;">The Primordial Dawn</div>
+              <p class="feature-desc">Unfettered grazing around five mineral hearths. Emergence of apex hunters and foundational speciation.</p>
+            </div>
+
+            <div class="feature-card" style="border-left: 3px solid #06b6d4;">
+              <div style="font-weight: 700; color: #06b6d4; font-size: 0.85rem; margin-bottom: 0.25rem;">WEEK 1</div>
+              <div class="feature-title" style="font-size: 1rem;">The Calcite Archipelago</div>
+              <p class="feature-desc">Necro-mineralization builds living stone barriers. The droplet fractures into discrete lagoons fostering isolated speciation.</p>
+            </div>
+
+            <div class="feature-card" style="border-left: 3px solid #8b5cf6;">
+              <div style="font-weight: 700; color: #8b5cf6; font-size: 0.85rem; margin-bottom: 0.25rem;">WEEKS 2 — 3</div>
+              <div class="feature-title" style="font-size: 1rem;">Age of Multicellularity</div>
+              <p class="feature-desc">Adhesive clades assemble 20–60-cell superorganisms. Solitary species face intense pressure from cooperative leviathans.</p>
+            </div>
+
+            <div class="feature-card" style="border-left: 3px solid #f59e0b;">
+              <div style="font-weight: 700; color: #f59e0b; font-size: 0.85rem; margin-bottom: 0.25rem;">MONTH 1+</div>
+              <div class="feature-title" style="font-size: 1rem;">Planetary Climatic Epochs</div>
+              <p class="feature-desc">Global phase shifts: toxic bloom bottlenecks, glacial crystallization cycles, and fossilized coral megaliths across the fluid manifold.</p>
+            </div>
+          </div>
+        </div>
       </div>
     `;
   }

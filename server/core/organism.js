@@ -26,12 +26,16 @@ export class Organism {
     // Genome vector
     if (genome) {
       this.genome = { ...genome };
+      // Normalization: scale down legacy oversized genomes from earlier unconstrained epochs
+      if (this.genome.size > 9.5) {
+        this.genome.size = Math.max(2.5, this.genome.size * 0.52);
+      }
     } else {
       this.genome = Organism.createRandomGenome();
     }
 
     // Cached phenotype parameters derived from genome
-    this.size = Math.max(3.5, Math.min(16.0, this.genome.size));
+    this.size = Math.max(2.0, Math.min(9.5, this.genome.size));
     this.hue = (this.genome.hue % 1.0 + 1.0) % 1.0;
     this.carnivory = Math.max(0.0, Math.min(1.0, this.genome.carnivory));
     this.maxSpeed = Math.max(0.8, Math.min(4.5, this.genome.speedMax));
@@ -42,7 +46,7 @@ export class Organism {
     const baseHue = seedHue !== null ? seedHue : (isPredator ? 0.95 + Math.random() * 0.1 : 0.45 + Math.random() * 0.25);
     
     return {
-      size: isPredator ? 9.5 + Math.random() * 4.0 : 5.0 + Math.random() * 4.5,
+      size: isPredator ? 5.5 + Math.random() * 2.5 : 2.8 + Math.random() * 2.6,
       hue: baseHue % 1.0,
       speedMax: isPredator ? 2.6 + Math.random() * 1.4 : 1.2 + Math.random() * 1.4,
       carnivory: isPredator ? 0.70 + Math.random() * 0.25 : Math.random() * 0.15,
@@ -70,7 +74,7 @@ export class Organism {
       return Math.max(min, Math.min(max, val + delta));
     };
 
-    g.size = mutateVal(g.size, 3.5, 18.0, 3.0);
+    g.size = mutateVal(g.size, 2.0, 9.5, 1.4);
     g.hue = (mutateVal(g.hue, 0.0, 1.0, 0.2) + 1.0) % 1.0;
     g.speedMax = mutateVal(g.speedMax, 0.8, 5.0, 1.0);
     g.carnivory = mutateVal(g.carnivory, 0.0, 1.0, 0.3);
@@ -426,7 +430,7 @@ export class Organism {
     let dietType = 'grazer';
     if (this.carnivory > 0.35) {
       dietType = 'hunter';
-    } else if (this.carnivory < 0.1 && this.size > 7.5) {
+    } else if (this.carnivory < 0.1 && this.size > 4.2) {
       dietType = 'filter';
     } else {
       dietType = 'grazer';

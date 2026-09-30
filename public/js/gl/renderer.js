@@ -399,7 +399,7 @@ export class OceanRenderer {
     const isHunter = morph.isHunter;
 
     const pulse = Math.sin(time * 0.008 + org.id) * 0.12;
-    const bodyR = Math.max(3.5, r * (1.0 + pulse));
+    const bodyR = Math.max(1.8, r * (1.0 + pulse));
     const rx = bodyR * morph.aspectX;
     const ry = bodyR * morph.aspectY;
 
