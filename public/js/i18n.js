@@ -74,7 +74,12 @@ export const DICTIONARY = {
     atlas_metric_colonies: 'Superorganisms',
     atlas_metric_dominant: 'Dominant Species',
     atlas_metric_apex: 'Apex Hunter',
-    atlas_metric_temp: 'Mean Temp'
+    atlas_metric_temp: 'Mean Temp',
+    btn_dive: '👁️ Dive 3D',
+    btn_dive_label: 'Dive (3D)',
+    dive_exit: 'Orbit (ESC)',
+    chemotaxis_sensor: 'CHEMOTAXIS',
+    ciliary_rhythm: 'CILIARY RHYTHM'
   },
   ru: {
     organisms: 'организмов',
@@ -151,7 +156,12 @@ export const DICTIONARY = {
     atlas_metric_colonies: 'Суперорганизмы',
     atlas_metric_dominant: 'Доминирующий вид',
     atlas_metric_apex: 'Верховный хищник',
-    atlas_metric_temp: 'Температура'
+    atlas_metric_temp: 'Температура',
+    btn_dive: '👁️ Погрузиться (3D)',
+    btn_dive_label: 'Погрузиться (3D)',
+    dive_exit: 'Всплыть (ESC)',
+    chemotaxis_sensor: 'ХЕМОТАКСИС',
+    ciliary_rhythm: 'РИТМ РЕСНИЧЕК'
   }
 };
 

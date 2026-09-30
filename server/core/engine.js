@@ -321,6 +321,20 @@ export class SimulationEngine {
     return { success: false };
   }
 
+  // Handle visitor first-person ciliary steering impulse
+  applySteer(orgId, steerX, steerY) {
+    for (let i = 0; i < this.organisms.length; i++) {
+      const o = this.organisms[i];
+      if (o.id === orgId) {
+        const force = 0.35;
+        o.vx = Math.max(-o.maxSpeed, Math.min(o.maxSpeed, o.vx + steerX * force));
+        o.vy = Math.max(-o.maxSpeed, Math.min(o.maxSpeed, o.vy + steerY * force));
+        return true;
+      }
+    }
+    return false;
+  }
+
   getStats() {
     const ageSeconds = Math.floor((Date.now() - this.genesisTime) / 1000);
     const days = Math.floor(ageSeconds / 86400);

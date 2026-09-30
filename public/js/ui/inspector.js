@@ -8,6 +8,7 @@ export class BioInspector {
     this.closeBtn = document.getElementById('bio-close-btn');
     this.feedBtn = document.getElementById('btn-feed-target');
     this.trackBtn = document.getElementById('btn-track-target');
+    this.diveBtn = document.getElementById('btn-dive-target');
 
     this.selectedId = null;
     this.isTracking = false;
@@ -33,6 +34,15 @@ export class BioInspector {
       this.isTracking = !this.isTracking;
       this.renderer.camera.trackedEntityId = this.isTracking ? this.selectedId : null;
       this.trackBtn.style.borderColor = this.isTracking ? 'var(--accent-cyan)' : 'var(--border-subtle)';
+    });
+
+    this.diveBtn?.addEventListener('click', () => {
+      if (this.selectedId && this.client.diveEngine) {
+        this.renderer.camera.trackedEntityId = this.selectedId;
+        this.isTracking = true;
+        this.panel.classList.add('hidden');
+        this.client.diveEngine.enter(this.selectedId);
+      }
     });
 
     window.addEventListener('aetheon-lang-changed', () => {

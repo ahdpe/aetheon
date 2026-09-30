@@ -6,6 +6,7 @@ import { CodexModal } from './ui/codexModal.js';
 import { AboutModal } from './ui/aboutModal.js';
 import { JournalDrawer } from './ui/journalDrawer.js';
 import { InputController } from './ui/controls.js';
+import { DiveEngine } from './dive/diveEngine.js';
 
 class AetheonApp {
   constructor() {
@@ -14,6 +15,9 @@ class AetheonApp {
     this.socket = null;
     this.isConnected = false;
     this.journalEntries = [];
+
+    // 3D First-Person Dive Engine
+    this.diveEngine = new DiveEngine(this);
 
     // UI Modules
     this.inspector = new BioInspector(this, this.renderer);

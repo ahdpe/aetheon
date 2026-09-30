@@ -97,6 +97,12 @@ export class NetworkManager {
         type: 'atlas_data',
         entries: this.engine.atlas ? this.engine.atlas.getAllEntries() : []
       }));
+    } else if (msg.type === 'steer') {
+      if (typeof msg.id === 'number' && typeof msg.steerX === 'number' && typeof msg.steerY === 'number') {
+        const sx = Math.max(-1.5, Math.min(1.5, msg.steerX));
+        const sy = Math.max(-1.5, Math.min(1.5, msg.steerY));
+        this.engine.applySteer(msg.id, sx, sy);
+      }
     }
   }
 
