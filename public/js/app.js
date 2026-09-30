@@ -88,8 +88,13 @@ class AetheonApp {
   }
 
   connectWebSocket() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
+    let wsUrl;
+    if (window.location.protocol === 'file:' || !window.location.host) {
+      wsUrl = 'ws://localhost:3000';
+    } else {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsUrl = `${protocol}//${window.location.host}`;
+    }
 
     console.log(`[Aetheon] Connecting to canonical world stream: ${wsUrl}`);
     this.socket = new WebSocket(wsUrl);
@@ -121,6 +126,10 @@ class AetheonApp {
 
   handleMessage(msg) {
     if (msg.type === 'init') {
+      if (msg.worldSize) {
+        this.renderer.worldSize = msg.worldSize;
+        if (this.renderer.particles) this.renderer.particles.worldSize = msg.worldSize;
+      }
       this.renderer.setVents(msg.vents);
       if (msg.thumbnail) this.renderer.updateThumbnail(msg.thumbnail);
       this.updateStats(msg.stats);

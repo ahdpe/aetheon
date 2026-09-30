@@ -1,4 +1,5 @@
 import { WebSocketServer, WebSocket } from 'ws';
+import { CONFIG } from '../config.js';
 
 export class NetworkManager {
   constructor(server, engine) {
@@ -10,13 +11,14 @@ export class NetworkManager {
   }
 
   setupListeners() {
-    this.wss.on('connection', (ws) => {
+    this.wss.on('connection', (ws, req) => {
       this.clients.add(ws);
+      console.log(`[WS] Client connected from ${req.socket.remoteAddress}. Active clients: ${this.clients.size}`);
 
       // Send initial hand-shake state
       const initialPayload = {
         type: 'init',
-        worldSize: 1000.0,
+        worldSize: CONFIG.WORLD_SIZE,
         vents: this.engine.grid.vents,
         stats: this.engine.getStats(),
         journal: this.engine.naturalist.getRecentEntries(10),
@@ -39,6 +41,7 @@ export class NetworkManager {
 
       ws.on('close', () => {
         this.clients.delete(ws);
+        console.log(`[WS] Client disconnected. Active clients: ${this.clients.size}`);
         this.broadcastVisitorCount();
       });
 

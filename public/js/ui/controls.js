@@ -42,9 +42,10 @@ export class InputController {
         // Break tracking if user manual pans
         this.renderer.camera.trackedEntityId = null;
 
+        const ws = this.renderer.worldSize || 1400.0;
         const zoom = this.renderer.camera.zoom;
-        this.renderer.camera.targetX = (this.camStartX - dx / zoom + 1000) % 1000;
-        this.renderer.camera.targetY = (this.camStartY - dy / zoom + 1000) % 1000;
+        this.renderer.camera.targetX = (this.camStartX - dx / zoom + ws) % ws;
+        this.renderer.camera.targetY = (this.camStartY - dy / zoom + ws) % ws;
       }
     });
 
@@ -98,9 +99,10 @@ export class InputController {
     }
 
     // 2. Otherwise, drop nutrient into the ocean!
+    const ws = this.renderer.worldSize || 1400.0;
     const worldPt = this.renderer.screenToWorld(screenX, screenY);
-    const wx = (worldPt.x + 1000) % 1000;
-    const wy = (worldPt.y + 1000) % 1000;
+    const wx = (worldPt.x + ws) % ws;
+    const wy = (worldPt.y + ws) % ws;
 
     // Send to server
     this.client.sendInteraction('nutrient_drop', wx, wy);
