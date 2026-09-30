@@ -18,6 +18,7 @@ class AetheonApp {
 
     // 3D First-Person Dive Engine
     this.diveEngine = new DiveEngine(this);
+    this.i18n = i18n;
 
     // UI Modules
     this.inspector = new BioInspector(this, this.renderer);

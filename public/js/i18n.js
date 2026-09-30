@@ -79,7 +79,11 @@ export const DICTIONARY = {
     btn_dive_label: 'Dive (3D)',
     dive_exit: 'Orbit (ESC)',
     chemotaxis_sensor: 'CHEMOTAXIS',
-    ciliary_rhythm: 'CILIARY RHYTHM'
+    ciliary_rhythm: 'CILIARY RHYTHM',
+    dive_steer: 'Steer',
+    dive_look: 'Look',
+    dive_boost: 'Boost',
+    speed: 'SPEED'
   },
   ru: {
     organisms: 'организмов',
@@ -161,7 +165,11 @@ export const DICTIONARY = {
     btn_dive_label: 'Погрузиться (3D)',
     dive_exit: 'Всплыть (ESC)',
     chemotaxis_sensor: 'ХЕМОТАКСИС',
-    ciliary_rhythm: 'РИТМ РЕСНИЧЕК'
+    ciliary_rhythm: 'РИТМ РЕСНИЧЕК',
+    dive_steer: 'Руление',
+    dive_look: 'Обзор',
+    dive_boost: 'Ускорение',
+    speed: 'СКОРОСТЬ'
   }
 };
 

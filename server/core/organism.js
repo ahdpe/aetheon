@@ -22,6 +22,7 @@ export class Organism {
     // Internal Kuramoto phase and membrane morphology
     this.phase = Math.random() * Math.PI * 2;
     this.heading = Math.random() * Math.PI * 2;
+    this.playerSteer = { x: 0, y: 0, ticks: 0 };
     
     // Genome vector
     if (genome) {
@@ -107,40 +108,49 @@ export class Organism {
     }
     this.phase = (this.phase + this.genome.ciliaryFrequency + phaseTorque) % (Math.PI * 2);
 
-    // 2. Chemical gradient sensing (Chemotaxis)
-    const chem = grid.sample(this.x, this.y);
-    
-    // Desired steering vector from chemical field
-    let steerX = chem.gradNutrientX * this.genome.chemotaxisNutrient + chem.gradWasteX * this.genome.chemotaxisWaste;
-    let steerY = chem.gradNutrientY * this.genome.chemotaxisNutrient + chem.gradWasteY * this.genome.chemotaxisWaste;
+    // 2. Chemical gradient sensing (Chemotaxis) or Active Player Steering Override
+    const isPiloted = Boolean(this.playerSteer && this.playerSteer.ticks > 0);
+    let steerX = 0;
+    let steerY = 0;
 
-    // 2.5. Active Visitor Food Scent Luring (Sensory horizon up to 480 μm!)
-    if (nutrientBlooms && nutrientBlooms.length > 0 && this.carnivory < 0.65) {
-      let closestBloom = null;
-      let closestDist = 480.0; // Broad sensory range across the petri dish!
+    if (isPiloted) {
+      this.playerSteer.ticks--;
+      // High-authority visitor steering impulse
+      steerX = this.playerSteer.x * 6.5;
+      steerY = this.playerSteer.y * 6.5;
+    } else {
+      const chem = grid.sample(this.x, this.y);
+      steerX = chem.gradNutrientX * this.genome.chemotaxisNutrient + chem.gradWasteX * this.genome.chemotaxisWaste;
+      steerY = chem.gradNutrientY * this.genome.chemotaxisNutrient + chem.gradWasteY * this.genome.chemotaxisWaste;
 
-      for (let b = 0; b < nutrientBlooms.length; b++) {
-        const bloom = nutrientBlooms[b];
-        const d = Math.hypot(bloom.x - this.x, bloom.y - this.y);
-        if (d < closestDist) {
-          closestDist = d;
-          closestBloom = bloom;
+      // 2.5. Active Visitor Food Scent Luring (Sensory horizon up to 480 μm!)
+      if (nutrientBlooms && nutrientBlooms.length > 0 && this.carnivory < 0.65) {
+        let closestBloom = null;
+        let closestDist = 480.0; // Broad sensory range across the petri dish!
+
+        for (let b = 0; b < nutrientBlooms.length; b++) {
+          const bloom = nutrientBlooms[b];
+          const d = Math.hypot(bloom.x - this.x, bloom.y - this.y);
+          if (d < closestDist) {
+            closestDist = d;
+            closestBloom = bloom;
+          }
         }
-      }
 
-      if (closestBloom) {
-        // Strong, irresistible lure pull towards user-dropped food
-        const lureStrength = Math.pow(1.0 - closestDist / 480.0, 1.2) * 4.2;
-        const dx = closestBloom.x - this.x;
-        const dy = closestBloom.y - this.y;
-        steerX += (dx / closestDist) * lureStrength;
-        steerY += (dy / closestDist) * lureStrength;
+        if (closestBloom) {
+          // Strong, irresistible lure pull towards user-dropped food
+          const lureStrength = Math.pow(1.0 - closestDist / 480.0, 1.2) * 4.2;
+          const dx = closestBloom.x - this.x;
+          const dy = closestBloom.y - this.y;
+          steerX += (dx / closestDist) * lureStrength;
+          steerY += (dy / closestDist) * lureStrength;
 
-        // If organism arrives at the food bloom, graze directly from the bounty
-        if (closestDist < closestBloom.radius + this.size) {
-          const bite = Math.min(closestBloom.energy, 3.5);
-          closestBloom.energy -= bite;
-          this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 1.8);
+          // If organism arrives at the food bloom, graze directly from the bounty
+          if (closestDist < closestBloom.radius + this.size) {
+            const bite = Math.min(closestBloom.energy, 3.5);
+            closestBloom.energy -= bite;
+            this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 1.8);
+          }
         }
       }
     }
@@ -241,15 +251,16 @@ export class Organism {
       }
     }
 
-    // Smooth angular turning with inertia (prevent rapid 180° twitching)
+    // Smooth angular turning with inertia (prevent rapid 180° twitching, but responsive when piloted)
     const steerMag = Math.sqrt(steerX * steerX + steerY * steerY);
     if (steerMag > 0.05) {
       const targetHeading = Math.atan2(steerY, steerX);
       let angleDiff = targetHeading - this.heading;
       while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
       while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-      const maxTurn = (distCenter > R - margin) ? 0.45 : 0.28;
-      this.heading += Math.max(-maxTurn, Math.min(maxTurn, angleDiff * 0.25));
+      const maxTurn = isPiloted ? 0.65 : ((distCenter > R - margin) ? 0.45 : 0.28);
+      const turnRate = isPiloted ? 0.55 : 0.25;
+      this.heading += Math.max(-maxTurn, Math.min(maxTurn, angleDiff * turnRate));
     } else {
       // Gentle forward wander
       this.heading += (Math.random() - 0.5) * 0.08;
@@ -257,13 +268,14 @@ export class Organism {
 
     // Continuous rhythmic ciliary propulsion
     const ciliaryPulse = 0.5 + 0.5 * Math.sin(this.phase);
-    const speedMultiplier = 0.7 + 0.5 * ciliaryPulse;
+    const speedMultiplier = isPiloted ? 1.45 : (0.7 + 0.5 * ciliaryPulse);
 
     const targetVx = Math.cos(this.heading) * this.maxSpeed * speedMultiplier * tempFactor;
     const targetVy = Math.sin(this.heading) * this.maxSpeed * speedMultiplier * tempFactor;
 
-    this.vx += (targetVx - this.vx) * 0.2;
-    this.vy += (targetVy - this.vy) * 0.2;
+    const accelRate = isPiloted ? 0.45 : 0.2;
+    this.vx += (targetVx - this.vx) * accelRate;
+    this.vy += (targetVy - this.vy) * accelRate;
 
     // Gentle fluid damping
     this.vx *= 0.98;
@@ -314,6 +326,11 @@ export class Organism {
       }
     }
 
+    // Maintain vital energy baseline while actively piloted by visitor
+    if (isPiloted) {
+      this.energy = Math.max(40.0, this.energy);
+    }
+
     // Cap maximum energy
     if (this.energy > CONFIG.MAX_ORGANISM_ENERGY) {
       this.energy = CONFIG.MAX_ORGANISM_ENERGY;
@@ -333,7 +350,16 @@ export class Organism {
     const contactDist = (this.size + prey.size) * 0.75;
 
     if (dx * dx + dy * dy <= contactDist * contactDist) {
-      if (prey.size < this.size * 0.95 || prey.energy < 45.0) {
+      if (prey.playerSteer && prey.playerSteer.ticks > 0) {
+        // Piloted organism cannot be insta-devoured: predatory strike & evasive recoil!
+        const bite = Math.min(prey.energy * 0.25, 20.0);
+        prey.energy -= bite;
+        this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 0.7);
+        const d = Math.hypot(dx, dy) || 1.0;
+        prey.vx += (dx / d) * 3.8;
+        prey.vy += (dy / d) * 3.8;
+        return { killed: false, preyId: prey.id };
+      } else if (prey.size < this.size * 0.95 || prey.energy < 45.0) {
         // Full ingestion / kill!
         const gainedEnergy = Math.max(35.0, prey.energy * 0.45);
         this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + gainedEnergy);
@@ -400,6 +426,7 @@ export class Organism {
 
   // Check if organism has perished
   isDead() {
+    if (this.playerSteer && this.playerSteer.ticks > 0) return false; // Protected while visitor is piloting!
     return this.energy <= 0.0 || this.age > 12000; // max lifespan ~20 mins of continuous life
   }
 

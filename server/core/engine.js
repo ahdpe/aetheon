@@ -169,7 +169,8 @@ export class SimulationEngine {
           // Turnover: cull an old or depleted organism to maintain generational turnover
           for (let k = 0; k < this.organisms.length; k++) {
             const cand = this.organisms[k];
-            if (!deadSet.has(cand.id) && cand !== org && (cand.age > 4000 || cand.energy < 30)) {
+            const isCandPiloted = cand.playerSteer && cand.playerSteer.ticks > 0;
+            if (!deadSet.has(cand.id) && cand !== org && !isCandPiloted && (cand.age > 4000 || cand.energy < 30)) {
               deadSet.add(cand.id);
               allowMitosis = true;
               break;
@@ -326,9 +327,15 @@ export class SimulationEngine {
     for (let i = 0; i < this.organisms.length; i++) {
       const o = this.organisms[i];
       if (o.id === orgId) {
-        const force = 0.35;
-        o.vx = Math.max(-o.maxSpeed, Math.min(o.maxSpeed, o.vx + steerX * force));
-        o.vy = Math.max(-o.maxSpeed, Math.min(o.maxSpeed, o.vy + steerY * force));
+        // Keep active steering authority for 15 ticks (1.5 seconds)
+        o.playerSteer = { x: steerX, y: steerY, ticks: 15 };
+        const mag = Math.hypot(steerX, steerY);
+        if (mag > 0.05) {
+          const targetHeading = Math.atan2(steerY, steerX);
+          o.heading = targetHeading;
+          o.vx = Math.cos(targetHeading) * o.maxSpeed * 1.35;
+          o.vy = Math.sin(targetHeading) * o.maxSpeed * 1.35;
+        }
         return true;
       }
     }

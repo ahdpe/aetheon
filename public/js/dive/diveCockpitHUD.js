@@ -19,15 +19,28 @@ export class DiveCockpitHUD {
     this.lookTouchId = null;
     this.lastTouchPos = { x: 0, y: 0 };
 
+    this.ciliaCanvas = null;
+    this.ciliaCtx = null;
+
     this.setupDOM();
+    this.setupCiliaCanvas();
     this.setupInputListeners();
   }
 
   setupDOM() {
     if (!this.container) return;
     this.container.innerHTML = `
-      <!-- Organic Lipid Membrane Vignette -->
+      <!-- Organic Lipid Membrane Vignette & Microscope Lens Aberration -->
       <div class="dive-vignette" id="dive-vignette"></div>
+
+      <!-- Undulating Translucent Cellular Cilia Fringe on Viewport Rim -->
+      <canvas class="dive-cilia-canvas" id="dive-cilia-canvas"></canvas>
+
+      <!-- Center Reticle / Microscopic Sight -->
+      <div class="dive-reticle" id="dive-reticle">
+        <div class="reticle-dot"></div>
+        <div class="reticle-circle"></div>
+      </div>
 
       <!-- Top Bio-Cockpit Header Bar -->
       <div class="dive-top-bar glass-panel">
@@ -52,13 +65,20 @@ export class DiveCockpitHUD {
         </div>
       </div>
 
-      <!-- Chemical Gradient Compass (Navigating to Nutrient Hearth) -->
+      <!-- Chemical Gradient Compass (Navigating to Hydrothermal Hearth) -->
       <div class="dive-compass-wrap glass-panel" id="dive-compass-wrap">
         <div class="compass-label" data-i18n="chemotaxis_sensor">ХЕМОТАКСИС</div>
         <div class="compass-dial" id="dive-compass-dial">
           <div class="compass-needle" id="dive-compass-needle">▲</div>
         </div>
         <div class="compass-dist" id="dive-compass-dist">48 μm</div>
+      </div>
+
+      <!-- Control Key Hints (Desktop) -->
+      <div class="dive-controls-hint glass-panel" id="dive-controls-hint">
+        <span class="hint-key">WASD</span> <span data-i18n="dive_steer">Руление</span> • 
+        <span class="hint-key">Мышь</span> <span data-i18n="dive_look">Обзор</span> • 
+        <span class="hint-key">SPACE</span> <span data-i18n="dive_boost">Импульс</span>
       </div>
 
       <!-- Bottom Vitals Bar (Energy, Kuramoto rhythm, Speed) -->
@@ -92,6 +112,11 @@ export class DiveCockpitHUD {
         </div>
       </div>
 
+      <!-- Mobile Boost Button -->
+      <button class="dive-mobile-boost-btn" id="dive-mobile-boost-btn" title="Boost">
+        ⚡
+      </button>
+
       <!-- Cinematic Event Flash Overlays -->
       <div class="dive-event-overlay" id="dive-event-overlay"></div>
     `;
@@ -100,6 +125,88 @@ export class DiveCockpitHUD {
     this.exitBtn?.addEventListener('click', () => {
       this.engine.exit();
     });
+
+    const boostBtn = document.getElementById('dive-mobile-boost-btn');
+    boostBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.engine.triggerBoost();
+    });
+  }
+
+  setupCiliaCanvas() {
+    this.ciliaCanvas = document.getElementById('dive-cilia-canvas');
+    if (!this.ciliaCanvas) return;
+    this.ciliaCtx = this.ciliaCanvas.getContext('2d');
+    this.resizeCiliaCanvas();
+    window.addEventListener('resize', () => this.resizeCiliaCanvas());
+  }
+
+  resizeCiliaCanvas() {
+    if (!this.ciliaCanvas) return;
+    this.ciliaCanvas.width = window.innerWidth;
+    this.ciliaCanvas.height = window.innerHeight;
+  }
+
+  // Draw beating translucent cilia along the edges of the screen in sync with Kuramoto phase
+  drawCilia(phase, speed) {
+    if (!this.ciliaCtx || !this.ciliaCanvas) return;
+    const ctx = this.ciliaCtx;
+    const w = this.ciliaCanvas.width;
+    const h = this.ciliaCanvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+
+    const ciliaCount = 56;
+    const baseLength = 28 + Math.min(22, speed * 8.0);
+    const strokeCol = 'rgba(0, 240, 255, 0.28)';
+
+    ctx.strokeStyle = strokeCol;
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+
+    // Draw around the 4 borders of the screen
+    for (let i = 0; i < ciliaCount; i++) {
+      const frac = i / ciliaCount;
+      const ciliaPhase = phase + frac * Math.PI * 4;
+      const wave = Math.sin(ciliaPhase) * 14.0;
+
+      let sx = 0, sy = 0, ex = 0, ey = 0;
+
+      if (frac < 0.25) {
+        // Top edge
+        const t = frac / 0.25;
+        sx = t * w;
+        sy = 0;
+        ex = sx + wave;
+        ey = baseLength + Math.abs(Math.sin(ciliaPhase)) * 8;
+      } else if (frac < 0.5) {
+        // Right edge
+        const t = (frac - 0.25) / 0.25;
+        sx = w;
+        sy = t * h;
+        ex = w - (baseLength + Math.abs(Math.sin(ciliaPhase)) * 8);
+        ey = sy + wave;
+      } else if (frac < 0.75) {
+        // Bottom edge
+        const t = (frac - 0.5) / 0.25;
+        sx = (1 - t) * w;
+        sy = h;
+        ex = sx - wave;
+        ey = h - (baseLength + Math.abs(Math.sin(ciliaPhase)) * 8);
+      } else {
+        // Left edge
+        const t = (frac - 0.75) / 0.25;
+        sx = 0;
+        sy = (1 - t) * h;
+        ex = baseLength + Math.abs(Math.sin(ciliaPhase)) * 8;
+        ey = sy - wave;
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.quadraticCurveTo((sx + ex) * 0.5 + wave * 0.5, (sy + ey) * 0.5, ex, ey);
+      ctx.stroke();
+    }
   }
 
   setupInputListeners() {
@@ -138,7 +245,7 @@ export class DiveCockpitHUD {
 
     window.addEventListener('mousedown', (e) => {
       if (!this.engine.isActive) return;
-      if (e.target.closest('#dive-exit-btn')) return;
+      if (e.target.closest('#dive-exit-btn') || e.target.closest('#dive-mobile-boost-btn')) return;
       isMouseDown = true;
       prevMouseX = e.clientX;
       prevMouseY = e.clientY;
@@ -152,7 +259,7 @@ export class DiveCockpitHUD {
       prevMouseY = e.clientY;
 
       this.lookYaw -= dx * 0.006;
-      this.lookPitch = Math.max(-0.6, Math.min(0.6, this.lookPitch - dy * 0.004));
+      this.lookPitch = Math.max(-0.5, Math.min(0.5, this.lookPitch - dy * 0.004));
     });
 
     window.addEventListener('mouseup', () => {
@@ -160,7 +267,6 @@ export class DiveCockpitHUD {
     });
 
     // 3. Mobile Touch Controls (Dual-zone: Left joystick, Right swipe look)
-    const joyZone = document.getElementById('dive-joystick-zone');
     const joyBase = document.getElementById('dive-joystick-base');
     const joyKnob = document.getElementById('dive-joystick-knob');
 
@@ -193,7 +299,7 @@ export class DiveCockpitHUD {
         if (touch.identifier === this.joystickTouchId) {
           const dx = touch.clientX - this.joystickOrigin.x;
           const dy = touch.clientY - this.joystickOrigin.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
+          const dist = Math.hypot(dx, dy);
           const maxR = 40;
           const clampedDist = Math.min(maxR, dist);
           const angle = Math.atan2(dy, dx);
@@ -212,7 +318,7 @@ export class DiveCockpitHUD {
           this.lastTouchPos = { x: touch.clientX, y: touch.clientY };
 
           this.lookYaw -= ldx * 0.007;
-          this.lookPitch = Math.max(-0.6, Math.min(0.6, this.lookPitch - ldy * 0.005));
+          this.lookPitch = Math.max(-0.5, Math.min(0.5, this.lookPitch - ldy * 0.005));
         }
       }
     }, { passive: true });
@@ -242,6 +348,8 @@ export class DiveCockpitHUD {
     if (this.container) {
       this.container.classList.remove('hidden');
     }
+    this.resizeCiliaCanvas();
+    i18n.applyTranslations();
   }
 
   hide() {
@@ -259,32 +367,37 @@ export class DiveCockpitHUD {
   update(org, currentHeading, nearestVent, nearestPredatorDist, time) {
     if (!org) return;
     const isRu = i18n.getLang() === 'ru';
+    const totalYaw = currentHeading + this.lookYaw;
 
     // 1. Keyboard steering accumulation
     if (!this.joystickActive) {
       let sx = 0;
       let sy = 0;
       if (this.keys.w) {
-        sx += Math.cos(currentHeading + this.lookYaw);
-        sy += Math.sin(currentHeading + this.lookYaw);
+        sx += Math.cos(totalYaw);
+        sy += Math.sin(totalYaw);
       }
       if (this.keys.s) {
-        sx -= Math.cos(currentHeading + this.lookYaw) * 0.5;
-        sy -= Math.sin(currentHeading + this.lookYaw) * 0.5;
+        sx -= Math.cos(totalYaw) * 0.6;
+        sy -= Math.sin(totalYaw) * 0.6;
       }
       if (this.keys.a) {
-        sx += Math.cos(currentHeading + this.lookYaw - Math.PI * 0.5) * 0.7;
-        sy += Math.sin(currentHeading + this.lookYaw - Math.PI * 0.5) * 0.7;
+        sx += Math.cos(totalYaw - Math.PI * 0.5) * 0.8;
+        sy += Math.sin(totalYaw - Math.PI * 0.5) * 0.8;
       }
       if (this.keys.d) {
-        sx += Math.cos(currentHeading + this.lookYaw + Math.PI * 0.5) * 0.7;
-        sy += Math.sin(currentHeading + this.lookYaw + Math.PI * 0.5) * 0.7;
+        sx += Math.cos(totalYaw + Math.PI * 0.5) * 0.8;
+        sy += Math.sin(totalYaw + Math.PI * 0.5) * 0.8;
       }
       this.steerX = sx;
       this.steerY = sy;
     }
 
-    // 2. Telemetry DOM updates
+    // 2. Draw live beating cellular cilia
+    const currentSpeed = Math.hypot(org.vx || 0, org.vy || 0);
+    this.drawCilia(org.phase || (time * 0.005), currentSpeed);
+
+    // 3. Telemetry DOM updates
     const title = document.getElementById('dive-species-title');
     const sub = document.getElementById('dive-species-sub');
     const dot = document.getElementById('dive-species-dot');
@@ -355,21 +468,24 @@ export class DiveCockpitHUD {
     if (energyVal) energyVal.textContent = `${energyPct}%`;
 
     // Speed
-    const spd = Math.sqrt((org.vx || 0) * (org.vx || 0) + (org.vy || 0) * (org.vy || 0));
-    if (speedVal) speedVal.textContent = `${spd.toFixed(1)} μm/s`;
+    if (speedVal) speedVal.textContent = `${currentSpeed.toFixed(1)} μm/s`;
 
     // Kuramoto Ciliary Frequency
     const freq = (org.ciliaryFrequency || 0.25) * 4.0;
     if (bpmVal) bpmVal.textContent = `${freq.toFixed(1)} Hz`;
 
-    // Chemical Compass
+    // Chemical Compass (scaled correctly to 2D world coordinates!)
     if (nearestVent && compassNeedle && compassDist) {
-      const vdx = nearestVent.x - org.x;
-      const vdy = nearestVent.y - org.y;
+      const ventScale = 1400 / 128; // 10.9375
+      const vwx = (nearestVent.x !== undefined ? nearestVent.x : 64) * ventScale;
+      const vwy = (nearestVent.y !== undefined ? nearestVent.y : 64) * ventScale;
+
+      const vdx = vwx - org.x;
+      const vdy = vwy - org.y;
       const ventAngle = Math.atan2(vdy, vdx);
-      const relAngle = ventAngle - (currentHeading + this.lookYaw);
+      const relAngle = ventAngle - totalYaw;
       compassNeedle.style.transform = `rotate(${relAngle}rad)`;
-      const vdist = Math.sqrt(vdx * vdx + vdy * vdy);
+      const vdist = Math.hypot(vdx, vdy);
       compassDist.textContent = `${Math.round(vdist)} μm`;
     }
   }
