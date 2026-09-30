@@ -297,6 +297,39 @@ class AetheonApp {
       this.socket.send(JSON.stringify({ type: 'get_codex' }));
     }
   }
+
+  // Focus and track an active organism of the selected species in the ocean
+  trackSpeciesInOcean(speciesId) {
+    if (!this.renderer || !this.renderer.currEntities) return false;
+    const orgs = Array.from(this.renderer.currEntities.values()).filter(o => o.speciesId === speciesId);
+    if (!orgs.length) {
+      console.warn(`[Aetheon] No active organisms found for species #${speciesId}`);
+      return false;
+    }
+
+    // Pick a healthy, active specimen (highest energy)
+    const target = orgs.sort((a, b) => b.energy - a.energy)[0];
+
+    // Smooth camera transition to target
+    this.renderer.camera.targetX = target.x;
+    this.renderer.camera.targetY = target.y;
+    this.renderer.camera.targetZoom = Math.max(1.4, this.renderer.camera.zoom);
+    this.renderer.camera.trackedEntityId = target.id;
+
+    // Highlight with targeting ripple pulses
+    this.renderer.addRipple(target.x, target.y, 'rgba(0, 240, 255, 0.95)', 110);
+    this.renderer.addRipple(target.x, target.y, 'rgba(255, 255, 255, 0.85)', 55);
+
+    // Open inspector bio-card and set tracking state
+    this.inspector.select(target.id);
+    this.inspector.isTracking = true;
+    if (this.inspector.trackBtn) {
+      this.inspector.trackBtn.style.borderColor = 'var(--accent-cyan)';
+    }
+
+    sound.playDroplet(1500);
+    return true;
+  }
 }
 
 // Boot application

@@ -1,4 +1,5 @@
 import { i18n } from '../i18n.js';
+import { getSpeciesMorphology, drawCellMembranePath, drawCellMarkings, drawFlagellum, drawAntennae } from '../gl/morphology.js';
 
 export class CodexModal {
   constructor(socketClient) {
@@ -244,10 +245,29 @@ export class CodexModal {
             </span>
             <span class="species-total-count">${isRu ? 'Всего:' : 'Total:'} ${sp.totalCount}</span>
           </div>
+
+          <div class="species-actions-row">
+            <button class="species-track-btn ${isExtinct ? 'disabled' : ''}" data-species-id="${sp.id}" ${isExtinct ? 'disabled' : ''} title="${isExtinct ? (isRu ? 'Вид вымер' : 'Species is extinct') : (isRu ? 'Найти и следить за особью в чаше' : 'Track in Ocean')}">
+              ${isExtinct ? '💀 ' + (isRu ? 'Вымер' : 'Extinct') : '🎯 ' + (isRu ? 'Найти и следить' : 'Track in Ocean')}
+            </button>
+          </div>
         </div>
       `;
 
       this.speciesGrid.appendChild(card);
+    });
+
+    // Attach click events for track buttons
+    const trackBtns = this.speciesGrid.querySelectorAll('.species-track-btn:not(.disabled)');
+    trackBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const spId = parseInt(btn.getAttribute('data-species-id'), 10);
+        this.close();
+        if (this.client && typeof this.client.trackSpeciesInOcean === 'function') {
+          this.client.trackSpeciesInOcean(spId);
+        }
+      });
     });
 
     // Render microscope canvases for filtered species
@@ -282,8 +302,10 @@ export class CodexModal {
     const cx = w * 0.5;
     const cy = h * 0.5;
     const isExtinct = sp.extinctTime !== null && sp.population === 0;
-    const isHunter = sp.carnivory > 0.35;
     const hue = Math.round(sp.hue * 360);
+    const speedRate = Math.max(0.8, sp.speedMax || 1.8);
+    const morph = getSpeciesMorphology(sp.id, sp.hue, sp.carnivory || 0.1, sp.size || 6.5, speedRate);
+    const isHunter = morph.isHunter;
 
     // 1. Petri-Dish Lens Background with deep fluid vignette
     const bgGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, cx);
@@ -301,7 +323,7 @@ export class CodexModal {
     ctx.arc(cx, cy, cx - 2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Subtle fluid micro-particles floating in chamber
+    // Micro-particles floating in chamber
     const tSec = time * 0.001;
     ctx.fillStyle = isExtinct ? 'rgba(148, 163, 184, 0.15)' : `hsla(${hue}, 80%, 75%, 0.25)`;
     for (let p = 0; p < 4; p++) {
@@ -317,22 +339,21 @@ export class CodexModal {
     const swimDriftY = isExtinct ? 0 : Math.sin(tSec * 1.4 + sp.id) * 4.5;
     const orgX = cx + swimDriftX;
     const orgY = cy + swimDriftY;
-
-    // Heading angle: turns smoothly in circles or oscillates
-    const speedRate = Math.max(0.8, sp.speedMax || 1.8);
     const heading = isExtinct ? 0.3 : (tSec * 0.6 * speedRate + sp.id);
 
-    // Body dimensions scaled by species genome
-    const baseR = Math.max(16, Math.min(32, (sp.size || 6.5) * 2.4));
+    // Body dimensions scaled by species genome and morphology aspect
+    const baseR = Math.max(16, Math.min(30, (sp.size || 6.5) * 2.3));
     const pulse = isExtinct ? 0 : Math.sin(tSec * 3.0 + sp.id) * 0.08;
     const bodyR = baseR * (1.0 + pulse);
+    const rx = bodyR * morph.aspectX;
+    const ry = bodyR * morph.aspectY;
 
     ctx.save();
     ctx.translate(orgX, orgY);
     ctx.rotate(heading);
 
     // 3. Bioluminescent Halo
-    const glowR = bodyR * (isHunter ? 2.5 : 2.2);
+    const glowR = Math.max(rx, ry) * (isHunter ? 2.5 : 2.2);
     const glow = ctx.createRadialGradient(0, 0, bodyR * 0.4, 0, 0, glowR);
     if (isExtinct) {
       glow.addColorStop(0, 'rgba(100, 116, 139, 0.15)');
@@ -346,7 +367,13 @@ export class CodexModal {
     ctx.arc(0, 0, glowR, 0, Math.PI * 2);
     ctx.fill();
 
-    // 4. Undulating Cilia (Swimming Fringes)
+    // 4. Undulating Flagellum (whip)
+    if (!isExtinct) {
+      drawFlagellum(ctx, rx, ry, morph, speedRate, time, sp.id);
+      drawAntennae(ctx, rx, ry, morph, time, sp.id);
+    }
+
+    // 5. Undulating Cilia
     if (!isExtinct) {
       const ciliaCount = isHunter ? 14 : Math.min(26, Math.floor(bodyR * 0.9) + 8);
       ctx.strokeStyle = isHunter ? `hsla(${hue}, 95%, 70%, 0.65)` : `hsla(${hue}, 85%, 80%, 0.55)`;
@@ -357,10 +384,10 @@ export class CodexModal {
         const wave = Math.sin(time * 0.012 * speedRate + angle * 4.0 + sp.id) * (bodyR * 0.35);
         const cLen = bodyR * (isHunter ? 0.55 : 0.42) + wave;
 
-        const x1 = Math.cos(angle) * (bodyR * 1.1);
-        const y1 = Math.sin(angle) * (bodyR * 0.82);
-        const x2 = Math.cos(angle) * (bodyR * 1.1 + cLen);
-        const y2 = Math.sin(angle) * (bodyR * 0.82 + cLen);
+        const x1 = Math.cos(angle) * (rx * 0.95);
+        const y1 = Math.sin(angle) * (ry * 0.95);
+        const x2 = Math.cos(angle) * (rx * 0.95 + cLen);
+        const y2 = Math.sin(angle) * (ry * 0.95 + cLen);
 
         ctx.beginPath();
         ctx.moveTo(x1, y1);
@@ -369,29 +396,24 @@ export class CodexModal {
       }
     }
 
-    // 5. Viscoelastic Translucent Membrane
-    ctx.beginPath();
-    const rx = bodyR * 1.25;
-    const ry = bodyR * 0.88;
-    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-
+    // 6. Viscoelastic Translucent Membrane (Specific morphotype: vibrio / bacillus / coccus / raptor / ovoid)
     if (isExtinct) {
       ctx.fillStyle = 'rgba(71, 85, 105, 0.45)';
       ctx.strokeStyle = 'rgba(148, 163, 184, 0.6)';
       ctx.lineWidth = 1.2;
     } else {
-      ctx.fillStyle = isHunter 
-        ? `hsla(${hue}, 85%, 36%, 0.72)` 
-        : `hsla(${hue}, 75%, 38%, 0.65)`;
+      ctx.fillStyle = isHunter ? `hsla(${hue}, 85%, 36%, 0.72)` : `hsla(${hue}, 75%, 38%, 0.65)`;
       ctx.strokeStyle = `hsla(${hue}, 95%, 75%, 0.95)`;
       ctx.lineWidth = isHunter ? 2.0 : 1.5;
     }
+
+    drawCellMembranePath(ctx, isExtinct ? 'ovoid' : morph.shape, rx, ry, time, sp.id);
     ctx.fill();
     ctx.stroke();
 
-    // 6. Predatory Rostrum & Mandibles (If Apex Hunter)
+    // 7. Predatory Rostrum & Mandibles (If Apex Hunter)
     if (isHunter && !isExtinct) {
-      ctx.fillStyle = `hsla(${(hue + 25) % 360}, 100%, 70%, 0.95)`;
+      ctx.fillStyle = `hsla(${morph.accentHue}, 100%, 70%, 0.95)`;
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.0;
 
@@ -415,9 +437,14 @@ export class CodexModal {
       ctx.fill();
     }
 
-    // 7. Internal Organelles & Nucleus
+    // 8. Surface Markings (Spots / Stripes / Spine / Twin Core)
+    if (!isExtinct) {
+      drawCellMarkings(ctx, morph, rx, ry, hue, time, sp.id);
+    }
+
+    // 9. Internal Organelles & Nucleus
     const nucleusR = bodyR * 0.34;
-    const nX = -bodyR * 0.25;
+    const nX = -rx * 0.22;
     const nY = 0;
 
     const nGrad = ctx.createRadialGradient(nX, nY, 1, nX, nY, nucleusR);
@@ -438,17 +465,6 @@ export class CodexModal {
     ctx.fillStyle = isExtinct ? 'rgba(255, 255, 255, 0.5)' : '#ffffff';
     ctx.beginPath();
     ctx.arc(nX, nY, nucleusR * 0.35, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Vacuoles & Plastid organelle droplets
-    const vAlpha = isExtinct ? '0.25' : '0.55';
-    ctx.fillStyle = isHunter 
-      ? `rgba(244, 63, 94, ${vAlpha})` 
-      : `rgba(255, 255, 255, ${vAlpha})`;
-
-    ctx.beginPath();
-    ctx.arc(bodyR * 0.35, -bodyR * 0.22, bodyR * 0.18, 0, Math.PI * 2);
-    ctx.arc(bodyR * 0.28, bodyR * 0.26, bodyR * 0.14, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();

@@ -1,4 +1,5 @@
 import { ParticleSystem } from './particles.js';
+import { getSpeciesMorphology, drawCellMembranePath, drawCellMarkings, drawFlagellum, drawAntennae } from './morphology.js';
 
 export class OceanRenderer {
   constructor(canvas) {
@@ -332,40 +333,52 @@ export class OceanRenderer {
     }
   }
 
-  // Render organic soft-body Aetheobiont with translucent membrane and beating cilia
+  // Render organic soft-body Aetheobiont with translucent membrane, species-specific morphotype, markings, and cilia
   drawOrganism(ctx, x, y, r, org, heading, isSelected, time) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(heading);
 
     const hue = Math.round(org.hue * 360);
-    const isHunter = org.hue < 0.2 || org.hue > 0.9;
-    const pulse = Math.sin(time * 0.008 + org.id) * 0.15;
+    const speed = Math.sqrt((org.vx || 0) * (org.vx || 0) + (org.vy || 0) * (org.vy || 0));
+    const morph = getSpeciesMorphology(org.speciesId || 1, org.hue, org.carnivory || 0.1, org.size || 7, speed);
+    const isHunter = morph.isHunter;
+
+    const pulse = Math.sin(time * 0.008 + org.id) * 0.12;
     const bodyR = Math.max(3.5, r * (1.0 + pulse));
+    const rx = bodyR * morph.aspectX;
+    const ry = bodyR * morph.aspectY;
 
     // A. Bioluminescent Halo
-    const glowGrad = ctx.createRadialGradient(0, 0, bodyR * 0.5, 0, 0, bodyR * 2.4);
-    glowGrad.addColorStop(0, `hsla(${hue}, 90%, 55%, 0.25)`);
+    const haloR = Math.max(rx, ry) * (isHunter ? 2.4 : 2.0);
+    const glowGrad = ctx.createRadialGradient(0, 0, bodyR * 0.4, 0, 0, haloR);
+    glowGrad.addColorStop(0, `hsla(${hue}, 95%, ${isHunter ? '55%' : '50%'}, ${isHunter ? '0.35' : '0.22'})`);
     glowGrad.addColorStop(1, 'transparent');
     ctx.fillStyle = glowGrad;
     ctx.beginPath();
-    ctx.arc(0, 0, bodyR * 2.4, 0, Math.PI * 2);
+    ctx.arc(0, 0, haloR, 0, Math.PI * 2);
     ctx.fill();
 
-    // B. Beating Cilia (whipping hairs along perimeter)
-    const ciliaCount = Math.max(8, Math.floor(bodyR * 1.4));
-    ctx.strokeStyle = `hsla(${hue}, 80%, 75%, 0.45)`;
-    ctx.lineWidth = 1.0;
+    // B. Trailing Propulsion Flagellum (whip)
+    drawFlagellum(ctx, rx, ry, morph, speed, time, org.id);
+
+    // C. Forward Sensory Antennules
+    drawAntennae(ctx, rx, ry, morph, time, org.id);
+
+    // D. Beating Cilia (whipping hairs along perimeter)
+    const ciliaCount = isHunter ? 14 : Math.max(8, Math.floor(bodyR * 1.3));
+    ctx.strokeStyle = `hsla(${hue}, 85%, 75%, 0.45)`;
+    ctx.lineWidth = isHunter ? 1.3 : 1.0;
     
     for (let c = 0; c < ciliaCount; c++) {
       const angle = (c / ciliaCount) * Math.PI * 2;
-      const wave = Math.sin(time * 0.015 + angle * 3.0 + org.id) * (bodyR * 0.35);
-      const ciliaLen = bodyR * 0.45 + wave;
+      const wave = Math.sin(time * 0.015 + angle * 3.0 + org.id) * (bodyR * 0.3);
+      const ciliaLen = bodyR * (isHunter ? 0.48 : 0.38) + wave;
 
-      const cx1 = Math.cos(angle) * bodyR;
-      const cy1 = Math.sin(angle) * bodyR;
-      const cx2 = Math.cos(angle) * (bodyR + ciliaLen);
-      const cy2 = Math.sin(angle) * (bodyR + ciliaLen);
+      const cx1 = Math.cos(angle) * (rx * 0.95);
+      const cy1 = Math.sin(angle) * (ry * 0.95);
+      const cx2 = Math.cos(angle) * (rx * 0.95 + ciliaLen);
+      const cy2 = Math.sin(angle) * (ry * 0.95 + ciliaLen);
 
       ctx.beginPath();
       ctx.moveTo(cx1, cy1);
@@ -373,35 +386,61 @@ export class OceanRenderer {
       ctx.stroke();
     }
 
-    // C. Translucent Viscoelastic Membrane
-    ctx.fillStyle = `hsla(${hue}, 75%, 35%, 0.65)`;
-    ctx.strokeStyle = `hsla(${hue}, 95%, 70%, 0.85)`;
-    ctx.lineWidth = 1.4;
+    // E. Translucent Viscoelastic Membrane (Species-specific shape: vibrio/bacillus/coccus/raptor/ovoid)
+    ctx.fillStyle = isHunter ? `hsla(${hue}, 85%, 35%, 0.72)` : `hsla(${hue}, 75%, 35%, 0.65)`;
+    ctx.strokeStyle = `hsla(${hue}, 95%, 72%, 0.90)`;
+    ctx.lineWidth = isHunter ? 1.8 : 1.3;
 
-    ctx.beginPath();
-    // Oval swimming deformation along heading
-    ctx.ellipse(0, 0, bodyR * 1.25, bodyR * 0.85, 0, 0, Math.PI * 2);
+    drawCellMembranePath(ctx, morph.shape, rx, ry, time, org.id);
     ctx.fill();
     ctx.stroke();
 
-    // D. Internal Organelles & Nucleus
+    // F. Predatory Rostrum & Mandibles (If Apex Hunter)
+    if (isHunter) {
+      ctx.fillStyle = `hsla(${morph.accentHue}, 100%, 70%, 0.95)`;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.0;
+
+      // Front predatory jaw spike
+      ctx.beginPath();
+      ctx.moveTo(rx * 0.85, -ry * 0.35);
+      ctx.lineTo(rx + bodyR * 0.45, 0);
+      ctx.lineTo(rx * 0.85, ry * 0.35);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Lateral hunting thorns
+      ctx.beginPath();
+      ctx.moveTo(rx * 0.2, -ry * 0.95);
+      ctx.lineTo(rx * 0.5, -ry * 1.35);
+      ctx.lineTo(rx * 0.4, -ry * 0.8);
+      ctx.moveTo(rx * 0.2, ry * 0.95);
+      ctx.lineTo(rx * 0.5, ry * 1.35);
+      ctx.lineTo(rx * 0.4, ry * 0.8);
+      ctx.fill();
+    }
+
+    // G. Distinctive Phenotypic Markings (Spots / Stripes / Spine / Twin Core)
+    drawCellMarkings(ctx, morph, rx, ry, hue, time, org.id);
+
+    // H. Internal Organelles & Nucleus
     ctx.fillStyle = `hsla(${(hue + 40) % 360}, 90%, 75%, 0.85)`;
     ctx.beginPath();
-    ctx.arc(-bodyR * 0.25, 0, bodyR * 0.35, 0, Math.PI * 2);
+    ctx.arc(-rx * 0.22, 0, bodyR * 0.32, 0, Math.PI * 2);
     ctx.fill();
 
-    // Small vacuoles
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    // Core nucleolus
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.arc(bodyR * 0.35, -bodyR * 0.2, bodyR * 0.18, 0, Math.PI * 2);
-    ctx.arc(bodyR * 0.25, bodyR * 0.25, bodyR * 0.14, 0, Math.PI * 2);
+    ctx.arc(-rx * 0.22, 0, bodyR * 0.12, 0, Math.PI * 2);
     ctx.fill();
 
-    // E. Targeting Reticle (if selected in Inspector)
+    // I. Targeting Reticle (if selected in Inspector or tracked from Codex)
     if (isSelected) {
       ctx.strokeStyle = '#00f0ff';
-      ctx.lineWidth = 1.5;
-      const targetR = bodyR * 1.8;
+      ctx.lineWidth = 1.8;
+      const targetR = Math.max(rx, ry) * 1.7;
       
       ctx.beginPath();
       ctx.arc(0, 0, targetR, 0, Math.PI * 2);
@@ -409,10 +448,10 @@ export class OceanRenderer {
 
       // Crosshairs
       ctx.beginPath();
-      ctx.moveTo(-targetR - 4, 0); ctx.lineTo(-targetR + 4, 0);
-      ctx.moveTo(targetR - 4, 0); ctx.lineTo(targetR + 4, 0);
-      ctx.moveTo(0, -targetR - 4); ctx.lineTo(0, -targetR + 4);
-      ctx.moveTo(0, targetR - 4); ctx.lineTo(0, targetR + 4);
+      ctx.moveTo(-targetR - 5, 0); ctx.lineTo(-targetR + 5, 0);
+      ctx.moveTo(targetR - 5, 0); ctx.lineTo(targetR + 5, 0);
+      ctx.moveTo(0, -targetR - 5); ctx.lineTo(0, -targetR + 5);
+      ctx.moveTo(0, targetR - 5); ctx.lineTo(0, targetR + 5);
       ctx.stroke();
     }
 

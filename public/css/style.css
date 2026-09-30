@@ -1348,6 +1348,61 @@ body.mode-lab .interactive-hint {
   color: #64748b;
 }
 
+.species-actions-row {
+  margin-top: 4px;
+}
+
+.species-track-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.15), rgba(16, 185, 129, 0.12));
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  color: #e0f2fe;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.species-track-btn:hover:not(.disabled) {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.28), rgba(16, 185, 129, 0.24));
+  border-color: rgba(0, 240, 255, 0.7);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 240, 255, 0.25);
+}
+
+.species-track-btn:active:not(.disabled) {
+  transform: translateY(0);
+}
+
+.species-card.hunter-card .species-track-btn {
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.2), rgba(225, 29, 72, 0.12));
+  border-color: rgba(244, 63, 94, 0.45);
+  color: #ffe4e6;
+}
+
+.species-card.hunter-card .species-track-btn:hover:not(.disabled) {
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.35), rgba(225, 29, 72, 0.25));
+  border-color: rgba(244, 63, 94, 0.8);
+  box-shadow: 0 4px 14px rgba(244, 63, 94, 0.3);
+}
+
+.species-track-btn.disabled {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #64748b;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .journal-timeline {
   display: flex;
   flex-direction: column;
