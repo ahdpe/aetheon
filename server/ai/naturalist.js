@@ -7,8 +7,10 @@ export class AINaturalist {
     this.currentEpoch = 1;
     this.epochNameEn = 'The Primordial Dawn';
     this.epochNameRu = 'Первичный Рассвет';
-    this.lastObservationTime = 0;
+    this.lastObservationTime = Date.now();
+    this.lastJevScreenTime = 0;
     this.totalApiCalls = 0;
+    this.totalJevCalls = 0;
     
     // Seed initial poetic observation
     this.addEntry({
@@ -45,24 +47,144 @@ export class AINaturalist {
     return this.journalEntries.slice(0, limit);
   }
 
-  // Periodic observation check
+  // Periodic observation check with JEV decision gatekeeper
   async checkObservation(engineStats) {
     const now = Date.now();
-    if (now - this.lastObservationTime < CONFIG.AI_OBSERVER_INTERVAL_MS) {
-      return false;
-    }
-    this.lastObservationTime = now;
 
-    // Identify candidate species needing AI taxonomy
+    // 1. Identify newly stabilized species needing taxonomic christening
     const allSpecies = this.lineageManager.getAllSpecies();
     const unchronicled = allSpecies.find(s => !s.aiChronicle && s.totalCount > 10 && s.population > 1);
 
     if (unchronicled) {
       await this.chronicleSpecies(unchronicled, engineStats);
+      this.lastObservationTime = now;
       return true;
-    } else {
-      await this.chronicleEcosystem(engineStats);
+    }
+
+    // 2. Rate limit JEV screening interval
+    const screeningInterval = CONFIG.JEV_SCREENING_INTERVAL_MS || 25000;
+    if (now - this.lastJevScreenTime < screeningInterval) {
+      return false;
+    }
+    this.lastJevScreenTime = now;
+
+    // 3. Screen ecosystem dynamics with JEV micro-decisions
+    const minutesSinceLastDispatch = (now - this.lastObservationTime) / 60000;
+    const jevVerdict = await this.screenWithJev(engineStats, minutesSinceLastDispatch);
+
+    if (jevVerdict && jevVerdict.shouldPublish) {
+      await this.chronicleEcosystem(engineStats, jevVerdict);
+      this.lastObservationTime = now;
       return true;
+    }
+
+    // 4. Safety fallback if JEV is offline/unreachable and maximum quiet interval has elapsed
+    if (!jevVerdict && (now - this.lastObservationTime >= CONFIG.AI_OBSERVER_INTERVAL_MS)) {
+      await this.chronicleEcosystem(engineStats, null);
+      this.lastObservationTime = now;
+      return true;
+    }
+
+    return false;
+  }
+
+  // Ultra-fast micro-decision screening using Venice Decisions API (TypeSafe Jev)
+  async screenWithJev(stats, minutesSinceLastDispatch) {
+    if (!CONFIG.VENICE_API_KEY || !CONFIG.VENICE_DECISIONS_URL) {
+      return null;
+    }
+
+    const t0 = Date.now();
+    this.totalJevCalls = (this.totalJevCalls || 0) + 1;
+
+    const state = {
+      recentKills: stats.recentKills || 0,
+      recentBirths: stats.recentBirths || 0,
+      recentSpeciations: stats.recentSpeciations || 0,
+      organismCount: stats.organismCount || 0,
+      speciesCount: stats.speciesCount || 0,
+      dominantSpecies: stats.dominantSpeciesNameRu || stats.dominantSpeciesNameEn || 'Unknown',
+      dominantCount: stats.dominantCount || 0,
+      topApexPredator: stats.topPredatorNameRu || stats.topPredatorNameEn || 'None',
+      minutesSinceLastDispatch: Math.round(minutesSinceLastDispatch * 10) / 10
+    };
+
+    const questions = {
+      should_publish: {
+        type: 'choice',
+        instructions: 'Should this ecological interval be published as a journal dispatch for visitors, or skipped as routine baseline?',
+        criteria: {
+          publish: 'High predation kills (4+), rapid population boom (10+ births), speciation event, or more than 15 minutes since last chronicle',
+          skip: 'Minor baseline fluctuations, routine small birth counts (1-5), and no heavy predator kills'
+        }
+      },
+      editorial_focus: {
+        type: 'choice',
+        instructions: 'What is the primary driving drama or theme of this ecosystem moment?',
+        criteria: {
+          predation_hunt: 'Active hunts, apex predators striking prey in open water',
+          population_boom: 'Sudden surge of cell divisions (mitosis) and crowding at vents',
+          speciation_branch: 'A new lineage or species has adapted and split off',
+          extinction_threat: 'A species is dwindling or facing sharp decline',
+          tranquil_equilibrium: 'Peaceful harmony, steady metabolic drifting around mineral hearths'
+        }
+      },
+      urgency_level: {
+        type: 'score',
+        instructions: 'Rate the urgency and drama of this moment from 0 (calm) to 2 (intense crisis or boom).',
+        criteria: ['calm / baseline', 'moderate activity', 'high drama']
+      }
+    };
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+
+    try {
+      const res = await fetch(CONFIG.VENICE_DECISIONS_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${CONFIG.VENICE_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: CONFIG.JEV_MODEL || 'jev-latest',
+          state,
+          questions
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        console.warn(`[JEV Screener] HTTP ${res.status}: ${await res.text()}`);
+        return null;
+      }
+
+      const data = await res.json();
+      const answers = data.answers || {};
+      const shouldPublishChoice = answers.should_publish?.choice;
+      const editorialFocus = answers.editorial_focus?.choice || 'tranquil_equilibrium';
+      const confidence = answers.should_publish?.confidence ?? 0.5;
+      const latency = Date.now() - t0;
+
+      // Publish if JEV selected publish OR if maximum silence exceeded
+      const shouldPublish = (shouldPublishChoice === 'publish') || (minutesSinceLastDispatch >= 18);
+
+      console.log(`[JEV Screener] Verdict: ${shouldPublishChoice} (${shouldPublish ? 'PUBLISH' : 'SKIP'}, conf: ${confidence}), Focus: ${editorialFocus} (${latency}ms)`);
+
+      return {
+        shouldPublish,
+        choice: shouldPublishChoice,
+        editorialFocus,
+        confidence,
+        probabilities: answers.should_publish?.probabilities || {},
+        latency
+      };
+    } catch (err) {
+      clearTimeout(timeout);
+      console.warn(`[JEV Screener] Decision request failed (${err.message}), using procedural fallback`);
+      return null;
     }
   }
 
@@ -201,28 +323,48 @@ JSON ONLY, NO MARKDOWN.`;
     });
   }
 
-  // Periodic ecosystem status chronicle
-  async chronicleEcosystem(stats) {
+  // Periodic ecosystem status chronicle (guided by JEV screening verdict)
+  async chronicleEcosystem(stats, jevDecision = null) {
     const isVeniceAvailable = Boolean(CONFIG.VENICE_API_KEY && CONFIG.VENICE_API_KEY.trim().length > 0);
+
+    const focusTheme = jevDecision?.editorialFocus || (
+      (stats.recentKills || 0) > 2 ? 'predation_hunt' : (
+        (stats.recentBirths || 0) > 8 ? 'population_boom' : (
+          (stats.recentSpeciations || 0) > 0 ? 'speciation_branch' : 'tranquil_equilibrium'
+        )
+      )
+    );
+
+    let themeGuidance = '';
+    if (focusTheme === 'predation_hunt') {
+      themeGuidance = `Apex predator hunts (${stats.topPredatorNameRu || 'ловчие'}), sudden strikes claiming ${stats.recentKills || 0} prey, and grazers fleeing toward the mineral vents.`;
+    } else if (focusTheme === 'population_boom') {
+      themeGuidance = `Mitotic population surge (${stats.recentBirths || 0} divisions), crowding around mineral vents, and total population climbing to ${stats.organismCount}.`;
+    } else if (focusTheme === 'speciation_branch') {
+      themeGuidance = `Evolutionary divergence (${stats.recentSpeciations || 0} new species split), ciliary variations, and colonizing a new fluid niche.`;
+    } else if (focusTheme === 'extinction_threat') {
+      themeGuidance = `Vulnerable species dwindled under predatory pressure and competing for thermal plumes.`;
+    } else {
+      themeGuidance = `Calm metabolic harmony, peaceful gliding along hydrothermal currents, and steady nutrient filtration.`;
+    }
 
     if (isVeniceAvailable) {
       try {
         const prompt = `Live field observation of the microscopic aquarium AETHEON:
+- Editorial Theme: ${themeGuidance}
 - Recent hunts / predation strikes: ${stats.recentKills || 0}
 - Recent cell divisions (mitosis): ${stats.recentBirths || 0}
 - Recent speciation branches: ${stats.recentSpeciations || 0}
-- Dominant lineage: "${stats.dominantSpeciesNameEn || 'Grazer'}" (${stats.dominantCount || 0} organisms)
-- Top Apex Hunter: "${stats.topPredatorNameEn || 'Solitary stalkers'}"
+- Dominant lineage: "${stats.dominantSpeciesNameRu || stats.dominantSpeciesNameEn || 'Пастбищник'}" (${stats.dominantCount || 0} organisms)
+- Top Apex Hunter: "${stats.topPredatorNameRu || stats.topPredatorNameEn || 'Охотник'}"
 - Active population: ${stats.organismCount} organisms across ${stats.speciesCount} species
 - Generation milestone: #${stats.generation}
 
 CRITICAL RULES:
-1. NEVER start with 'In the depths of AETHEON', 'A vibrant tapestry', 'In the microscopic realm', or 'A kaleidoscope of life'.
+1. NEVER start with 'В недрах AETHEON', 'В сердце AETHEON', 'In the depths of AETHEON', 'A vibrant tapestry', or 'A kaleidoscope of life'.
 2. NEVER use the phrase 'Это значит, что' or 'This means that'.
-3. Describe the EXACT current drama based on the field data above:
-   - If hunts happened (${stats.recentKills || 0} kills), narrate the predator strikes and grazers fleeing toward the vents.
-   - If births surged (${stats.recentBirths || 0} divisions), narrate the sudden bloom, crowding, and fight for mineral plumes.
-   - If speciation happened (${stats.recentSpeciations || 0}), narrate how a new lineage split away.
+3. Describe the EXACT current drama based on the field data and editorial theme above:
+   - Make it cinematic, thrilling, and accessible for general audiences.
 4. "insightRu" / "insightEn": 1 brief scientific takeaway (without saying "это значит"), OR empty string "" if not strictly needed.
 
 JSON format ONLY:
@@ -243,7 +385,7 @@ JSON format ONLY:
         if (response && response.storyRu) {
           this.addEntry({
             type: 'observation',
-            icon: response.icon || '🌾',
+            icon: response.icon || (focusTheme === 'predation_hunt' ? '⚔️' : (focusTheme === 'population_boom' ? '🌾' : '⚖️')),
             badgeEn: response.badgeEn || 'Ecosystem Dispatch',
             badgeRu: response.badgeRu || 'Хроника капли',
             titleEn: response.titleEn || `Ecosystem Dispatch (Gen #${stats.generation || 1})`,
@@ -252,6 +394,8 @@ JSON format ONLY:
             contentRu: response.storyRu,
             insightEn: response.insightEn || '',
             insightRu: response.insightRu || '',
+            editorialFocus: focusTheme,
+            screener: jevDecision ? 'jev-latest' : 'baseline',
             timestamp: Date.now()
           });
           return;
@@ -261,7 +405,7 @@ JSON format ONLY:
       }
     }
 
-    // Adaptive procedural narrative dispatches (based on real recent events)
+    // Adaptive procedural narrative dispatches (based on real recent events & JEV focus)
     let icon = '⚖️';
     let badgeEn = 'Equilibrium';
     let badgeRu = 'Баланс капли';
@@ -272,27 +416,27 @@ JSON format ONLY:
     let insightEn = `Steady nutrient supply maintains population stability across all active niches.`;
     let insightRu = `Равномерный приток минералов предотвращает резкие колебания численности.`;
 
-    if ((stats.recentKills || 0) > 2) {
+    if (focusTheme === 'predation_hunt' || (stats.recentKills || 0) > 2) {
       icon = '⚔️';
       badgeEn = 'Predator Hunt';
       badgeRu = 'Охота хищников';
       titleEn = '⚔️ The Crimson Stalkers';
       titleRu = `⚔️ Охотничий рейд: ${stats.topPredatorNameRu || 'Ловчие'}`;
-      storyEn = `Predators have struck with sudden speed in the open channels! Swift hunters darted through the currents, claiming ${stats.recentKills} prey and driving grazers back to the shelter of the mineral vents.`;
-      storyRu = `В открытых водных коридорах развернулась стремительная охота! Быстрые хищники нанесли ${stats.recentKills} точных ударов, заставив травоядных искать спасения у теплых минеральных жерл.`;
+      storyEn = `Predators have struck with sudden speed in the open channels! Swift hunters darted through the currents, claiming ${stats.recentKills || 3} prey and driving grazers back to the shelter of the mineral vents.`;
+      storyRu = `В открытых водных коридорах развернулась стремительная охота! Быстрые хищники нанесли ${stats.recentKills || 3} точных ударов, заставив травоядных искать спасения у теплых минеральных жерл.`;
       insightEn = `Active predation prevents overgrazing and exerts evolutionary pressure for greater speed and defensive reflexes.`;
       insightRu = `Охота сдерживает перенаселение и стимулирует выработку защитной скорости у травоядных.`;
-    } else if ((stats.recentBirths || 0) > 8) {
+    } else if (focusTheme === 'population_boom' || (stats.recentBirths || 0) > 8) {
       icon = '🌾';
       badgeEn = 'Colony Boom';
       badgeRu = 'Всплеск делений';
       titleEn = '🌾 Thermal Feeding Frenzy';
       titleRu = `🌾 Демографический бум: ${stats.dominantSpeciesNameRu || 'Пастбищники'}`;
-      storyEn = `A sudden wave of ${stats.recentBirths} cell divisions has swept through the hydrothermal reefs! The colony has expanded to ${stats.organismCount} organisms, with shimmering clusters contesting the richest feeding plumes.`;
-      storyRu = `Теплые гидротермальные оазисы всколыхнула волна из ${stats.recentBirths} клеточных делений! Популяция выросла до ${stats.organismCount} особей, и вокруг жерл разгорелась плотная борьба за питательные шлейфы.`;
+      storyEn = `A sudden wave of ${stats.recentBirths || 10} cell divisions has swept through the hydrothermal reefs! The colony has expanded to ${stats.organismCount} organisms, with shimmering clusters contesting the richest feeding plumes.`;
+      storyRu = `Теплые гидротермальные оазисы всколыхнула волна из ${stats.recentBirths || 10} клеточных делений! Популяция выросла до ${stats.organismCount} особей, и вокруг жерл разгорелась плотная борьба за питательные шлейфы.`;
       insightEn = `Abundant nutrient intake fuels exponential mitotic divisions, testing the carrying capacity of each thermal zone.`;
       insightRu = `Избыток тепла и солей запускает митоз, проверяя пределы вместимости подводных оазисов.`;
-    } else if ((stats.recentSpeciations || 0) > 0) {
+    } else if (focusTheme === 'speciation_branch' || (stats.recentSpeciations || 0) > 0) {
       icon = '🧬';
       badgeEn = 'Speciation';
       badgeRu = 'Ветвление жизни';
@@ -315,6 +459,8 @@ JSON format ONLY:
       contentRu: storyRu,
       insightEn,
       insightRu,
+      editorialFocus: focusTheme,
+      screener: jevDecision ? 'jev-latest' : 'baseline',
       timestamp: Date.now()
     });
   }

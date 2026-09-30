@@ -19,15 +19,29 @@ function resolveVeniceUrl() {
   return 'https://api.venice.ai/api/v1/chat/completions';
 }
 
+function resolveVeniceDecisionsUrl() {
+  if (process.env.VENICE_DECISIONS_URL && process.env.VENICE_DECISIONS_URL.trim()) {
+    return process.env.VENICE_DECISIONS_URL.trim();
+  }
+  if (process.env.VENICE_BASE_URL && process.env.VENICE_BASE_URL.trim()) {
+    const base = process.env.VENICE_BASE_URL.trim().replace(/\/+$/, '');
+    return `${base}/decisions`;
+  }
+  return 'https://api.venice.ai/api/v1/decisions';
+}
+
 export const CONFIG = {
   PORT: parseInt(process.env.PORT || '3000', 10),
   HOST: process.env.HOST || '0.0.0.0',
   
-  // AI Observer
+  // AI Observer & Storyteller
   VENICE_API_KEY: process.env.VENICE_API_KEY || '',
   VENICE_API_URL: resolveVeniceUrl(),
-  VENICE_MODEL: process.env.VENICE_MODEL || 'llama-3.3-70b',
-  AI_OBSERVER_INTERVAL_MS: (parseInt(process.env.AI_OBSERVER_INTERVAL_MIN || '20', 10)) * 60 * 1000,
+  VENICE_DECISIONS_URL: resolveVeniceDecisionsUrl(),
+  VENICE_MODEL: process.env.VENICE_MODEL || 'openai-gpt-4o-mini-2024-07-18',
+  JEV_MODEL: process.env.JEV_MODEL || 'jev-latest',
+  JEV_SCREENING_INTERVAL_MS: (parseInt(process.env.JEV_SCREENING_INTERVAL_SEC || '25', 10)) * 1000,
+  AI_OBSERVER_INTERVAL_MS: (parseInt(process.env.AI_OBSERVER_INTERVAL_MIN || '15', 10)) * 60 * 1000,
   
   // Simulation Constants
   TICK_RATE_HZ: parseInt(process.env.TICK_RATE_HZ || '10', 10),
