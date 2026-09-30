@@ -39,6 +39,27 @@ async function takeScreenshot() {
   await page.screenshot({ path: 'public/screenshot_lab.png' });
   console.log('Lab screenshot with food blooms saved to public/screenshot_lab.png');
 
+  // Switch to Russian language
+  console.log('Switching to Russian language...');
+  await page.click('#btn-lang');
+  await new Promise(r => setTimeout(r, 400));
+
+  // Open About Modal
+  console.log('Opening About modal...');
+  await page.click('#btn-about');
+  await new Promise(r => setTimeout(r, 600));
+
+  await page.screenshot({ path: 'public/screenshot_about_overview.png' });
+  console.log('About Overview screenshot saved to public/screenshot_about_overview.png');
+
+  // Click Expand Math button
+  console.log('Clicking Expand Math button...');
+  await page.click('#btn-expand-math');
+  await new Promise(r => setTimeout(r, 600));
+
+  await page.screenshot({ path: 'public/screenshot_about_math.png' });
+  console.log('About Math screenshot saved to public/screenshot_about_math.png');
+
   await browser.close();
 }
 

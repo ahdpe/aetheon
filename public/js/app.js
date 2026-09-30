@@ -3,6 +3,7 @@ import { sound } from './audio/sound.js';
 import { OceanRenderer } from './gl/renderer.js';
 import { BioInspector } from './ui/inspector.js';
 import { CodexModal } from './ui/codexModal.js';
+import { AboutModal } from './ui/aboutModal.js';
 import { InputController } from './ui/controls.js';
 
 class AetheonApp {
@@ -15,7 +16,8 @@ class AetheonApp {
     // UI Modules
     this.inspector = new BioInspector(this, this.renderer);
     this.codexModal = new CodexModal(this);
-    this.controls = new InputController(this.canvas, this.renderer, this.inspector, this.codexModal, this);
+    this.aboutModal = new AboutModal();
+    this.controls = new InputController(this.canvas, this.renderer, this.inspector, this.codexModal, this, this.aboutModal);
 
     this.init();
   }

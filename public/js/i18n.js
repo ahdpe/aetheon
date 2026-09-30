@@ -40,7 +40,12 @@ export const DICTIONARY = {
     legend_hunter: 'Predator Thrust',
     legend_sensor: 'Sensory Field',
     grazers: 'Grazers',
-    hunters: 'Hunters'
+    hunters: 'Hunters',
+    about_btn: 'About',
+    about_title: 'Architecture & Mathematics',
+    about_tab_overview: 'Concept & Controls',
+    about_tab_math: 'Mathematical Model (Full)',
+    btn_explore_math: 'Open Full Mathematical Model →'
   },
   ru: {
     organisms: 'организмов',
@@ -83,7 +88,12 @@ export const DICTIONARY = {
     legend_hunter: 'Тяга хищника',
     legend_sensor: 'Радиус чувств',
     grazers: 'Пастбищники',
-    hunters: 'Хищники'
+    hunters: 'Хищники',
+    about_btn: 'О проекте',
+    about_title: 'Архитектура и математика',
+    about_tab_overview: 'Концепция и управление',
+    about_tab_math: 'Математическая модель (полная)',
+    btn_explore_math: 'Развернуть полную математическую модель →'
   }
 };
 
@@ -101,6 +111,7 @@ class I18nManager {
       this.lang = lang;
       localStorage.setItem('aetheon_lang', lang);
       this.applyTranslations();
+      window.dispatchEvent(new CustomEvent('aetheon-lang-changed', { detail: { lang } }));
     }
   }
 

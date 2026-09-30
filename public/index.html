@@ -69,6 +69,16 @@
         <span class="btn-label" data-i18n="codex_title">Codex</span>
       </button>
 
+      <!-- About & Architecture Modal -->
+      <button class="hud-btn" id="btn-about" aria-label="About & Mathematics" title="About & Architecture (A)">
+        <svg class="icon icon-about" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <span class="btn-label" data-i18n="about_btn">About</span>
+      </button>
+
       <!-- Audio Toggle -->
       <button class="hud-btn" id="btn-audio" aria-label="Toggle Sound" title="Toggle Ambient Audio (M)">
         <svg class="icon icon-sound-off" id="icon-sound-off" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -205,6 +215,27 @@
       <div class="journal-timeline" id="journal-timeline">
         <!-- Rendered dynamically -->
       </div>
+    </div>
+  </dialog>
+
+  <!-- About & Mathematical Model Modal Dialog -->
+  <dialog class="about-dialog glass-panel" id="about-dialog" aria-labelledby="about-modal-title">
+    <div class="modal-header">
+      <div class="modal-tabs">
+        <button class="tab-btn active" id="tab-about-overview-btn" data-i18n="about_tab_overview">Concept & Controls</button>
+        <button class="tab-btn" id="tab-about-math-btn" data-i18n="about_tab_math">Mathematical Model (Full)</button>
+      </div>
+      <button class="close-btn" id="about-close-btn" aria-label="Close Dialog">&times;</button>
+    </div>
+
+    <!-- Tab 1: High-level overview & controls -->
+    <div class="modal-body tab-content active" id="tab-about-overview-content">
+      <!-- Rendered dynamically -->
+    </div>
+
+    <!-- Tab 2: Deep dive mathematical model -->
+    <div class="modal-body tab-content" id="tab-about-math-content">
+      <!-- Rendered dynamically -->
     </div>
   </dialog>
 

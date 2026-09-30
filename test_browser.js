@@ -103,6 +103,46 @@ async function run() {
 
   console.log('[Browser Test] Lab Mode metrics:', labMetrics);
 
+  // Test About Modal
+  console.log('[Browser Test] Clicking About button (#btn-about)...');
+  await page.click('#btn-about');
+  await new Promise(r => setTimeout(r, 400));
+
+  const aboutStatus1 = await page.evaluate(() => {
+    const dialog = document.getElementById('about-dialog');
+    const overview = document.getElementById('tab-about-overview-content');
+    return {
+      isOpen: dialog?.hasAttribute('open'),
+      overviewTextLen: overview?.innerText?.length || 0
+    };
+  });
+  console.log('[Browser Test] About Modal opened (Overview):', aboutStatus1);
+
+  // Click Expand Math button
+  console.log('[Browser Test] Clicking Expand Math button (#btn-expand-math)...');
+  await page.click('#btn-expand-math');
+  await new Promise(r => setTimeout(r, 400));
+
+  const aboutStatus2 = await page.evaluate(() => {
+    const mathContent = document.getElementById('tab-about-math-content');
+    const sections = mathContent?.querySelectorAll('.math-section')?.length || 0;
+    const formulas = mathContent?.querySelectorAll('.formula-box')?.length || 0;
+    return {
+      isMathTabActive: mathContent?.classList.contains('active'),
+      sectionCount: sections,
+      formulaBoxCount: formulas
+    };
+  });
+  console.log('[Browser Test] About Modal expanded (Math & Physics):', aboutStatus2);
+
+  // Close modal via Escape
+  console.log('[Browser Test] Closing modal with Escape key...');
+  await page.keyboard.press('Escape');
+  await new Promise(r => setTimeout(r, 300));
+
+  const isClosed = await page.evaluate(() => !document.getElementById('about-dialog')?.hasAttribute('open'));
+  console.log('[Browser Test] About Modal closed successfully:', isClosed);
+
   console.log('[Browser Test] Console messages logged:', consoleMessages.length);
   console.log('[Browser Test] Page errors logged:', pageErrors.length);
 

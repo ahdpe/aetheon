@@ -2,12 +2,13 @@ import { sound } from '../audio/sound.js';
 import { i18n } from '../i18n.js';
 
 export class InputController {
-  constructor(canvas, renderer, inspector, codexModal, socketClient) {
+  constructor(canvas, renderer, inspector, codexModal, socketClient, aboutModal = null) {
     this.canvas = canvas;
     this.renderer = renderer;
     this.inspector = inspector;
     this.codexModal = codexModal;
     this.client = socketClient;
+    this.aboutModal = aboutModal;
 
     this.isDragging = false;
     this.dragStartX = 0;
@@ -89,6 +90,8 @@ export class InputController {
         toggleBtn?.click();
       } else if (e.key === 'c' || e.key === 'C' || e.key === 'с' || e.key === 'С') {
         this.codexModal.open();
+      } else if (e.key === 'a' || e.key === 'A' || e.key === 'ф' || e.key === 'Ф') {
+        this.aboutModal ? this.aboutModal.open() : document.getElementById('btn-about')?.click();
       } else if (e.key === 'm' || e.key === 'M' || e.key === 'ь' || e.key === 'Ь') {
         const audioBtn = document.getElementById('btn-audio');
         audioBtn?.click();
@@ -97,6 +100,7 @@ export class InputController {
       } else if (e.key === 'Escape') {
         this.inspector.close();
         this.codexModal.close();
+        this.aboutModal?.close();
       }
     });
   }
