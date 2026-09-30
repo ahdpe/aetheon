@@ -116,9 +116,9 @@ export class OceanRenderer {
 
     const raw = packet.orgs;
     if (raw) {
-      const count = raw.length / 8;
+      const count = raw.length / 10;
       for (let i = 0; i < count; i++) {
-        const ptr = i * 8;
+        const ptr = i * 10;
         const id = raw[ptr];
         this.currEntities.set(id, {
           id,
@@ -128,7 +128,9 @@ export class OceanRenderer {
           vy: raw[ptr + 4],
           energy: raw[ptr + 5],
           size: raw[ptr + 6],
-          hue: raw[ptr + 7]
+          hue: raw[ptr + 7],
+          speciesId: raw[ptr + 8],
+          carnivory: raw[ptr + 9]
         });
       }
     }
@@ -173,7 +175,7 @@ export class OceanRenderer {
     ctx.save();
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.globalAlpha = 0.35;
+    ctx.globalAlpha = this.isLabMode ? 0.70 : 0.35;
     
     // Draw chemical fluid across 4 quadrants to handle wrapping
     const camZoom = this.camera.zoom;
@@ -208,6 +210,11 @@ export class OceanRenderer {
       ctx.beginPath();
       ctx.arc(vx, vy, Math.max(3, vr * 0.25), 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    // 4.5. If Lab Mode, draw analysis counting chamber grid and reactor boundaries
+    if (this.isLabMode) {
+      this.drawLabGrid(ctx, toScreenX, toScreenY);
     }
 
     // 5. Ambient fluid micro-plankton
@@ -267,9 +274,9 @@ export class OceanRenderer {
       ctx.stroke();
     }
 
-    // 9. Research Lab Overlays (if enabled)
+    // 9. Research Lab Overlays (Telemetry tags, velocity vector arrows, sensory radii)
     if (this.isLabMode) {
-      this.drawLabOverlay(ctx, currentList, toScreenX, toScreenY);
+      this.drawLabEntityOverlay(ctx, currentList, toScreenX, toScreenY, alpha);
     }
   }
 
@@ -360,29 +367,213 @@ export class OceanRenderer {
     ctx.restore();
   }
 
-  // Draw Research Lab overlays: velocity vectors, grid lines
-  drawLabOverlay(ctx, organisms, toScreenX, toScreenY) {
+  // High-precision Hemocytometer / Counting Chamber grid & thermal isotherms
+  drawLabGrid(ctx, toScreenX, toScreenY) {
     ctx.save();
+    const zoom = this.camera.zoom;
+    const w = this.camera.viewportW;
+    const h = this.camera.viewportH;
+    const WS = this.worldSize;
+
+    // 1. Minor grid (every 50 world units)
     ctx.strokeStyle = 'rgba(0, 240, 255, 0.08)';
     ctx.lineWidth = 1;
+    ctx.setLineDash([2, 4]);
 
-    // Draw world boundaries
-    const minX = toScreenX(0);
-    const minY = toScreenY(0);
-    const size = this.worldSize * this.camera.zoom;
-    ctx.strokeRect(minX, minY, size, size);
+    for (let u = 0; u <= WS; u += 50) {
+      if (u % 200 === 0) continue; // Skip major lines
+      const sx = toScreenX(u);
+      if (sx >= -10 && sx <= w + 10) {
+        ctx.beginPath();
+        ctx.moveTo(sx, toScreenY(0));
+        ctx.lineTo(sx, toScreenY(WS));
+        ctx.stroke();
+      }
+      const sy = toScreenY(u);
+      if (sy >= -10 && sy <= h + 10) {
+        ctx.beginPath();
+        ctx.moveTo(toScreenX(0), sy);
+        ctx.lineTo(toScreenX(WS), sy);
+        ctx.stroke();
+      }
+    }
 
-    // Draw velocity vectors
-    ctx.strokeStyle = 'rgba(0, 255, 136, 0.5)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < organisms.length; i += 2) {
-      const o = organisms[i];
-      const sx = toScreenX(o.x);
-      const sy = toScreenY(o.y);
+    // 2. Major grid (every 200 world units) with measurement ticks & coordinate tags
+    ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.25)';
+    ctx.fillStyle = 'rgba(0, 240, 255, 0.65)';
+    ctx.font = '9px "JetBrains Mono", monospace';
+
+    for (let u = 0; u <= WS; u += 200) {
+      const sx = toScreenX(u);
+      if (sx >= -10 && sx <= w + 10) {
+        ctx.beginPath();
+        ctx.moveTo(sx, toScreenY(0));
+        ctx.lineTo(sx, toScreenY(WS));
+        ctx.stroke();
+        ctx.fillText(`${u}μm`, sx + 4, toScreenY(0) + 14);
+      }
+      const sy = toScreenY(u);
+      if (sy >= -10 && sy <= h + 10) {
+        ctx.beginPath();
+        ctx.moveTo(toScreenX(0), sy);
+        ctx.lineTo(toScreenX(WS), sy);
+        ctx.stroke();
+        ctx.fillText(`${u}μm`, toScreenX(0) + 6, sy - 4);
+      }
+    }
+
+    // 3. Canonical Reactor Bounds with Corner Brackets
+    const rx0 = toScreenX(0);
+    const ry0 = toScreenY(0);
+    const rx1 = toScreenX(WS);
+    const ry1 = toScreenY(WS);
+    const rw = rx1 - rx0;
+    const rh = ry1 - ry0;
+
+    // Glowing border frame
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(rx0, ry0, rw, rh);
+
+    // High-tech corner brackets
+    const bLen = Math.max(12, 22 * zoom);
+    ctx.strokeStyle = '#00f0ff';
+    ctx.lineWidth = 2.5;
+
+    // Top-Left
+    ctx.beginPath();
+    ctx.moveTo(rx0, ry0 + bLen); ctx.lineTo(rx0, ry0); ctx.lineTo(rx0 + bLen, ry0);
+    ctx.stroke();
+    // Top-Right
+    ctx.beginPath();
+    ctx.moveTo(rx1 - bLen, ry0); ctx.lineTo(rx1, ry0); ctx.lineTo(rx1, ry0 + bLen);
+    ctx.stroke();
+    // Bottom-Left
+    ctx.beginPath();
+    ctx.moveTo(rx0, ry1 - bLen); ctx.lineTo(rx0, ry1); ctx.lineTo(rx0 + bLen, ry1);
+    ctx.stroke();
+    // Bottom-Right
+    ctx.beginPath();
+    ctx.moveTo(rx1 - bLen, ry1); ctx.lineTo(rx1, ry1); ctx.lineTo(rx1, ry1 - bLen);
+    ctx.stroke();
+
+    // Chamber identification badge
+    ctx.fillStyle = '#00f0ff';
+    ctx.font = '10px "JetBrains Mono", monospace';
+    ctx.fillText('◈ CANONICAL BIO-REACTOR: 1000 × 1000 μm [CHAMBER ALPHA]', rx0 + 12, ry0 - 8);
+
+    // 4. Hydrothermal Vents Isotherms in Lab Mode
+    const ventScale = WS / 128;
+    for (let v = 0; v < this.vents.length; v++) {
+      const vent = this.vents[v];
+      const vx = toScreenX(vent.x * ventScale);
+      const vy = toScreenY(vent.y * ventScale);
+      const vr = vent.radius * ventScale * zoom;
+
+      // Concentric isotherm contours
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = 'rgba(255, 170, 0, 0.45)';
+      ctx.lineWidth = 1;
+
+      ctx.beginPath();
+      ctx.arc(vx, vy, vr * 1.2, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(vx, vy, vr * 2.2, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(255, 170, 0, 0.85)';
+      ctx.font = '9px "JetBrains Mono", monospace';
+      ctx.fillText(`VENT #${v + 1} [82°C]`, vx + vr * 0.5, vy - vr * 1.3);
+    }
+
+    ctx.restore();
+  }
+
+  // Draw Research Lab overlays: velocity vector arrows, sensory bubbles, telemetry data tags
+  drawLabEntityOverlay(ctx, organisms, toScreenX, toScreenY, alpha) {
+    ctx.save();
+    const zoom = this.camera.zoom;
+    const w = this.camera.viewportW;
+    const h = this.camera.viewportH;
+    const WS = this.worldSize;
+
+    ctx.font = '9px "JetBrains Mono", monospace';
+
+    for (let i = 0; i < organisms.length; i++) {
+      const curr = organisms[i];
+      const prev = this.prevEntities.get(curr.id) || curr;
+
+      let ix = prev.x + (curr.x - prev.x) * alpha;
+      let iy = prev.y + (curr.y - prev.y) * alpha;
+      if (Math.abs(curr.x - prev.x) > WS * 0.5) ix = curr.x;
+      if (Math.abs(curr.y - prev.y) > WS * 0.5) iy = curr.y;
+
+      const sx = toScreenX(ix);
+      const sy = toScreenY(iy);
+
+      // Cull offscreen
+      if (sx < -40 || sx > w + 40 || sy < -40 || sy > h + 40) continue;
+
+      const isHunter = curr.carnivory > 0.4;
+      const speed = Math.hypot(curr.vx, curr.vy);
+
+      // A. Sensory Field (Chemotactic Gradient Detection Radius)
+      ctx.beginPath();
+      ctx.setLineDash([3, 4]);
+      ctx.arc(sx, sy, curr.size * 3.5 * zoom, 0, Math.PI * 2);
+      ctx.strokeStyle = isHunter ? 'rgba(255, 77, 77, 0.35)' : 'rgba(0, 240, 255, 0.25)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // B. Velocity Vector with Arrowhead
+      ctx.setLineDash([]);
+      const arrowLen = Math.max(12, speed * 22 * zoom);
+      const angle = Math.atan2(curr.vy, curr.vx);
+      const endX = sx + Math.cos(angle) * arrowLen;
+      const endY = sy + Math.sin(angle) * arrowLen;
+
+      ctx.strokeStyle = isHunter ? '#ff4d4d' : '#00ffaa';
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
       ctx.moveTo(sx, sy);
-      ctx.lineTo(sx + o.vx * 15 * this.camera.zoom, sy + o.vy * 15 * this.camera.zoom);
+      ctx.lineTo(endX, endY);
       ctx.stroke();
+
+      // Arrowhead
+      const headLen = 6;
+      ctx.fillStyle = isHunter ? '#ff4d4d' : '#00ffaa';
+      ctx.beginPath();
+      ctx.moveTo(endX, endY);
+      ctx.lineTo(
+        endX - headLen * Math.cos(angle - Math.PI / 6),
+        endY - headLen * Math.sin(angle - Math.PI / 6)
+      );
+      ctx.lineTo(
+        endX - headLen * Math.cos(angle + Math.PI / 6),
+        endY - headLen * Math.sin(angle + Math.PI / 6)
+      );
+      ctx.closePath();
+      ctx.fill();
+
+      // C. Telemetry Data Tag Badge
+      const tagText = `${isHunter ? '▲' : '●'} Sp.${curr.speciesId || 1} • ${Math.round(curr.energy)}E`;
+      const textWidth = ctx.measureText(tagText).width;
+      const tagX = sx - textWidth * 0.5;
+      const tagY = sy - curr.size * zoom - 10;
+
+      // Background pill
+      ctx.fillStyle = 'rgba(6, 12, 26, 0.85)';
+      ctx.fillRect(tagX - 4, tagY - 9, textWidth + 8, 12);
+      ctx.strokeStyle = isHunter ? 'rgba(255, 77, 77, 0.55)' : 'rgba(0, 240, 255, 0.45)';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(tagX - 4, tagY - 9, textWidth + 8, 12);
+
+      // Text
+      ctx.fillStyle = isHunter ? '#ff8080' : '#80ffcc';
+      ctx.fillText(tagText, tagX, tagY);
     }
 
     ctx.restore();

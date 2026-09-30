@@ -31,7 +31,16 @@ export const DICTIONARY = {
     unit_children: 'children',
     unit_seconds: 's',
     unit_minutes: 'm',
-    unit_days: 'd'
+    unit_days: 'd',
+    lab_mode_active: 'RESEARCH INSTRUMENT',
+    grid_scale: 'Scale',
+    trophic_balance: 'Trophic',
+    diversity_index: 'Shannon H\'',
+    legend_grazer: 'Grazer Thrust',
+    legend_hunter: 'Predator Thrust',
+    legend_sensor: 'Sensory Field',
+    grazers: 'Grazers',
+    hunters: 'Hunters'
   },
   ru: {
     organisms: 'организмов',
@@ -65,7 +74,16 @@ export const DICTIONARY = {
     unit_children: 'потомков',
     unit_seconds: 'с',
     unit_minutes: 'м',
-    unit_days: 'д'
+    unit_days: 'д',
+    lab_mode_active: 'НАУЧНЫЙ ИНСТРУМЕНТ',
+    grid_scale: 'Масштаб',
+    trophic_balance: 'Трофика',
+    diversity_index: 'Индекс Шеннона',
+    legend_grazer: 'Тяга пастбищника',
+    legend_hunter: 'Тяга хищника',
+    legend_sensor: 'Радиус чувств',
+    grazers: 'Пастбищники',
+    hunters: 'Хищники'
   }
 };
 

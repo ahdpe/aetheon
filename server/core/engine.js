@@ -212,7 +212,7 @@ export class SimulationEngine {
 
   // Pack low-latency 10 Hz broadcast packet for clients
   getBroadcastPacket() {
-    const orgData = new Float32Array(this.organisms.length * 8);
+    const orgData = new Float32Array(this.organisms.length * 10);
     let ptr = 0;
     for (let i = 0; i < this.organisms.length; i++) {
       const o = this.organisms[i];
@@ -224,6 +224,8 @@ export class SimulationEngine {
       orgData[ptr++] = o.energy;
       orgData[ptr++] = o.size;
       orgData[ptr++] = o.hue;
+      orgData[ptr++] = o.speciesId;
+      orgData[ptr++] = o.carnivory;
     }
 
     return {

@@ -55,10 +55,14 @@ class AetheonApp {
       this.renderer.setLabMode(isLab);
       document.body.classList.toggle('mode-lab', isLab);
       document.body.classList.toggle('mode-zen', !isLab);
+      sound.playDroplet(isLab ? 1400 : 700);
       if (modeLabel) {
         modeLabel.textContent = isLab ? i18n.t('mode_zen') : i18n.t('mode_lab');
       }
       modeBtn.style.borderColor = isLab ? 'var(--accent-cyan)' : 'var(--border-subtle)';
+      if (isLab) {
+        this.updateLabTelemetry();
+      }
     });
 
     // Sound toggle
@@ -128,6 +132,7 @@ class AetheonApp {
       this.renderer.onServerTick(msg);
       if (msg.visitors !== undefined) this.updateVisitors(msg.visitors);
       if (msg.stats) this.updateStats(msg.stats);
+      if (this.renderer.isLabMode) this.updateLabTelemetry();
 
       // Play audio events for nearby occurrences
       if (msg.events && msg.events.length > 0) {
@@ -185,6 +190,48 @@ class AetheonApp {
     }
     if (textEl) {
       textEl.textContent = isRu ? (entry.contentRu || entry.contentEn) : entry.contentEn;
+    }
+  }
+
+  updateLabTelemetry() {
+    const list = Array.from(this.renderer.currEntities.values());
+    if (list.length === 0) return;
+
+    let hunters = 0;
+    let grazers = 0;
+    const speciesCounts = new Map();
+
+    for (let i = 0; i < list.length; i++) {
+      const o = list[i];
+      if (o.carnivory > 0.4) hunters++;
+      else grazers++;
+
+      const spId = o.speciesId || 1;
+      speciesCounts.set(spId, (speciesCounts.get(spId) || 0) + 1);
+    }
+
+    const total = list.length;
+    const grazerPct = Math.round((grazers / total) * 100);
+    const hunterPct = 100 - grazerPct;
+
+    // Shannon Diversity Index H' = - sum(p_i * ln(p_i))
+    let shannon = 0;
+    for (const count of speciesCounts.values()) {
+      const p = count / total;
+      if (p > 0) shannon -= p * Math.log(p);
+    }
+
+    const trophicEl = document.getElementById('lab-trophic-ratio');
+    const shannonEl = document.getElementById('lab-shannon-h');
+    const isRu = i18n.getLang() === 'ru';
+
+    if (trophicEl) {
+      trophicEl.textContent = isRu 
+        ? `${grazerPct}% ${i18n.t('grazers')} / ${hunterPct}% ${i18n.t('hunters')}`
+        : `${grazerPct}% Grazers / ${hunterPct}% Hunters`;
+    }
+    if (shannonEl) {
+      shannonEl.textContent = shannon.toFixed(2);
     }
   }
 

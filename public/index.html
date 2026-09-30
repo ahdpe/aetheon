@@ -91,6 +91,23 @@
     </div>
   </header>
 
+  <!-- Lab Mode Diagnostics Ribbon (Visible only in Lab Mode) -->
+  <div class="lab-ribbon glass-panel" id="lab-ribbon" aria-label="Laboratory Diagnostics">
+    <div class="lab-ribbon-left">
+      <span class="lab-tag"><span class="pulse-cyan"></span> <span data-i18n="lab_mode_active">RESEARCH INSTRUMENT</span></span>
+      <span class="lab-metric">🔬 <span data-i18n="grid_scale">Scale</span>: <strong>50 μm</strong></span>
+      <span class="lab-sep">•</span>
+      <span class="lab-metric">⚖️ <span data-i18n="trophic_balance">Trophic</span>: <strong id="lab-trophic-ratio">85% Grazers / 15% Hunters</strong></span>
+      <span class="lab-sep">•</span>
+      <span class="lab-metric">🧬 <span data-i18n="diversity_index">Shannon H'</span>: <strong id="lab-shannon-h">2.41</strong></span>
+    </div>
+    <div class="lab-legend">
+      <span class="legend-item"><span class="legend-dot green"></span> <span data-i18n="legend_grazer">Grazer Thrust</span></span>
+      <span class="legend-item"><span class="legend-dot red"></span> <span data-i18n="legend_hunter">Predator Thrust</span></span>
+      <span class="legend-item"><span class="legend-dot dashed"></span> <span data-i18n="legend_sensor">Sensory Field</span></span>
+    </div>
+  </div>
+
   <!-- Interactive Onboarding Hint (Auto-fades out) -->
   <div class="interactive-hint" id="interactive-hint">
     <div class="hint-pill glass-panel">

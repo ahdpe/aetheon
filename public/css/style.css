@@ -227,6 +227,107 @@ html, body {
   color: var(--accent-cyan);
 }
 
+/* Lab Mode Diagnostics Ribbon */
+.lab-ribbon {
+  position: absolute;
+  top: calc(var(--safe-top) + 54px);
+  left: var(--safe-left);
+  right: var(--safe-right);
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 10;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  border-color: rgba(0, 240, 255, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+body.mode-lab .lab-ribbon {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.lab-ribbon-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lab-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 240, 255, 0.12);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  letter-spacing: 0.5px;
+}
+
+.pulse-cyan {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 8px var(--accent-cyan);
+  animation: pulse-ring 1.8s infinite;
+}
+
+.lab-metric strong {
+  color: #ffffff;
+}
+
+.lab-sep {
+  color: var(--text-dim);
+}
+
+.lab-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-dot.green {
+  background: #00ffaa;
+  box-shadow: 0 0 6px #00ffaa;
+}
+
+.legend-dot.red {
+  background: #ff4d4d;
+  box-shadow: 0 0 6px #ff4d4d;
+}
+
+.legend-dot.dashed {
+  background: transparent;
+  border: 1.5px dashed #00f0ff;
+  border-radius: 50%;
+}
+
 /* Onboarding Interactive Hint */
 .interactive-hint {
   position: absolute;
