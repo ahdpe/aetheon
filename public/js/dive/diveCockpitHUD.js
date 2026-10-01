@@ -78,7 +78,8 @@ export class DiveCockpitHUD {
       <div class="dive-controls-hint glass-panel" id="dive-controls-hint">
         <span class="hint-key">WASD</span> <span data-i18n="dive_steer">Руление</span> • 
         <span class="hint-key">Мышь</span> <span data-i18n="dive_look">Обзор</span> • 
-        <span class="hint-key">SPACE</span> <span data-i18n="dive_boost">Импульс</span>
+        <span class="hint-key">SPACE</span> <span data-i18n="dive_boost">Импульс</span> • 
+        <span class="hint-key">F</span> <span data-i18n="dive_feed">Кормить</span>
       </div>
 
       <!-- Bottom Vitals Bar (Energy, Kuramoto rhythm, Speed) -->
@@ -237,6 +238,10 @@ export class DiveCockpitHUD {
       if (e.key === ' ') {
         this.keys.space = true;
         this.engine.triggerBoost();
+        e.preventDefault();
+      }
+      if (k === 'f' || k === 'а') {
+        this.engine.triggerFeedDrop();
         e.preventDefault();
       }
     });

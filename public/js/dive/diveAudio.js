@@ -21,8 +21,8 @@ export class DiveAudio {
     if (this.isActive) return;
     this.isActive = true;
     
-    // Try to get audio context from master sound engine
-    sound.init();
+    // Auto-unmute sound engine on 3D dive immersion
+    sound.unmute();
     this.ctx = sound.ctx;
     if (!this.ctx) return;
 
@@ -41,7 +41,7 @@ export class DiveAudio {
     if (!this.ctx || !sound.masterGain) return;
     const t = this.ctx.currentTime;
 
-    // 1. Hydrodynamic Liquid Whoosh (Filtered noise)
+    // 1. Hydrodynamic Liquid Whoosh (Filtered noise for fluid flow)
     const bufferSize = this.ctx.sampleRate * 2;
     const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const output = noiseBuffer.getChannelData(0);
@@ -58,27 +58,27 @@ export class DiveAudio {
     this.whooshSource.buffer = noiseBuffer;
     this.whooshSource.loop = true;
 
-    const whooshFilter = this.ctx.createBiquadFilter();
-    whooshFilter.type = 'lowpass';
-    whooshFilter.frequency.setValueAtTime(280, t);
+    this.whooshFilter = this.ctx.createBiquadFilter();
+    this.whooshFilter.type = 'lowpass';
+    this.whooshFilter.frequency.setValueAtTime(260, t);
 
     this.whooshGain = this.ctx.createGain();
-    this.whooshGain.gain.setValueAtTime(0.01, t);
+    this.whooshGain.gain.setValueAtTime(0.04, t);
 
-    this.whooshSource.connect(whooshFilter);
-    whooshFilter.connect(this.whooshGain);
+    this.whooshSource.connect(this.whooshFilter);
+    this.whooshFilter.connect(this.whooshGain);
     this.whooshGain.connect(sound.droneGain || sound.masterGain);
     this.whooshSource.start();
 
-    // 2. Hydrothermal Vent Sizzle (Resonant boiling noise)
+    // 2. Hydrothermal Vent Sizzle & Geothermal Deep Rumble
     this.ventSource = this.ctx.createBufferSource();
     this.ventSource.buffer = noiseBuffer;
     this.ventSource.loop = true;
 
     const ventFilter = this.ctx.createBiquadFilter();
     ventFilter.type = 'bandpass';
-    ventFilter.frequency.setValueAtTime(650, t);
-    ventFilter.Q.setValueAtTime(4.0, t);
+    ventFilter.frequency.setValueAtTime(560, t);
+    ventFilter.Q.setValueAtTime(3.5, t);
 
     this.ventGain = this.ctx.createGain();
     this.ventGain.gain.setValueAtTime(0.0, t);
@@ -87,6 +87,20 @@ export class DiveAudio {
     ventFilter.connect(this.ventGain);
     this.ventGain.connect(sound.droneGain || sound.masterGain);
     this.ventSource.start();
+
+    // Geothermal Sub Drone (warm deep thermal humming near vent hemispheres)
+    try {
+      this.ventDroneOsc = this.ctx.createOscillator();
+      this.ventDroneOsc.type = 'sine';
+      this.ventDroneOsc.frequency.setValueAtTime(58.0, t);
+
+      this.ventDroneGain = this.ctx.createGain();
+      this.ventDroneGain.gain.setValueAtTime(0.0, t);
+
+      this.ventDroneOsc.connect(this.ventDroneGain);
+      this.ventDroneGain.connect(sound.droneGain || sound.masterGain);
+      this.ventDroneOsc.start();
+    } catch (e) {}
   }
 
   // Update real-time acoustic dynamics every frame
@@ -94,21 +108,29 @@ export class DiveAudio {
     if (!this.isActive || !this.ctx || sound.isMuted) return;
     const t = this.ctx.currentTime;
 
-    // 1. Whoosh modulation by speed
-    if (this.whooshGain) {
-      const targetWhoosh = Math.min(0.25, Math.max(0.01, (speed / 3.0) * 0.22));
-      this.whooshGain.gain.setTargetAtTime(targetWhoosh, t, 0.1);
+    // 1. Whoosh modulation by steering speed and fluid drag
+    if (this.whooshGain && this.whooshFilter) {
+      const spdNorm = Math.min(1.0, (speed || 0) / 3.2);
+      const targetWhoosh = 0.04 + spdNorm * 0.28;
+      const targetFreq = 220 + spdNorm * 380;
+      this.whooshGain.gain.setTargetAtTime(targetWhoosh, t, 0.08);
+      this.whooshFilter.frequency.setTargetAtTime(targetFreq, t, 0.08);
     }
 
-    // 2. Vent hiss modulation by proximity (< 180 um)
+    // 2. Vent hiss & geothermal drone modulation by proximity (< 220 um)
     if (this.ventGain) {
-      const ventProx = Math.max(0.0, 1.0 - (nearestVentDist / 180.0));
-      const targetVent = ventProx * ventProx * 0.18;
-      this.ventGain.gain.setTargetAtTime(targetVent, t, 0.15);
+      const ventProx = Math.max(0.0, 1.0 - (nearestVentDist / 220.0));
+      const targetVent = ventProx * ventProx * 0.22;
+      this.ventGain.gain.setTargetAtTime(targetVent, t, 0.12);
+
+      if (this.ventDroneGain) {
+        const targetDrone = ventProx * 0.18;
+        this.ventDroneGain.gain.setTargetAtTime(targetDrone, t, 0.15);
+      }
     }
 
-    // 3. Cellular Heartbeat pulse (Kuramoto rhythm)
-    const bpmInterval = 1.0 / Math.max(0.2, ciliaryFreq || 0.8);
+    // 3. Cellular Heartbeat pulse (Kuramoto rhythm / hydrostatic ciliary beat)
+    const bpmInterval = 1.0 / Math.max(0.35, Math.min(2.5, ciliaryFreq || 1.1));
     if (t - this.lastHeartbeatTime > bpmInterval) {
       this.lastHeartbeatTime = t;
       this.playHeartbeatThud(t);
@@ -118,21 +140,39 @@ export class DiveAudio {
   playHeartbeatThud(t) {
     if (!this.ctx || sound.isMuted) return;
     try {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
+      // Primary deep hydrostatic sub-bass pulse
+      const osc1 = this.ctx.createOscillator();
+      const gain1 = this.ctx.createGain();
 
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(52.0, t);
-      osc.frequency.exponentialRampToValueAtTime(32.0, t + 0.18);
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(54.0, t);
+      osc1.frequency.exponentialRampToValueAtTime(28.0, t + 0.24);
 
-      gain.gain.setValueAtTime(0.22, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+      gain1.gain.setValueAtTime(0.32, t);
+      gain1.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
 
-      osc.connect(gain);
-      gain.connect(sound.masterGain);
+      osc1.connect(gain1);
+      gain1.connect(sound.masterGain);
 
-      osc.start(t);
-      osc.stop(t + 0.25);
+      osc1.start(t);
+      osc1.stop(t + 0.28);
+
+      // Secondary ciliary fluidic harmonic throb
+      const osc2 = this.ctx.createOscillator();
+      const gain2 = this.ctx.createGain();
+
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(92.0, t + 0.03);
+      osc2.frequency.exponentialRampToValueAtTime(42.0, t + 0.18);
+
+      gain2.gain.setValueAtTime(0.12, t + 0.03);
+      gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.19);
+
+      osc2.connect(gain2);
+      gain2.connect(sound.masterGain);
+
+      osc2.start(t + 0.03);
+      osc2.stop(t + 0.22);
     } catch (e) {
       // AudioCtx edge case
     }
@@ -223,6 +263,15 @@ export class DiveAudio {
         this.ventSource.stop();
         this.ventSource.disconnect();
         this.ventSource = null;
+      }
+      if (this.ventDroneOsc) {
+        this.ventDroneOsc.stop();
+        this.ventDroneOsc.disconnect();
+        this.ventDroneOsc = null;
+      }
+      if (this.ventDroneGain) {
+        this.ventDroneGain.disconnect();
+        this.ventDroneGain = null;
       }
     } catch (e) {}
   }

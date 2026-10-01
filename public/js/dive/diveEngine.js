@@ -1,6 +1,7 @@
 import * as THREE from '../lib/three.module.js';
 import { DiveEnvironment } from './diveEnvironment.js';
 import { DiveCreatureManager } from './diveCreatureManager.js';
+import { DiveFoodManager } from './diveFoodManager.js';
 import { DiveCockpitHUD } from './diveCockpitHUD.js';
 import { DiveAudio } from './diveAudio.js';
 import { sound } from '../audio/sound.js';
@@ -20,8 +21,10 @@ export class DiveEngine {
     // Subsystems
     this.environment = null;
     this.creatures = null;
+    this.food = null;
     this.hud = null;
     this.audio = new DiveAudio();
+    this.lastGrazingChimeTime = 0;
 
     // Loop & State
     this.animFrameId = null;
@@ -66,6 +69,7 @@ export class DiveEngine {
     this.environment.build(vents);
 
     this.creatures = new DiveCreatureManager(this.scene);
+    this.food = new DiveFoodManager(this.scene, 1400);
     this.hud = new DiveCockpitHUD(this);
 
     // Dynamic cellular bioluminescent illumination from piloted organism
@@ -103,7 +107,8 @@ export class DiveEngine {
     this.canvas.style.opacity = '1';
     this.hud.show();
 
-    // 2. Play dive immersion sound
+    // 2. Play dive immersion sound & ensure sound engine is unmuted
+    sound.unmute();
     this.audio.start();
     sound.playDroplet(2400);
 
@@ -155,6 +160,9 @@ export class DiveEngine {
     this.hud.hide();
     this.audio.stop();
     this.creatures.cleanup();
+    if (this.food) {
+      this.food.cleanup();
+    }
 
     if (this.app.renderer) {
       this.app.renderer.camera.targetZoom = 1.0;
@@ -177,6 +185,33 @@ export class DiveEngine {
 
     this.sendSteer(bx, by);
     sound.playDroplet(1900);
+  }
+
+  // Drop nutrient bloom ahead of cell while diving
+  triggerFeedDrop() {
+    if (!this.isActive || !this.trackedId) return;
+    const org = this.app.renderer.currEntities.get(this.trackedId);
+    if (!org) return;
+
+    const dropDist = 45;
+    const fx = org.x + Math.cos(this.currentHeading) * dropDist;
+    const fy = org.y + Math.sin(this.currentHeading) * dropDist;
+
+    // Send nutrient drop to server
+    if (this.app.socket && this.app.isConnected) {
+      this.app.socket.send(JSON.stringify({
+        type: 'interaction',
+        action: 'nutrient_drop',
+        x: fx,
+        y: fy
+      }));
+    }
+
+    if (this.app.renderer) {
+      this.app.renderer.spawnFoodBloom(fx, fy);
+    }
+
+    sound.playDroplet(720);
   }
 
   sendSteer(sx, sy) {
@@ -323,6 +358,18 @@ export class DiveEngine {
     // 7. Update Subsystems
     const speed = Math.hypot(org.vx || 0, org.vy || 0);
     const serverBlooms = this.app.renderer ? this.app.renderer.serverBlooms : [];
+
+    // 7.1. 3D Volumetric Food Blooms & Floating Phytomanna Crystals
+    let grazingState = { isPlayerGrazing: false };
+    if (this.food) {
+      grazingState = this.food.update(serverBlooms, time, this.camPos);
+    }
+    if (grazingState.isPlayerGrazing && time - this.lastGrazingChimeTime > 550) {
+      this.lastGrazingChimeTime = time;
+      this.audio.playFeedChime();
+      this.hud.flashFeeding();
+    }
+
     this.environment.update(time, orgX3D, orgZ3D, this.app.renderer.thumbCanvas, serverBlooms, org.color);
     this.creatures.update(orgs, this.trackedId, this.app.renderer.colonyBonds, time, this.app.renderer.pilotedIds);
     this.hud.update(org, this.currentHeading, nearestVent, nearestPredatorDist, time);

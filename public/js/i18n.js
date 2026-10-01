@@ -83,6 +83,7 @@ export const DICTIONARY = {
     dive_steer: 'Steer',
     dive_look: 'Look',
     dive_boost: 'Boost',
+    dive_feed: 'Feed',
     speed: 'SPEED'
   },
   ru: {
@@ -169,6 +170,7 @@ export const DICTIONARY = {
     dive_steer: 'Руление',
     dive_look: 'Обзор',
     dive_boost: 'Ускорение',
+    dive_feed: 'Кормить',
     speed: 'СКОРОСТЬ'
   }
 };

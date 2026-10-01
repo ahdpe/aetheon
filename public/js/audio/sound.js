@@ -76,6 +76,26 @@ export class SoundEngine {
     return !this.isMuted;
   }
 
+  unmute() {
+    this.init();
+    if (!this.ctx) return false;
+
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+
+    this.isMuted = false;
+    this.masterGain.gain.setTargetAtTime(0.8, this.ctx.currentTime, 0.2);
+
+    const btn = document.getElementById('sound-toggle');
+    if (btn) {
+      btn.classList.remove('muted');
+      btn.innerHTML = '🔊';
+      btn.title = 'Mute audio';
+    }
+    return true;
+  }
+
   // Crystalline bell on cell division (Mitosis)
   playMitosisPing() {
     if (this.isMuted || !this.ctx) return;

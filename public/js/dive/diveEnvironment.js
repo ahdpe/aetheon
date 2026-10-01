@@ -11,6 +11,7 @@ export class DiveEnvironment {
     this.terrainMesh = null;
     this.vents = [];
     this.ventLights = [];
+    this.ventHemispheres = [];
     this.ventPositions3D = []; // Array of { x, z, col, hue, power }
 
     this.ambLight = null;
@@ -329,38 +330,67 @@ export class DiveEnvironment {
     for (let i = 0; i < this.ventPositions3D.length; i++) {
       const vent = this.ventPositions3D[i];
 
-      // 1. Basalt Chimney Spire Column standing upright from mound (Y = -10 to Y = +4)
-      const spireGeo = new THREE.CylinderGeometry(6, 14, 14, 10);
-      const spireMat = new THREE.MeshStandardMaterial({
-        color: 0x081320,
-        roughness: 0.9,
-        metalness: 0.1,
-        emissive: new THREE.Color(vent.color),
-        emissiveIntensity: 0.45
-      });
-      const spire = new THREE.Mesh(spireGeo, spireMat);
-      spire.position.set(vent.x, -3, vent.z);
-      this.scene.add(spire);
-
-      // 2. Vent Hearth Core (Glowing orifice at top of chimney)
-      const glowGeo = new THREE.SphereGeometry(6, 12, 12);
-      const glowMat = new THREE.MeshBasicMaterial({
+      // 1. Luminous Bio-Calcite Hemisphere Dome (Outer translucent mantle, radius 22, height 22 from seabed)
+      const outerGeo = new THREE.SphereGeometry(22, 36, 20, 0, Math.PI * 2, 0, Math.PI * 0.5);
+      const outerMat = new THREE.MeshStandardMaterial({
         color: vent.color,
+        roughness: 0.18,
+        metalness: 0.05,
+        transparent: true,
+        opacity: 0.52,
+        emissive: new THREE.Color(vent.color),
+        emissiveIntensity: 0.70,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      });
+      const outerDome = new THREE.Mesh(outerGeo, outerMat);
+      outerDome.position.set(vent.x, -11.5, vent.z);
+      this.scene.add(outerDome);
+
+      // 2. Inner Incandescent Geothermal Core Hemisphere (Concentrated warm radiance)
+      const coreGeo = new THREE.SphereGeometry(12, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.5);
+      const coreMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
         transparent: true,
         opacity: 0.85,
-        blending: THREE.AdditiveBlending
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
       });
-      const glow = new THREE.Mesh(glowGeo, glowMat);
-      glow.position.set(vent.x, 4, vent.z);
-      this.scene.add(glow);
+      const coreDome = new THREE.Mesh(coreGeo, coreMat);
+      coreDome.position.set(vent.x, -11.5, vent.z);
+      this.scene.add(coreDome);
 
-      // 3. High-Intensity Volumetric Point Light illuminating surrounding waters
-      const pLight = new THREE.PointLight(vent.color, 3.4, 260);
-      pLight.position.set(vent.x, 7, vent.z);
+      // 3. Concentric Seabed Radiant Halo Ring on seafloor plane
+      const haloGeo = new THREE.RingGeometry(18, 42, 48);
+      const haloMat = new THREE.MeshBasicMaterial({
+        color: vent.color,
+        transparent: true,
+        opacity: 0.38,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const halo = new THREE.Mesh(haloGeo, haloMat);
+      halo.rotation.x = -Math.PI * 0.5;
+      halo.position.set(vent.x, -11.0, vent.z);
+      this.scene.add(halo);
+
+      // 4. Soft Pulsating Volumetric Point Light illuminating surrounding waters
+      const pLight = new THREE.PointLight(vent.color, 3.2, 280, 1.2);
+      pLight.position.set(vent.x, 6, vent.z);
       this.scene.add(pLight);
       this.ventLights.push(pLight);
+      this.ventHemispheres.push({
+        light: pLight,
+        outerDome,
+        coreDome,
+        baseIntensity: 3.2,
+        x: vent.x,
+        z: vent.z
+      });
 
-      // 4. Ascending Chimney Mineral Plume Particles
+      // 5. Ascending Thermal Micro-Embers & Mineral Spores
       this.createChimneyPlume(vent.x, vent.z, vent.color);
     }
   }
@@ -391,14 +421,14 @@ export class DiveEnvironment {
     const velocities = [];
 
     for (let i = 0; i < particleCount; i++) {
-      positions[i * 3] = x + (Math.random() - 0.5) * 12;
-      positions[i * 3 + 1] = 38 + Math.random() * 38; // Y rises from chimney mouth to surface
-      positions[i * 3 + 2] = z + (Math.random() - 0.5) * 12;
+      positions[i * 3] = x + (Math.random() - 0.5) * 14;
+      positions[i * 3 + 1] = -2.0 + Math.random() * 54.0; // Y rises gently from dome into water column
+      positions[i * 3 + 2] = z + (Math.random() - 0.5) * 14;
 
       velocities.push({
-        vx: (Math.random() - 0.5) * 0.35,
-        vy: 0.35 + Math.random() * 0.55,
-        vz: (Math.random() - 0.5) * 0.35,
+        vx: (Math.random() - 0.5) * 0.28,
+        vy: 0.28 + Math.random() * 0.45,
+        vz: (Math.random() - 0.5) * 0.28,
         origX: x,
         origZ: z
       });
@@ -408,7 +438,7 @@ export class DiveEnvironment {
 
     const mat = new THREE.PointsMaterial({
       color: colorHex,
-      size: 7.5,
+      size: 7.0,
       map: this.particleTexture,
       transparent: true,
       opacity: 0.85,
@@ -518,7 +548,24 @@ export class DiveEnvironment {
       this.renderSeafloorCanvas(thumbCanvas, playerX3D, playerZ3D, serverBlooms, playerColor);
     }
 
-    // 2. Animate chimney mineral plumes rising along +Y to surface
+    // 1.8. Breathing pulsation of luminous bio-calcite hemispheres
+    if (this.ventHemispheres) {
+      for (let i = 0; i < this.ventHemispheres.length; i++) {
+        const vh = this.ventHemispheres[i];
+        const pulse = Math.sin(time * 0.0022 + i * 1.4);
+        vh.light.intensity = vh.baseIntensity + pulse * 0.45;
+        if (vh.outerDome) {
+          const s = 1.0 + pulse * 0.035;
+          vh.outerDome.scale.set(s, s, s);
+        }
+        if (vh.coreDome) {
+          const cs = 1.0 + pulse * 0.05;
+          vh.coreDome.scale.set(cs, cs, cs);
+        }
+      }
+    }
+
+    // 2. Animate ascending thermal mineral plumes rising along +Y to surface
     for (let p = 0; p < this.plumeParticles.length; p++) {
       const plume = this.plumeParticles[p];
       const pos = plume.mesh.geometry.attributes.position;
@@ -530,13 +577,13 @@ export class DiveEnvironment {
         const vel = plume.velocities[i];
 
         py += vel.vy; // Rise upwards
-        px += vel.vx + Math.sin(time * 0.002 + i) * 0.18;
-        pz += vel.vz + Math.cos(time * 0.002 + i) * 0.18;
+        px += vel.vx + Math.sin(time * 0.002 + i) * 0.16;
+        pz += vel.vz + Math.cos(time * 0.002 + i) * 0.16;
 
-        if (py > 76.0) {
-          py = 38.0; // Reset at chimney mouth
-          px = vel.origX + (Math.random() - 0.5) * 8;
-          pz = vel.origZ + (Math.random() - 0.5) * 8;
+        if (py > 54.0) {
+          py = -2.0; // Reset at hemisphere crest
+          px = vel.origX + (Math.random() - 0.5) * 14;
+          pz = vel.origZ + (Math.random() - 0.5) * 14;
         }
 
         pos.setXYZ(i, px, py, pz);
