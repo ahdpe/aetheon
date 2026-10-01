@@ -151,6 +151,8 @@ export class DiveCockpitHUD {
       </div>
     `;
 
+    i18n.applyTranslations();
+
     this.exitBtn = document.getElementById('dive-exit-btn');
     this.exitBtn?.addEventListener('click', () => {
       this.engine.exit();
@@ -497,6 +499,7 @@ export class DiveCockpitHUD {
       }
     } catch (_) {}
 
+    i18n.applyTranslations();
     modal.classList.remove('hidden');
     const input = document.getElementById('dive-dynasty-input');
     if (input) {
