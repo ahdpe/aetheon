@@ -403,18 +403,23 @@ export class JournalDrawer {
       const apex = isRu ? (m.apexHunterRu || m.apexHunterEn) : m.apexHunterEn;
 
       // Check if client cached a screenshot for this Atlas day, or generate live authentic landscape snapshot
+      const cacheKey = `aetheon_atlas_v6_day_${entry.day}`;
       let dayScreenshot = entry.screenshot;
       if (!dayScreenshot) {
         try {
-          dayScreenshot = localStorage.getItem(`aetheon_atlas_day_${entry.day}`);
+          dayScreenshot = localStorage.getItem(cacheKey);
         } catch (_) {}
       }
-      if (!dayScreenshot && this.app && this.app.renderer) {
-        dayScreenshot = this.app.renderer.captureDropletSnapshot(480);
-        if (dayScreenshot) {
-          entry.screenshot = dayScreenshot;
+
+      const renderer = this.app?.renderer || window.aetheonApp?.renderer;
+      // Always capture fresh authentic snapshot if not cached in v6, or if viewing current active day
+      if (renderer && (!dayScreenshot || entry.day === (this.atlasEntries[0]?.day || 1))) {
+        const fresh = renderer.captureDropletSnapshot(560);
+        if (fresh) {
+          dayScreenshot = fresh;
+          entry.screenshot = fresh;
           try {
-            localStorage.setItem(`aetheon_atlas_day_${entry.day}`, dayScreenshot);
+            localStorage.setItem(cacheKey, fresh);
           } catch (_) {}
         }
       }
@@ -434,6 +439,9 @@ export class JournalDrawer {
           </div>
           <div class="atlas-map-caption">
             <span>🗺️ ${isRu ? 'КАРТА ЛАНДШАФТА И РИФОВ' : 'BENTHIC LANDSCAPE & REEF SURVEY'} • Ø 1240 мкм</span>
+            <button class="atlas-refresh-cam-btn" data-day="${entry.day}" title="${isRu ? 'Сделать свежий снимок капли' : 'Take fresh droplet snapshot'}">
+              <span>📷</span> ${isRu ? 'Свежий снимок' : 'Live Snapshot'}
+            </button>
             <span>DAY ${entry.day}</span>
           </div>
         </div>
@@ -491,6 +499,32 @@ export class JournalDrawer {
           <div class="monograph-content">${summary}</div>
         </div>
       `;
+
+      const camBtn = card.querySelector('.atlas-refresh-cam-btn');
+      if (camBtn) {
+        camBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const r = this.app?.renderer || window.aetheonApp?.renderer;
+          if (r) {
+            camBtn.style.opacity = '0.5';
+            camBtn.textContent = isRu ? '⏳ Снимок...' : '⏳ Snapping...';
+            setTimeout(() => {
+              const fresh = r.captureDropletSnapshot(560);
+              if (fresh) {
+                entry.screenshot = fresh;
+                try {
+                  localStorage.setItem(`aetheon_atlas_v6_day_${entry.day}`, fresh);
+                } catch (_) {}
+                const img = card.querySelector('.atlas-screenshot-img');
+                if (img) img.src = fresh;
+                else this.renderAtlas();
+              }
+              camBtn.style.opacity = '1';
+              camBtn.innerHTML = `<span>📷</span> ${isRu ? 'Свежий снимок' : 'Live Snapshot'}`;
+            }, 60);
+          }
+        });
+      }
 
       this.atlasPane.appendChild(card);
     });

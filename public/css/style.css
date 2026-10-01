@@ -2796,12 +2796,39 @@ body.mode-lab .interactive-hint {
 .atlas-map-caption {
   width: 100%;
   display: flex;
+  align-items: center;
   justify-content: space-between;
   margin-top: 8px;
   font-family: var(--font-mono);
   font-size: 10px;
   color: #64748b;
   padding: 0 4px;
+  gap: 8px;
+}
+
+.atlas-refresh-cam-btn {
+  background: rgba(0, 240, 255, 0.12);
+  border: 1px solid rgba(0, 240, 255, 0.40);
+  border-radius: 6px;
+  color: #38bdf8;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+}
+
+.atlas-refresh-cam-btn:hover {
+  background: rgba(0, 240, 255, 0.28);
+  border-color: #00f0ff;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.35);
+  transform: translateY(-1px);
 }
 
 .atlas-metrics-grid {
