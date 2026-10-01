@@ -3473,6 +3473,17 @@ body.mode-lab .interactive-hint {
   margin: 0;
 }
 
+.dynasty-note {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px dashed rgba(245, 158, 11, 0.35);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+}
+
 .dynasty-input-row {
   display: flex;
   gap: 8px;

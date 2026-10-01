@@ -380,6 +380,33 @@ export class ChemicalGrid {
     }
   }
 
+  // Inject bioluminescent signal / alarm cloud
+  injectSignal(wx, wy, amount = 0.8, radius = 22) {
+    const scale = this.size / CONFIG.WORLD_SIZE;
+    const gridR = Math.max(2, Math.ceil(radius * scale));
+    const { ix: cx, iy: cy } = this.worldToGrid(wx, wy);
+    const N = this.size;
+
+    const minY = Math.max(0, cy - gridR);
+    const maxY = Math.min(N - 1, cy + gridR);
+    const minX = Math.max(0, cx - gridR);
+    const maxX = Math.min(N - 1, cx + gridR);
+
+    for (let y = minY; y <= maxY; y++) {
+      const dy = y - cy;
+      const row = y * N;
+      for (let x = minX; x <= maxX; x++) {
+        const dx = x - cx;
+        const dist2 = dx * dx + dy * dy;
+        if (dist2 <= gridR * gridR) {
+          const factor = Math.exp(-dist2 / (gridR * 1.2));
+          const idx = row + x;
+          this.signal[idx] = Math.min(2.5, this.signal[idx] + amount * factor);
+        }
+      }
+    }
+  }
+
   // Deposit bio-calcite mineral into substrate (Stigmergy / Reef building)
   depositSubstrate(wx, wy, amount = 0.05, radius = 12) {
     const scale = this.size / CONFIG.WORLD_SIZE;

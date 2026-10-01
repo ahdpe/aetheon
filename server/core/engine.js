@@ -270,26 +270,31 @@ export class SimulationEngine {
       }
     }
 
-    // 6.5. Preserve Apex Predator Pack: ensure at least 14-20 hunters are actively swimming
+    // 6.5. Natural Ecological Balance: prevent total hunter extinction without vent-camping
     let activeHunters = 0;
     for (let i = 0; i < this.organisms.length; i++) {
       if (this.organisms[i].carnivory > 0.35) activeHunters++;
     }
 
-    if (!blockBiogenesis && activeHunters < 16) {
-      const neededHunters = 16 - activeHunters;
-      const vents = this.grid.vents;
+    if (!blockBiogenesis && activeHunters < 4) {
+      const neededHunters = Math.min(2, 4 - activeHunters);
       let hunterSpecies = this.lineage.getSpecies(3); // Vibrionox vorax
       if (!hunterSpecies) {
         hunterSpecies = this.lineage.getAllSpecies().find(s => s.carnivory > 0.45) || this.lineage.getAllSpecies()[2];
       }
 
+      const CX = CONFIG.CHAMBER_CENTER_X;
+      const CY = CONFIG.CHAMBER_CENTER_Y;
       for (let h = 0; h < neededHunters; h++) {
-        const vent = vents[Math.floor(Math.random() * vents.length)];
-        const wx = vent.x * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 80;
-        const wy = vent.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 80;
+        // Disperse in pelagic open water AWAY from hydrothermal vents to allow grazers to thrive
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 180 + Math.random() * 220;
+        const wx = CX + Math.cos(angle) * dist;
+        const wy = CY + Math.sin(angle) * dist;
         const org = new Organism(wx, wy, Organism.createRandomGenome(hunterSpecies.hue, true), 1, 0, hunterSpecies.id);
-        org.energy = 160.0;
+        org.maturity = 0.55;
+        org.size = org.adultSize * (0.38 + 0.62 * org.maturity);
+        org.energy = 75.0; // Moderate energy; must hunt actively to grow & reproduce
         this.organisms.push(org);
       }
     }

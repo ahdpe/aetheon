@@ -47,6 +47,7 @@ export class Organism {
     this.maxSpeed = Math.max(0.8, Math.min(4.5, this.genome.speedMax));
     this.isAvatarLineage = false;
     this.pilotedTicks = 0;
+    this.panicTicks = 0;
   }
 
   static createRandomGenome(seedHue = null, forcePredator = null) {
@@ -209,6 +210,7 @@ export class Organism {
     let nearestPreyDist = 9999;
     let separationX = 0;
     let separationY = 0;
+    let isFleeing = false;
 
     if (nearbyNeighbors.length > 0) {
       let crowdCount = 0;
@@ -240,10 +242,10 @@ export class Organism {
         }
 
         // B. Identify single nearest threat / prey to avoid force cancellation
-        if (this.carnivory < 0.35 && other.carnivory > 0.4 && other.size > this.size && d < nearestPredatorDist) {
+        if (other.carnivory > 0.35 && other.size > this.size * 1.1 && d < nearestPredatorDist) {
           nearestPredatorDist = d;
           nearestPredator = { dx, dy, d };
-        } else if (this.carnivory > 0.4 && other.size < this.size * 0.85 && d < nearestPreyDist) {
+        } else if (this.carnivory > 0.35 && other.size < this.size * 0.9 && d < nearestPreyDist) {
           nearestPreyDist = d;
           nearestPrey = { dx, dy, d };
         }
@@ -260,16 +262,20 @@ export class Organism {
       }
     }
 
-    // Apply fleeing force if predator is near
-    if (nearestPredator && nearestPredator.d < this.size * 5.0) {
-      steerX -= (nearestPredator.dx / nearestPredator.d) * 3.5;
-      steerY -= (nearestPredator.dy / nearestPredator.d) * 3.5;
+    // Apply fleeing force if predator is near (amplified sensory awareness & panic steering)
+    const fleeThreshold = Math.max(52.0, this.size * 6.5);
+    if (nearestPredator && nearestPredator.d < fleeThreshold) {
+      isFleeing = true;
+      const urgency = 1.0 - (nearestPredator.d / fleeThreshold);
+      const fleeForce = 3.5 + urgency * 3.5; // up to 7.0 force for close threats
+      steerX -= (nearestPredator.dx / nearestPredator.d) * fleeForce;
+      steerY -= (nearestPredator.dy / nearestPredator.d) * fleeForce;
     }
 
     // Apply pursuit force if prey is near
-    if (nearestPrey && nearestPrey.d < this.size * 4.0) {
-      steerX += (nearestPrey.dx / nearestPrey.d) * 2.5;
-      steerY += (nearestPrey.dy / nearestPrey.d) * 2.5;
+    if (nearestPrey && nearestPrey.d < this.size * 4.5) {
+      steerX += (nearestPrey.dx / nearestPrey.d) * 2.8;
+      steerY += (nearestPrey.dy / nearestPrey.d) * 2.8;
     }
 
     // Add separation force
@@ -349,6 +355,16 @@ export class Organism {
       }
     } else {
       speedMultiplier = 0.7 + 0.5 * ciliaryPulse;
+    }
+
+    // Panic evasive sprint when fleeing or recently bitten
+    if (this.panicTicks > 0) {
+      this.panicTicks--;
+      speedMultiplier += 1.35;
+      this.phase += 0.08;
+    } else if (isFleeing) {
+      speedMultiplier += 0.65;
+      this.phase += 0.04;
     }
 
     if (isLuredToFood && !isDetritusTarget && foodLureDist < 260 && !isPiloted) {
@@ -445,35 +461,75 @@ export class Organism {
     const contactDist = (this.size + prey.size) * 0.75;
 
     if (dx * dx + dy * dy <= contactDist * contactDist) {
+      // 1. Reef shelter evasion: small organisms hide in mineral crevices / coral caverns
+      if (grid && grid.getSubstrate) {
+        const preySub = grid.getSubstrate(prey.x, prey.y);
+        if (preySub > 0.20 && this.size > prey.size * 1.2) {
+          // 65% chance the prey slips into a reef crevice
+          if (Math.random() < 0.65) {
+            this.vx *= 0.6;
+            this.vy *= 0.6;
+            return false;
+          }
+        }
+      }
+
       if (prey.playerSteer && prey.playerSteer.ticks > 0) {
         // Piloted organism cannot be insta-devoured: predatory strike & evasive recoil!
         const bite = Math.min(prey.energy * 0.25, 20.0);
         prey.energy -= bite;
         this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 0.7);
         const d = Math.hypot(dx, dy) || 1.0;
-        prey.vx += (dx / d) * 3.8;
-        prey.vy += (dy / d) * 3.8;
+        prey.vx += (dx / d) * 4.5;
+        prey.vy += (dy / d) * 4.5;
+        prey.panicTicks = 30;
         return { killed: false, preyId: prey.id };
-      } else if (prey.size < this.size * 0.95 || prey.energy < 45.0) {
+      }
+
+      // Check if prey can be swallowed whole: only if predator is colossal (>2.2x prey) OR prey is depleted (< 22 energy)
+      const canSwallowWhole = (this.size > prey.size * 2.2) || (prey.energy < 22.0);
+
+      if (canSwallowWhole) {
         // Full ingestion / kill!
-        const gainedEnergy = Math.max(35.0, prey.energy * 0.45);
+        const gainedEnergy = Math.max(30.0, prey.energy * 0.45);
         this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + gainedEnergy);
         this.kills++;
         grid.consumeAndExcrete(this.x, this.y, 0, 0.8, 0.4);
         if (grid.depositSubstrate) {
-          // Battleground mineral precipitate: organic carcass leaves calcite traces
           grid.depositSubstrate(prey.x, prey.y, 0.05 * (prey.size / 8), prey.size * 0.9);
         }
         return { killed: true, preyId: prey.id };
       } else {
-        // Predatory strike & bite: tears away vital energy from prey
-        const bite = Math.min(prey.energy * 0.45, 50.0);
+        // Predatory strike & bite: tears away vital energy without insta-killing healthy organisms
+        const bite = Math.min(prey.energy * 0.38, 38.0);
         prey.energy -= bite;
         this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 0.7);
-        // Panic recoil for prey
+
+        // If bite depleted remaining energy, prey perishes
+        if (prey.energy <= 0.0) {
+          this.kills++;
+          grid.consumeAndExcrete(this.x, this.y, 0, 0.8, 0.4);
+          if (grid.depositSubstrate) {
+            grid.depositSubstrate(prey.x, prey.y, 0.04 * (prey.size / 8), prey.size * 0.8);
+          }
+          return { killed: true, preyId: prey.id };
+        }
+
+        // Prey survives bite: triggers evasive sprint & alarm discharge!
         const d = Math.hypot(dx, dy) || 1.0;
-        prey.vx += (dx / d) * 3.2;
-        prey.vy += (dy / d) * 3.2;
+        prey.vx += (dx / d) * 5.2;
+        prey.vy += (dy / d) * 5.2;
+        prey.panicTicks = 25;
+
+        // Hunter experiences jaw recoil / handling delay
+        this.vx *= 0.4;
+        this.vy *= 0.4;
+
+        // Discharge defensive chemical alarm cloud in water
+        if (grid.injectSignal) {
+          grid.injectSignal(prey.x, prey.y, 1.2, 28);
+        }
+
         return { killed: false, preyId: prey.id };
       }
     }

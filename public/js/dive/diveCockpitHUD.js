@@ -132,12 +132,15 @@ export class DiveCockpitHUD {
           <span class="dynasty-crown">👑</span>
           <div class="dynasty-header-text">
             <h3 class="dynasty-title" data-i18n="dynasty_title">РОДОСЛОВНАЯ НАБЛЮДАТЕЛЯ</h3>
-            <span class="dynasty-sub" data-i18n="dynasty_sub">Связь с аватаром активна более 20 секунд</span>
+            <span class="dynasty-sub" data-i18n="dynasty_sub">Связь с аватаром активна более 30 секунд</span>
           </div>
         </div>
         <p class="dynasty-desc" data-i18n="dynasty_desc">
           Ваша воля направила эволюцию этой особи. Впишите имя Наблюдателя, чтобы навечно закрепить правящую династию в Кодексе видов:
         </p>
+        <div class="dynasty-note" data-i18n="dynasty_note">
+          Примечание: увековечить родословную можно не чаще 1 раза в час.
+        </div>
         <div class="dynasty-input-row">
           <input type="text" id="dive-dynasty-input" class="dynasty-input" maxlength="24" data-i18n-placeholder="dynasty_placeholder" placeholder="Имя Наблюдателя..." autocomplete="off">
           <button type="button" id="dive-dynasty-submit" class="dynasty-submit-btn" data-i18n="dynasty_enshrine">Увековечить</button>
@@ -178,6 +181,14 @@ export class DiveCockpitHUD {
       const org = this.engine.currentOrg;
       if (name && name.length > 0 && org) {
         localStorage.setItem('aetheon_observer_name', name);
+        localStorage.setItem('aetheon_last_dynasty_time', Date.now().toString());
+        try {
+          const myDynasties = JSON.parse(localStorage.getItem('aetheon_my_dynasty_species') || '[]');
+          if (!myDynasties.includes(org.speciesId)) {
+            myDynasties.push(org.speciesId);
+            localStorage.setItem('aetheon_my_dynasty_species', JSON.stringify(myDynasties));
+          }
+        } catch (_) {}
         this.engine.app?.sendLineageFounder?.(org.speciesId, name);
         modal?.classList.add('hidden');
         this.showCinematicEvent(
@@ -459,12 +470,32 @@ export class DiveCockpitHUD {
     const modal = document.getElementById('dive-dynasty-modal');
     if (!modal || !org) return;
 
-    // Check if this species already has a founder recorded in codex
+    // Check 1: If species already has a founder recorded in codex
     const app = this.engine.app;
     const sp = app?.codexModal?.allSpecies?.find(s => s.id === org.speciesId);
     if (sp && sp.founderName) {
       return; // Already has an enshrined founder
     }
+
+    // Check 2: If user entered an organism of their own previously designated dynasty
+    try {
+      const myDynasties = JSON.parse(localStorage.getItem('aetheon_my_dynasty_species') || '[]');
+      if (myDynasties.includes(org.speciesId)) {
+        return; // User already founded this dynasty!
+      }
+    } catch (_) {}
+
+    // Check 3: 1-hour cooldown after establishing any dynasty
+    try {
+      const lastDynastyTime = localStorage.getItem('aetheon_last_dynasty_time');
+      if (lastDynastyTime) {
+        const elapsedMs = Date.now() - Number(lastDynastyTime);
+        const oneHourMs = 60 * 60 * 1000;
+        if (elapsedMs < oneHourMs) {
+          return; // Under 1 hour cooldown!
+        }
+      }
+    } catch (_) {}
 
     modal.classList.remove('hidden');
     const input = document.getElementById('dive-dynasty-input');
@@ -481,14 +512,14 @@ export class DiveCockpitHUD {
     const isRu = i18n.getLang() === 'ru';
     const totalYaw = currentHeading + this.lookYaw;
 
-    // Track active piloting time for the Founder Dynasty milestone (20s)
+    // Track active piloting time for the Founder Dynasty milestone (30s)
     const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     if (!this.lastUpdateTime) this.lastUpdateTime = now;
     const dt = Math.min(0.2, (now - this.lastUpdateTime) / 1000);
     this.lastUpdateTime = now;
     this.pilotedSeconds += dt;
 
-    if (this.pilotedSeconds >= 20 && !this.dynastyPromptShown) {
+    if (this.pilotedSeconds >= 30 && !this.dynastyPromptShown) {
       this.checkAndShowDynastyPrompt(org);
     }
 

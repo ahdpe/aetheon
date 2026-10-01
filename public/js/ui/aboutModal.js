@@ -1116,7 +1116,7 @@ export class AboutModal {
           <div class="formula-box">
             <div class="formula-label">AVATAR DYNASTIES & DYNAMIC OPTICAL LOD:</div>
             <div class="formula-vars">
-              <div><strong>Avatar Dynasties:</strong> Piloting an organism for &gt;20 seconds establishes an evolutionary lineage. The Observer's name is permanently enshrined in the Species Codex as the dynasty founder, granting descendants epigenetic metabolic vitality.</div>
+              <div><strong>Avatar Dynasties:</strong> Piloting an organism for &gt;30 seconds establishes an evolutionary lineage (max once per hour). The Observer's name is permanently enshrined in the Species Codex as the dynasty founder, granting descendants epigenetic metabolic vitality.</div>
               <div><strong>Dynamic Optical LOD:</strong> A 3-tier camera-distance rendering system renders distant cells (r &lt; 4.8px) as lightweight bioluminescent spores (reducing draw calls by 90%), smoothly transitioning into full ultra-microscopy Nomarski DIC relief, mandibles, and beating cilia only when zooming in close.</div>
             </div>
           </div>
