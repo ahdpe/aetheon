@@ -216,7 +216,7 @@ export class SimulationEngine {
           const adhesion = org.genome.adhesion ?? 0.35;
           const coupling = org.genome.phaseCoupling ?? 0.4;
           const bondingAffinity = adhesion + coupling * 0.3;
-          if (bondingAffinity > 0.48 && org.carnivory < 0.45) {
+          if (bondingAffinity > 0.65 && org.carnivory < 0.40) {
             this.colonies.formBond(org, child);
           }
         }
@@ -543,7 +543,7 @@ export class SimulationEngine {
   }
 
   // Handle organism demise: release chemical nutrients, deposit bio-calcite reef substrate, and form organic detritus
-  handleOrganismDeath(org, isPredation = false) {
+  handleOrganismDeath(org, isPredation = false, forceDetritus = false) {
     // 1. Dissolve organism mass into nutrients
     this.grid.injectDrop(org.x, org.y, org.size * 0.25, org.size * 1.5);
 
@@ -553,26 +553,29 @@ export class SimulationEngine {
     }
 
     // 3. Detritus cloud: dead cells leave scavengeable necromass for grazers
-    if (org.size >= 3.0 && Math.random() < 0.65) {
+    // Throttled: only adult organisms (maturity >= 0.7, size >= 4.0) with bounded probability or predation or forced test
+    const shouldSpawn = forceDetritus || (org.maturity >= 0.7 && org.size >= 4.0 && (isPredation ? Math.random() < 0.45 : Math.random() < 0.25));
+    if (shouldSpawn) {
       this.spawnDetritusBloom(org.x, org.y, org.size, org.hue, org.energy);
     }
   }
 
   spawnDetritusBloom(x, y, size, hue, energyRemaining) {
-    if (this.nutrientBlooms.length >= 28) {
+    const detritusBlooms = this.nutrientBlooms.filter(b => b.isDetritus);
+    if (detritusBlooms.length >= 8) {
       const oldestDetritusIdx = this.nutrientBlooms.findIndex(b => b.isDetritus);
       if (oldestDetritusIdx >= 0) {
         this.nutrientBlooms.splice(oldestDetritusIdx, 1);
       }
     }
-    const detritusEnergy = Math.max(30.0, Math.min(180.0, (energyRemaining || 30) * 0.6 + size * 10));
+    const detritusEnergy = Math.max(15.0, Math.min(60.0, (energyRemaining || 20) * 0.4 + size * 4));
     const bloom = {
       id: this.nextBloomId++,
       x,
       y,
       energy: detritusEnergy,
-      radius: Math.max(14, size * 2.2),
-      maxAge: 220, // ~22 seconds
+      radius: Math.max(10, Math.min(22, size * 1.6)),
+      maxAge: 90, // ~9 seconds
       age: 0,
       isDetritus: true,
       hue: hue !== undefined ? hue : 0.12

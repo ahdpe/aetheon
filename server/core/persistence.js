@@ -148,6 +148,48 @@ export class PersistenceManager {
         }
       }
 
+      // De-clumping check on resume: if organisms are stacked in a dense pile (> 10 organisms within 35 μm), disperse them nicely across the droplet and vents
+      if (engine.organisms && engine.organisms.length > 0) {
+        const CX = CONFIG.CHAMBER_CENTER_X;
+        const CY = CONFIG.CHAMBER_CENTER_Y;
+        const R = CONFIG.CHAMBER_RADIUS * 0.72;
+        const vents = (engine.grid && engine.grid.vents) ? engine.grid.vents : [];
+
+        let dispersedCount = 0;
+        for (let i = 0; i < engine.organisms.length; i++) {
+          const org = engine.organisms[i];
+          let closeCount = 0;
+          for (let j = 0; j < engine.organisms.length; j++) {
+            if (i === j) continue;
+            const dx = org.x - engine.organisms[j].x;
+            const dy = org.y - engine.organisms[j].y;
+            if (dx * dx + dy * dy < 35 * 35) closeCount++;
+          }
+          if (closeCount > 10) {
+            dispersedCount++;
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 60 + Math.random() * 260;
+            if (vents.length > 0 && Math.random() < 0.65) {
+              const vent = vents[Math.floor(Math.random() * vents.length)];
+              const vx = (vent.x / CONFIG.GRID_SIZE) * CONFIG.WORLD_SIZE;
+              const vy = (vent.y / CONFIG.GRID_SIZE) * CONFIG.WORLD_SIZE;
+              org.x = Math.max(CX - R, Math.min(CX + R, vx + (Math.random() - 0.5) * 140));
+              org.y = Math.max(CY - R, Math.min(CY + R, vy + (Math.random() - 0.5) * 140));
+            } else {
+              org.x = Math.max(CX - R, Math.min(CX + R, CX + Math.cos(angle) * dist));
+              org.y = Math.max(CY - R, Math.min(CY + R, CY + Math.sin(angle) * dist));
+            }
+            // Give fresh randomized heading and mild velocity
+            org.heading = Math.random() * Math.PI * 2;
+            org.vx = Math.cos(org.heading) * 0.8;
+            org.vy = Math.sin(org.heading) * 0.8;
+          }
+        }
+        if (dispersedCount > 0) {
+          console.log(`[Persistence] De-clumped and naturally dispersed ${dispersedCount} organisms across the droplet manifold.`);
+        }
+      }
+
       return true;
     } catch (err) {
       console.error('[Persistence] Error loading snapshot, starting fresh:', err.message);

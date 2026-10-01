@@ -15,15 +15,26 @@ export class ColonyManager {
    * Called when child is born from a parent with adhesion > 0.6.
    */
   formBond(parentOrg, childOrg) {
-    const restLength = (parentOrg.size + childOrg.size) * 1.6;
-    const bond = { a: parentOrg.id, b: childOrg.id, restLength };
-
     const parentColonyId = this.orgToColony.get(parentOrg.id);
 
     if (parentColonyId !== undefined) {
       // Parent already in a colony — add child to it
       const colony = this.colonies.get(parentColonyId);
       if (colony) {
+        // Enforce max colony size (micro-colonies capped at 6 cells)
+        if (colony.memberIds.size >= 6) return;
+
+        // Enforce max bonds per cell (max 2 bonds to keep morphology filamentous or small cluster)
+        let parentBondCount = 0;
+        for (let b = 0; b < colony.bonds.length; b++) {
+          if (colony.bonds[b].a === parentOrg.id || colony.bonds[b].b === parentOrg.id) {
+            parentBondCount++;
+          }
+        }
+        if (parentBondCount >= 2) return;
+
+        const restLength = (parentOrg.size + childOrg.size) * 1.8;
+        const bond = { a: parentOrg.id, b: childOrg.id, restLength };
         colony.memberIds.add(childOrg.id);
         colony.bonds.push(bond);
         this.orgToColony.set(childOrg.id, parentColonyId);
@@ -32,6 +43,8 @@ export class ColonyManager {
     }
 
     // Create a new colony with both organisms
+    const restLength = (parentOrg.size + childOrg.size) * 1.8;
+    const bond = { a: parentOrg.id, b: childOrg.id, restLength };
     const id = nextColonyId++;
     const colony = {
       id,
@@ -49,7 +62,7 @@ export class ColonyManager {
    * Must be O(total bonds) — very lightweight at 10 Hz.
    */
   applyBondPhysics(organismsById) {
-    for (const colony of this.colonies.values()) {
+    for (const [colonyId, colony] of this.colonies.entries()) {
       for (let b = 0; b < colony.bonds.length; b++) {
         const bond = colony.bonds[b];
         const orgA = organismsById.get(bond.a);
@@ -59,10 +72,18 @@ export class ColonyManager {
         const dx = orgB.x - orgA.x;
         const dy = orgB.y - orgA.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+
+        // Tension snap: if bond stretched beyond 2.6x rest length, it breaks
+        if (dist > bond.restLength * 2.6) {
+          colony.bonds.splice(b, 1);
+          b--;
+          continue;
+        }
+
         const displacement = dist - bond.restLength;
 
         // Hookean spring: F = k * displacement
-        const k = 0.15;
+        const k = 0.12;
         const force = k * displacement;
         const fx = (dx / dist) * force;
         const fy = (dy / dist) * force;
@@ -79,6 +100,15 @@ export class ColonyManager {
         const alignForce = wrappedDiff * 0.03;
         orgA.heading += alignForce;
         orgB.heading -= alignForce;
+      }
+
+      // If bonds broke, dissolve empty colonies
+      if (colony.bonds.length === 0) {
+        for (const memberId of colony.memberIds) {
+          this.orgToColony.delete(memberId);
+        }
+        this.colonies.delete(colonyId);
+        continue;
       }
 
       // Collective metabolism: redistribute 10% of surplus energy to weakest member
@@ -207,16 +237,24 @@ export class ColonyManager {
       // Filter bonds to only those where both organisms exist
       const validBonds = cd.bonds.filter(b => organismsById.has(b.a) && organismsById.has(b.b));
 
-      if (validMembers.size >= 2 && validBonds.length > 0) {
+      // Enforce max 6 members on restore to prevent oversized historical colonies
+      let memberList = Array.from(validMembers);
+      if (memberList.length > 6) {
+        memberList = memberList.slice(0, 6);
+      }
+      const memberSet = new Set(memberList);
+      const cappedBonds = validBonds.filter(b => memberSet.has(b.a) && memberSet.has(b.b));
+
+      if (memberSet.size >= 2 && cappedBonds.length > 0) {
         const colony = {
           id: cd.id,
-          memberIds: validMembers,
-          bonds: validBonds,
+          memberIds: memberSet,
+          bonds: cappedBonds,
           createdAt: cd.createdAt || Date.now()
         };
 
         this.colonies.set(colony.id, colony);
-        for (const memberId of validMembers) {
+        for (const memberId of memberSet) {
           this.orgToColony.set(memberId, colony.id);
         }
 

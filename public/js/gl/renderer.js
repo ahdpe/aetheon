@@ -1525,9 +1525,11 @@ export class OceanRenderer {
         sCtx.strokeStyle = 'rgba(0, 240, 255, 0.45)';
         sCtx.lineWidth = 1.0;
         sCtx.beginPath();
-        for (let b = 0; b < this.colonyBonds.length; b += 2) {
-          const idA = this.colonyBonds[b];
-          const idB = this.colonyBonds[b + 1];
+        for (let b = 0; b < this.colonyBonds.length; b++) {
+          const bond = this.colonyBonds[b];
+          if (!bond) continue;
+          const idA = bond.a !== undefined ? bond.a : bond[0];
+          const idB = bond.b !== undefined ? bond.b : bond[1];
           const oA = this.currEntities.get(idA);
           const oB = this.currEntities.get(idB);
           if (oA && oB) {

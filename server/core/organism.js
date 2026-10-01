@@ -131,21 +131,27 @@ export class Organism {
       steerX = chem.gradNutrientX * this.genome.chemotaxisNutrient + chem.gradWasteX * this.genome.chemotaxisWaste;
       steerY = chem.gradNutrientY * this.genome.chemotaxisNutrient + chem.gradWasteY * this.genome.chemotaxisWaste;
 
-      // 2.5. Active Visitor Food Scent Luring (Sensory horizon up to 520 μm!)
+      // 2.5. Active Visitor Food Scent Luring vs Detritus Scavenging
       var isLuredToFood = false;
       var foodLureDist = Infinity;
+      var isDetritusTarget = false;
 
       if (nutrientBlooms && nutrientBlooms.length > 0 && this.carnivory < 0.78) {
         let closestBloom = null;
-        let closestDist = 520.0; // Broad sensory range across the petri dish!
+        let closestDist = Infinity;
 
         for (let b = 0; b < nutrientBlooms.length; b++) {
           const bloom = nutrientBlooms[b];
           if (bloom.energy <= 0) continue;
           const d = Math.hypot(bloom.x - this.x, bloom.y - this.y);
-          if (d < closestDist) {
+
+          // Detritus has a strictly LOCAL sensory radius (75 μm)
+          // Visitor food drops have a moderate sensory radius (260 μm)
+          const maxSenseDist = bloom.isDetritus ? 75.0 : 260.0;
+          if (d < maxSenseDist && d < closestDist) {
             closestDist = d;
             closestBloom = bloom;
+            isDetritusTarget = !!bloom.isDetritus;
           }
         }
 
@@ -153,19 +159,44 @@ export class Organism {
           isLuredToFood = true;
           foodLureDist = closestDist;
 
-          // Highly potent, irresistible lure force that overrides random wandering
-          const distNorm = closestDist / 520.0;
-          const lureStrength = (1.0 - distNorm) * 8.5;
-          const dx = closestBloom.x - this.x;
-          const dy = closestBloom.y - this.y;
-          steerX += (dx / closestDist) * lureStrength;
-          steerY += (dy / closestDist) * lureStrength;
+          if (isDetritusTarget) {
+            // Gentle local scavenger attraction — does not overwhelm chemotaxis or crowding
+            const distNorm = closestDist / 75.0;
+            const lureStrength = (1.0 - distNorm) * 1.6;
+            const dx = closestBloom.x - this.x;
+            const dy = closestBloom.y - this.y;
+            steerX += (dx / closestDist) * lureStrength;
+            steerY += (dy / closestDist) * lureStrength;
 
-          // If organism arrives at the food bloom, graze directly from the bounty
-          if (closestDist < closestBloom.radius + this.size * 1.5) {
-            const bite = Math.min(closestBloom.energy, 4.0);
-            closestBloom.energy -= bite;
-            this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 2.0);
+            // Graze detritus
+            if (closestDist < closestBloom.radius + this.size * 1.2) {
+              const bite = Math.min(closestBloom.energy, 2.0);
+              closestBloom.energy -= bite;
+              this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 1.5);
+              if (this.maturity < 1.0) {
+                this.maturity = Math.min(1.0, this.maturity + 0.04);
+                this.size = Math.min(this.adultSize, this.adultSize * (0.38 + 0.62 * this.maturity));
+              }
+            }
+          } else {
+            // Visitor food bloom: responsive attraction but capped to prevent runaway singularity
+            const distNorm = closestDist / 260.0;
+            const lureStrength = (1.0 - distNorm) * 3.8;
+            const dx = closestBloom.x - this.x;
+            const dy = closestBloom.y - this.y;
+            steerX += (dx / closestDist) * lureStrength;
+            steerY += (dy / closestDist) * lureStrength;
+
+            // Graze visitor food
+            if (closestDist < closestBloom.radius + this.size * 1.5) {
+              const bite = Math.min(closestBloom.energy, 3.5);
+              closestBloom.energy -= bite;
+              this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 2.0);
+              if (this.maturity < 1.0) {
+                this.maturity = Math.min(1.0, this.maturity + 0.05);
+                this.size = Math.min(this.adultSize, this.adultSize * (0.38 + 0.62 * this.maturity));
+              }
+            }
           }
         }
       }
@@ -180,6 +211,10 @@ export class Organism {
     let separationY = 0;
 
     if (nearbyNeighbors.length > 0) {
+      let crowdCount = 0;
+      let crowdCenterX = 0;
+      let crowdCenterY = 0;
+
       for (let i = 0; i < nearbyNeighbors.length; i++) {
         const other = nearbyNeighbors[i];
         if (other === this) continue;
@@ -190,11 +225,18 @@ export class Organism {
         const d = Math.sqrt(d2) || 0.01;
 
         // A. Elastic volume exclusion (prevent awkward overlapping clumps & clumping)
-        const minDist = (this.size + other.size) * 1.35;
+        const minDist = (this.size + other.size) * 1.45;
         if (d < minDist) {
           const push = (minDist - d) / minDist;
-          separationX -= (dx / d) * push * 2.8;
-          separationY -= (dy / d) * push * 2.8;
+          separationX -= (dx / d) * push * 4.5;
+          separationY -= (dy / d) * push * 4.5;
+        }
+
+        // Measure crowd density within 4x size
+        if (d < (this.size + other.size) * 2.5) {
+          crowdCount++;
+          crowdCenterX += dx;
+          crowdCenterY += dy;
         }
 
         // B. Identify single nearest threat / prey to avoid force cancellation
@@ -205,6 +247,16 @@ export class Organism {
           nearestPreyDist = d;
           nearestPrey = { dx, dy, d };
         }
+      }
+
+      // C. Active Anti-Clumping Dispersal: if crowded by more than 5 neighbors, strongly push away from crowd center
+      if (crowdCount >= 5) {
+        const avgDx = crowdCenterX / crowdCount;
+        const avgDy = crowdCenterY / crowdCount;
+        const avgDist = Math.hypot(avgDx, avgDy) || 0.01;
+        const crowdRepulsion = Math.min(5.5, (crowdCount - 4) * 1.2);
+        separationX -= (avgDx / avgDist) * crowdRepulsion;
+        separationY -= (avgDy / avgDist) * crowdRepulsion;
       }
     }
 
@@ -299,9 +351,9 @@ export class Organism {
       speedMultiplier = 0.7 + 0.5 * ciliaryPulse;
     }
 
-    if (isLuredToFood && foodLureDist < 320 && !isPiloted) {
+    if (isLuredToFood && !isDetritusTarget && foodLureDist < 260 && !isPiloted) {
       // Vigorous rush towards user-dropped food!
-      const sprintFactor = Math.pow(1.0 - foodLureDist / 320, 0.75) * 1.15;
+      const sprintFactor = Math.pow(1.0 - foodLureDist / 260, 0.75) * 1.15;
       speedMultiplier += sprintFactor;
       this.phase += 0.06; // Faster cilia beat
     }
