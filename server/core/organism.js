@@ -123,13 +123,17 @@ export class Organism {
       steerX = chem.gradNutrientX * this.genome.chemotaxisNutrient + chem.gradWasteX * this.genome.chemotaxisWaste;
       steerY = chem.gradNutrientY * this.genome.chemotaxisNutrient + chem.gradWasteY * this.genome.chemotaxisWaste;
 
-      // 2.5. Active Visitor Food Scent Luring (Sensory horizon up to 480 μm!)
-      if (nutrientBlooms && nutrientBlooms.length > 0 && this.carnivory < 0.65) {
+      // 2.5. Active Visitor Food Scent Luring (Sensory horizon up to 520 μm!)
+      var isLuredToFood = false;
+      var foodLureDist = Infinity;
+
+      if (nutrientBlooms && nutrientBlooms.length > 0 && this.carnivory < 0.78) {
         let closestBloom = null;
-        let closestDist = 480.0; // Broad sensory range across the petri dish!
+        let closestDist = 520.0; // Broad sensory range across the petri dish!
 
         for (let b = 0; b < nutrientBlooms.length; b++) {
           const bloom = nutrientBlooms[b];
+          if (bloom.energy <= 0) continue;
           const d = Math.hypot(bloom.x - this.x, bloom.y - this.y);
           if (d < closestDist) {
             closestDist = d;
@@ -138,18 +142,22 @@ export class Organism {
         }
 
         if (closestBloom) {
-          // Strong, irresistible lure pull towards user-dropped food
-          const lureStrength = Math.pow(1.0 - closestDist / 480.0, 1.2) * 4.2;
+          isLuredToFood = true;
+          foodLureDist = closestDist;
+
+          // Highly potent, irresistible lure force that overrides random wandering
+          const distNorm = closestDist / 520.0;
+          const lureStrength = (1.0 - distNorm) * 8.5;
           const dx = closestBloom.x - this.x;
           const dy = closestBloom.y - this.y;
           steerX += (dx / closestDist) * lureStrength;
           steerY += (dy / closestDist) * lureStrength;
 
           // If organism arrives at the food bloom, graze directly from the bounty
-          if (closestDist < closestBloom.radius + this.size) {
-            const bite = Math.min(closestBloom.energy, 3.5);
+          if (closestDist < closestBloom.radius + this.size * 1.5) {
+            const bite = Math.min(closestBloom.energy, 4.0);
             closestBloom.energy -= bite;
-            this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 1.8);
+            this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 2.0);
           }
         }
       }
@@ -251,24 +259,30 @@ export class Organism {
       }
     }
 
-    // Smooth angular turning with inertia (prevent rapid 180° twitching, but responsive when piloted)
+    // Smooth angular turning with inertia (snappy & reactive when lured to food or piloted)
     const steerMag = Math.sqrt(steerX * steerX + steerY * steerY);
     if (steerMag > 0.05) {
       const targetHeading = Math.atan2(steerY, steerX);
       let angleDiff = targetHeading - this.heading;
       while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
       while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-      const maxTurn = isPiloted ? 0.65 : ((distCenter > R - margin) ? 0.45 : 0.28);
-      const turnRate = isPiloted ? 0.55 : 0.25;
+      const maxTurn = isPiloted ? 0.65 : (isLuredToFood ? 0.55 : ((distCenter > R - margin) ? 0.45 : 0.28));
+      const turnRate = isPiloted ? 0.55 : (isLuredToFood ? 0.48 : 0.25);
       this.heading += Math.max(-maxTurn, Math.min(maxTurn, angleDiff * turnRate));
     } else {
       // Gentle forward wander
       this.heading += (Math.random() - 0.5) * 0.08;
     }
 
-    // Continuous rhythmic ciliary propulsion
+    // Continuous rhythmic ciliary propulsion with chemotactic feeding sprint
     const ciliaryPulse = 0.5 + 0.5 * Math.sin(this.phase);
-    const speedMultiplier = isPiloted ? 1.45 : (0.7 + 0.5 * ciliaryPulse);
+    let speedMultiplier = isPiloted ? 1.45 : (0.7 + 0.5 * ciliaryPulse);
+    if (isLuredToFood && foodLureDist < 320) {
+      // Vigorous rush towards user-dropped food!
+      const sprintFactor = Math.pow(1.0 - foodLureDist / 320, 0.75) * 1.15;
+      speedMultiplier += sprintFactor;
+      this.phase += 0.06; // Faster cilia beat
+    }
 
     const targetVx = Math.cos(this.heading) * this.maxSpeed * speedMultiplier * tempFactor;
     const targetVy = Math.sin(this.heading) * this.maxSpeed * speedMultiplier * tempFactor;

@@ -277,8 +277,27 @@ export class InputController {
 
     // 2. Otherwise, drop nutrient into the petri chamber!
     const worldPt = this.renderer.screenToWorld(screenX, screenY);
-    const wx = worldPt.x;
-    const wy = worldPt.y;
+    const ch = this.renderer.chamber || { cx: 700, cy: 700, r: 620 };
+    const dx = worldPt.x - ch.cx;
+    const dy = worldPt.y - ch.cy;
+    const dist = Math.hypot(dx, dy);
+
+    // If tapped outside the liquid droplet, do not drop food into the void!
+    if (dist > ch.r - 12) {
+      // Gentle subtle optical refraction ripple on the glass wall without food
+      this.renderer.addRipple(worldPt.x, worldPt.y, 'rgba(0, 240, 255, 0.35)', 35);
+      sound.playDroplet(380);
+      return;
+    }
+
+    // Clamp near-edge drops smoothly inward to (ch.r - 45) so food lands in open swimming waters
+    let wx = worldPt.x;
+    let wy = worldPt.y;
+    const maxDropR = ch.r - 45;
+    if (dist > maxDropR && dist > 0) {
+      wx = ch.cx + (dx / dist) * maxDropR;
+      wy = ch.cy + (dy / dist) * maxDropR;
+    }
 
     // Immediately spawn food bloom locally for 0ms instant feedback
     this.renderer.spawnFoodBloom(wx, wy);

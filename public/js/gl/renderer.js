@@ -100,6 +100,21 @@ export class OceanRenderer {
 
   // Spawn rich glowing phytomanna / nutrient spore cluster
   spawnFoodBloom(wx, wy, count = 24) {
+    const ch = this.chamber;
+    if (ch) {
+      const dx = wx - ch.cx;
+      const dy = wy - ch.cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist > ch.r - 12) {
+        return; // Strictly inside droplet only!
+      }
+      const maxR = ch.r - 45;
+      if (dist > maxR && dist > 0) {
+        wx = ch.cx + (dx / dist) * maxR;
+        wy = ch.cy + (dy / dist) * maxR;
+      }
+    }
+
     const hueBase = 0.23; // Emerald-golden bioluminescent nutrition
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -856,9 +871,13 @@ export class OceanRenderer {
         const org = organisms[o];
         const odx = org.x - p.x;
         const ody = org.y - p.y;
-        const eatDist = (org.size + p.size) * 1.1;
+        const eatDist = (org.size + p.size) * 1.35;
         if (odx * odx + ody * ody < eatDist * eatDist) {
           consumed = true;
+          // Spawn little emerald sparkle feeding ripple
+          if (Math.random() < 0.4) {
+            this.addRipple(p.x, p.y, 'rgba(190, 242, 100, 0.75)', 24);
+          }
           break;
         }
       }
@@ -1292,6 +1311,14 @@ export class OceanRenderer {
     return {
       x: (screenX - this.camera.viewportW * 0.5) / this.camera.zoom + this.camera.x,
       y: (screenY - this.camera.viewportH * 0.5) / this.camera.zoom + this.camera.y
+    };
+  }
+
+  // Convert world coordinates into screen coordinates
+  worldToScreen(worldX, worldY) {
+    return {
+      x: (worldX - this.camera.x) * this.camera.zoom + this.camera.viewportW * 0.5,
+      y: (worldY - this.camera.y) * this.camera.zoom + this.camera.viewportH * 0.5
     };
   }
 }

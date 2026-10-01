@@ -233,6 +233,11 @@ export class SimulationEngine {
     if (deadSet.size > 0) {
       for (const deadId of deadSet) {
         this.colonies.removeOrganism(deadId);
+        if (this.pilotedMap.has(deadId)) {
+          const clientId = this.pilotedMap.get(deadId);
+          this.pilotedMap.delete(deadId);
+          this.clientPilotMap.delete(clientId);
+        }
       }
       this.organisms = this.organisms.filter(o => !deadSet.has(o.id));
     }
@@ -311,18 +316,39 @@ export class SimulationEngine {
   // Handle external visitor perturbation (dropping nutrients, stirring water)
   injectInteraction(type, x, y, options = {}) {
     if (type === 'nutrient_drop') {
+      const CX = CONFIG.CHAMBER_CENTER_X;
+      const CY = CONFIG.CHAMBER_CENTER_Y;
+      const R = CONFIG.CHAMBER_RADIUS;
+      const dx = x - CX;
+      const dy = y - CY;
+      const dist = Math.hypot(dx, dy);
+
+      // Never drop food outside the droplet!
+      if (dist > R - 10) {
+        return { success: false, reason: 'outside_droplet' };
+      }
+
+      // Clamp near-edge drops safely inside the open swimming zone so organisms can reach it
+      let dropX = x;
+      let dropY = y;
+      const maxDropR = R - 45;
+      if (dist > maxDropR && dist > 0) {
+        dropX = CX + (dx / dist) * maxDropR;
+        dropY = CY + (dy / dist) * maxDropR;
+      }
+
       const bloom = {
         id: this.nextBloomId++,
-        x,
-        y,
-        energy: 280.0, // Substantial nutritional bounty
-        radius: 85.0,  // Visually rich dispersion radius
-        maxAge: 300,   // ~30 seconds active lifespan
+        x: dropX,
+        y: dropY,
+        energy: 380.0, // Substantial nutritional bounty
+        radius: 95.0,  // Visually rich dispersion radius
+        maxAge: 350,   // ~35 seconds active lifespan
         age: 0
       };
       this.nutrientBlooms.push(bloom);
-      this.grid.injectDrop(x, y, 3.5, 85);
-      return { success: true, type: 'nutrient_drop', x, y, bloom };
+      this.grid.injectDrop(dropX, dropY, 4.5, 95);
+      return { success: true, type: 'nutrient_drop', x: dropX, y: dropY, bloom };
     } else if (type === 'thermal_burst') {
       this.grid.injectDrop(x, y, 4.0, 110);
       return { success: true, type: 'thermal_burst', x, y };
