@@ -36,15 +36,18 @@ export class BioInspector {
       this.trackBtn.style.borderColor = this.isTracking ? 'var(--accent-cyan)' : 'var(--border-subtle)';
     });
 
-    this.diveBtn?.addEventListener('click', () => {
-      if (this.selectedId && this.client.diveEngine) {
+    this.diveBtn?.addEventListener('click', async () => {
+      if (this.selectedId) {
         if (this.renderer.pilotedIds && (this.renderer.pilotedIds.has(this.selectedId) || this.renderer.pilotedIds.has(Number(this.selectedId)))) {
           return;
         }
         this.renderer.camera.trackedEntityId = this.selectedId;
         this.isTracking = true;
         this.panel.classList.add('hidden');
-        this.client.diveEngine.enter(this.selectedId);
+        const engine = await this.client.getDiveEngine();
+        if (engine) {
+          engine.enter(this.selectedId);
+        }
       }
     });
 
@@ -172,6 +175,34 @@ export class BioInspector {
     }
 
     if (offspring) offspring.textContent = `${profile.childrenCount} ${i18n.t('unit_children')}`;
+
+    // Ontogenesis Development Stage
+    const stage = document.getElementById('bio-stage');
+    if (stage) {
+      const maturity = profile.maturity !== undefined ? profile.maturity : 100;
+      if (maturity < 45) {
+        stage.innerHTML = `<span class="stage-juvenile">${isRu ? '🌱 Ювенил' : '🌱 Juvenile'} (${maturity}%)</span>`;
+      } else if (maturity < 85) {
+        stage.innerHTML = `<span class="stage-subadult">${isRu ? '🌿 Подрастающая' : '🌿 Subadult'} (${maturity}%)</span>`;
+      } else {
+        stage.innerHTML = `<span class="stage-adult">${isRu ? '🌳 Взрослая особь' : '🌳 Mature Adult'}</span>`;
+      }
+    }
+
+    // Founder Dynasty Badge
+    const founderRow = document.getElementById('bio-founder-row');
+    const founderVal = document.getElementById('bio-founder');
+    if (founderRow && founderVal) {
+      if (profile.founderName) {
+        founderRow.classList.remove('hidden');
+        founderVal.textContent = `👑 ${profile.founderName}`;
+      } else if (profile.isAvatarLineage) {
+        founderRow.classList.remove('hidden');
+        founderVal.textContent = `✨ ${isRu ? 'Потомок Аватара' : 'Avatar Lineage'}`;
+      } else {
+        founderRow.classList.add('hidden');
+      }
+    }
 
     if (this.diveBtn) {
       const isPiloted = this.renderer.pilotedIds && (this.renderer.pilotedIds.has(this.selectedId) || this.renderer.pilotedIds.has(Number(this.selectedId)));

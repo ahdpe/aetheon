@@ -1579,6 +1579,232 @@ body.mode-lab .interactive-hint {
   color: #94a3b8;
 }
 
+/* Droplet Live Snapshot in Journal & Atlas */
+.journal-card-snapshot {
+  width: 100%;
+  max-width: 320px;
+  margin: 6px auto 10px auto;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 240, 255, 0.28);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55), inset 0 0 12px rgba(0, 240, 255, 0.1);
+  background: #020d1a;
+  position: relative;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.journal-card-snapshot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.25s ease;
+}
+
+.journal-card-snapshot:hover img {
+  transform: scale(1.03);
+}
+
+.journal-card-snapshot svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.journal-snapshot-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.6px;
+  background: rgba(2, 13, 26, 0.88);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  border-radius: 4px;
+  padding: 3px 7px;
+  color: #38bdf8;
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+  font-weight: 600;
+}
+
+.atlas-screenshot-img {
+  width: 100%;
+  height: 100%;
+  max-height: 380px;
+  object-fit: contain;
+  display: block;
+  border-radius: 8px;
+}
+
+/* Organism Micro-Portrait for Journal Cards */
+.journal-organism-portrait {
+  margin: 10px 0 12px;
+  background: rgba(3, 18, 33, 0.7);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: inset 0 0 14px rgba(0, 240, 255, 0.05);
+}
+
+.portrait-lens {
+  width: 90px;
+  height: 80px;
+  background: radial-gradient(circle, rgba(4, 32, 54, 0.9) 0%, rgba(2, 13, 26, 0.95) 100%);
+  border: 1px solid rgba(0, 240, 255, 0.45);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.15);
+  overflow: hidden;
+}
+
+.organism-svg-view {
+  width: 100%;
+  height: 100%;
+}
+
+.portrait-details {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.portrait-badge {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: #38bdf8;
+  text-transform: uppercase;
+}
+
+.portrait-title {
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #f1f5f9;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.portrait-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: #94a3b8;
+}
+
+.portrait-stats span {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 5px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Cataclysm Event Banner in Journal */
+.journal-cataclysm-banner {
+  margin: 10px 0 12px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(185, 28, 28, 0.08) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cataclysm-banner-icon {
+  font-size: 20px;
+}
+
+.cataclysm-banner-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #fca5a5;
+  letter-spacing: 0.6px;
+}
+
+/* Top HUD Cataclysm Banner */
+.cataclysm-banner {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(239, 68, 68, 0.6);
+  border-radius: 8px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 8px 24px rgba(239, 68, 68, 0.35), 0 0 15px rgba(239, 68, 68, 0.2);
+  backdrop-filter: blur(12px);
+  max-width: 90vw;
+  animation: cataclysmPulse 2.5s infinite ease-in-out;
+}
+
+@keyframes cataclysmPulse {
+  0%, 100% { border-color: rgba(239, 68, 68, 0.6); box-shadow: 0 8px 24px rgba(239, 68, 68, 0.25); }
+  50% { border-color: rgba(245, 158, 11, 0.9); box-shadow: 0 8px 28px rgba(245, 158, 11, 0.4); }
+}
+
+.cataclysm-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cataclysm-icon {
+  font-size: 20px;
+}
+
+.cataclysm-text-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.cataclysm-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #fca5a5;
+  letter-spacing: 0.6px;
+}
+
+.cataclysm-desc {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.cataclysm-phase-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
 .insight-tag {
   font-weight: 600;
   color: #38bdf8;
@@ -2553,7 +2779,7 @@ body.mode-lab .interactive-hint {
 
 .atlas-map-view {
   width: 100%;
-  max-width: 440px;
+  max-width: 360px;
   aspect-ratio: 1 / 1;
   display: flex;
   align-items: center;
@@ -3151,6 +3377,181 @@ body.mode-lab .interactive-hint {
   color: #ffffff !important;
   transform: translateY(-1px);
   box-shadow: 0 4px 18px rgba(0, 240, 255, 0.45);
+}
+
+/* Founder Dynasty Prompt Modal in 3D Dive */
+.dive-dynasty-modal {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 100;
+  pointer-events: auto;
+  max-width: 440px;
+  width: 90%;
+  padding: 24px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(245, 158, 11, 0.65);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7), 0 0 28px rgba(245, 158, 11, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: dynastySlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes dynastySlideIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -46%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.0);
+  }
+}
+
+.dynasty-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dynasty-crown {
+  font-size: 28px;
+  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.6));
+}
+
+.dynasty-header-text .dynasty-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fbbf24;
+  letter-spacing: 0.05em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.dynasty-header-text .dynasty-sub {
+  font-size: 11px;
+  color: #94a3b8;
+  font-family: var(--font-mono);
+}
+
+.dynasty-desc {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #cbd5e1;
+  margin: 0;
+}
+
+.dynasty-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.dynasty-input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #f8fafc;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.dynasty-input:focus {
+  border-color: #f59e0b;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.35);
+}
+
+.dynasty-submit-btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #d97706, #b45309);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 12.5px;
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.dynasty-submit-btn:hover {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.45);
+  transform: translateY(-1px);
+}
+
+.dynasty-footer-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dynasty-dismiss-btn {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 11.5px;
+  cursor: pointer;
+  padding: 4px 8px;
+  transition: color 0.15s;
+}
+
+.dynasty-dismiss-btn:hover {
+  color: #94a3b8;
+}
+
+/* Codex Founder Dynasty Pill */
+.species-founder-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.species-founder-pill .founder-crown {
+  font-size: 13px;
+}
+
+.species-founder-pill .founder-label {
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.species-founder-pill .founder-name {
+  color: #fef08a;
+  font-family: var(--font-mono);
+}
+
+/* Inspector Ontogenesis & Founder Styling */
+.stage-juvenile {
+  color: #a3e635;
+  font-weight: 600;
+}
+
+.stage-subadult {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.stage-adult {
+  color: #818cf8;
+  font-weight: 600;
+}
+
+.founder-val {
+  color: #fbbf24 !important;
+  font-weight: 600;
+  text-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
 }
 
 @media (max-width: 640px) {

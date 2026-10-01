@@ -158,7 +158,10 @@ export class DiveEnvironment {
     // Rotate to lie flat on XZ plane: X is horizontal, Z is depth, Y is altitude
     planeGeo.rotateX(-Math.PI * 0.5);
 
+    this.planeGeo = planeGeo;
     const pos = planeGeo.attributes.position;
+    this.baseElevations = new Float32Array(pos.count);
+
     for (let i = 0; i < pos.count; i++) {
       const vx = pos.getX(i);
       const vz = pos.getZ(i);
@@ -182,6 +185,7 @@ export class DiveEnvironment {
         elevation -= 22.0; // Shelf drops off outside petri chamber
       }
 
+      this.baseElevations[i] = elevation;
       pos.setY(i, elevation);
     }
     planeGeo.computeVertexNormals();
@@ -201,6 +205,60 @@ export class DiveEnvironment {
     this.terrainMesh = new THREE.Mesh(planeGeo, terrainMat);
     this.terrainMesh.position.set(0, 0, 0);
     this.scene.add(this.terrainMesh);
+  }
+
+  // Dynamically carve real 3D coral reef ridges from live substrate field
+  updateTerrainMeshHeights(thumbCanvas) {
+    if (!thumbCanvas || !this.planeGeo || !this.baseElevations) return;
+    try {
+      const ctx = thumbCanvas.getContext('2d');
+      if (!ctx) return;
+      const w = thumbCanvas.width;
+      const h = thumbCanvas.height;
+      const imgData = ctx.getImageData(0, 0, w, h);
+      const data = imgData.data;
+
+      const pos = this.planeGeo.attributes.position;
+      const halfSize = this.worldSize * 0.5;
+
+      for (let i = 0; i < pos.count; i++) {
+        const vx = pos.getX(i);
+        const vz = pos.getZ(i);
+        const distFromCenter = Math.hypot(vx, vz);
+        let elev = this.baseElevations[i];
+
+        if (distFromCenter < this.chamberRadius) {
+          const gx = Math.max(0, Math.min(w - 1, Math.round(((vx + halfSize) / this.worldSize) * (w - 1))));
+          const gy = Math.max(0, Math.min(h - 1, Math.round(((vz + halfSize) / this.worldSize) * (h - 1))));
+          const pIdx = (gy * w + gx) * 4;
+
+          // Alpha channel is substrate bio-calcite (0..255)
+          const sub = data[pIdx + 3] / 255;
+          if (sub > 0.08) {
+            elev += Math.pow(sub, 1.25) * 12.0;
+          }
+        }
+        pos.setY(i, elev);
+      }
+      pos.needsUpdate = true;
+      this.planeGeo.computeVertexNormals();
+    } catch (_) {}
+  }
+
+  updateVents(rawVents) {
+    if (!rawVents || !Array.isArray(rawVents)) return;
+    this.vents = rawVents;
+    this.calculateVentCoordinates();
+    if (this.ventHemispheres) {
+      for (let i = 0; i < Math.min(this.ventHemispheres.length, this.ventPositions3D.length); i++) {
+        const vh = this.ventHemispheres[i];
+        const vpos = this.ventPositions3D[i];
+        if (vh.outerDome) vh.outerDome.position.set(vpos.x, -10.0, vpos.z);
+        if (vh.coreDome) vh.coreDome.position.set(vpos.x, -10.0, vpos.z);
+        if (vh.halo) vh.halo.position.set(vpos.x, -12.4, vpos.z);
+        if (vh.light) vh.light.position.set(vpos.x, -2.0, vpos.z);
+      }
+    }
   }
 
   // Draw vibrant bioluminescent seabed canvas texture matching 2D chemical map & local light
@@ -527,6 +585,12 @@ export class DiveEnvironment {
     if (!this.lastSeafloorUpdate || time - this.lastSeafloorUpdate > 450) {
       this.lastSeafloorUpdate = time;
       this.renderSeafloorCanvas(thumbCanvas, playerX3D, playerZ3D, serverBlooms, playerColor);
+    }
+
+    // 1.6. Dynamic 3D seafloor topography update (throttled every 2200ms)
+    if (!this.lastTerrainUpdate || time - this.lastTerrainUpdate > 2200) {
+      this.lastTerrainUpdate = time;
+      this.updateTerrainMeshHeights(thumbCanvas);
     }
 
     // 1.8. Breathing pulsation of luminous bio-calcite hemispheres

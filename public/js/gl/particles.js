@@ -1,5 +1,5 @@
 export class ParticleSystem {
-  constructor(count = 1000, worldSize = 1400.0, chamber = { cx: 700.0, cy: 700.0, r: 620.0 }) {
+  constructor(count = 450, worldSize = 1400.0, chamber = { cx: 700.0, cy: 700.0, r: 620.0 }) {
     this.count = count;
     this.worldSize = worldSize;
     this.chamber = chamber;
@@ -34,7 +34,7 @@ export class ParticleSystem {
       this.vx[i] = (Math.random() - 0.5) * 0.4;
       this.vy[i] = (Math.random() - 0.5) * 0.4;
       this.depth[i] = 0.2 + Math.random() * 0.8;
-      this.size[i] = 1.0 + this.depth[i] * 2.5;
+      this.size[i] = 1.0 + this.depth[i] * 2.2;
       this.alpha[i] = 0.15 + this.depth[i] * 0.45;
       this.hue[i] = 0.5 + (Math.random() - 0.5) * 0.2; // Cyan/blue
     }
@@ -67,48 +67,70 @@ export class ParticleSystem {
       this.vy[i] = this.vy[i] * 0.98 + (Math.random() - 0.5) * 0.04;
     }
 
-    // Organisms stir nearby particles
+    // Organisms stir nearby particles (sub-sampled for high performance)
     if (organisms && organisms.length > 0) {
-      const stepCheck = Math.max(1, Math.floor(organisms.length / 50));
+      const stepCheck = Math.max(1, Math.floor(organisms.length / 30));
       for (let o = 0; o < organisms.length; o += stepCheck) {
         const org = organisms[o];
         const ox = org.x;
         const oy = org.y;
-        const r2 = (org.size * 2.5) * (org.size * 2.5);
+        const r2 = (org.size * 2.2) * (org.size * 2.2);
 
         // Push nearby particles
-        for (let p = 0; p < this.count; p += 4) {
+        for (let p = 0; p < this.count; p += 6) {
           const dx = this.x[p] - ox;
           const dy = this.y[p] - oy;
           const d2 = dx * dx + dy * dy;
           if (d2 < r2 && d2 > 0.1) {
-            const force = (1.0 - Math.sqrt(d2) / (org.size * 2.5)) * 0.8;
-            this.vx[p] += (org.vx * 0.4 + (dx / Math.sqrt(d2)) * 0.5) * force;
-            this.vy[p] += (org.vy * 0.4 + (dy / Math.sqrt(d2)) * 0.5) * force;
+            const force = (1.0 - Math.sqrt(d2) / (org.size * 2.2)) * 0.7;
+            this.vx[p] += (org.vx * 0.35 + (dx / Math.sqrt(d2)) * 0.4) * force;
+            this.vy[p] += (org.vy * 0.35 + (dy / Math.sqrt(d2)) * 0.4) * force;
           }
         }
       }
     }
   }
 
-  // Draw particles to Canvas context
+  // Draw particles to Canvas context using high-performance batched paths
   draw(ctx, camera) {
+    const w = camera.viewportW;
+    const h = camera.viewportH;
+    const camX = camera.x;
+    const camY = camera.y;
+    const zoom = camera.zoom;
+    const halfW = w * 0.5;
+    const halfH = h * 0.5;
+
     ctx.save();
+
+    // Pass 1: Background ambient drift particles (soft cyan)
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.22)';
+    ctx.beginPath();
     for (let i = 0; i < this.count; i++) {
-      const sx = (this.x[i] - camera.x) * camera.zoom + camera.viewportW * 0.5;
-      const sy = (this.y[i] - camera.y) * camera.zoom + camera.viewportH * 0.5;
-
-      // Cull offscreen
-      if (sx < -20 || sx > camera.viewportW + 20 || sy < -20 || sy > camera.viewportH + 20) {
-        continue;
-      }
-
-      const r = this.size[i] * camera.zoom;
-      ctx.beginPath();
-      ctx.arc(sx, sy, Math.max(0.6, r), 0, Math.PI * 2);
-      ctx.fillStyle = `hsla(${Math.round(this.hue[i] * 360)}, 85%, 65%, ${this.alpha[i]})`;
-      ctx.fill();
+      if (this.depth[i] >= 0.6) continue;
+      const sx = (this.x[i] - camX) * zoom + halfW;
+      const sy = (this.y[i] - camY) * zoom + halfH;
+      if (sx < -10 || sx > w + 10 || sy < -10 || sy > h + 10) continue;
+      const r = Math.max(0.6, this.size[i] * zoom);
+      ctx.moveTo(sx + r, sy);
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
     }
+    ctx.fill();
+
+    // Pass 2: Foreground luminous micro-spores (bright cyan/white)
+    ctx.fillStyle = 'rgba(125, 211, 252, 0.55)';
+    ctx.beginPath();
+    for (let i = 0; i < this.count; i++) {
+      if (this.depth[i] < 0.6) continue;
+      const sx = (this.x[i] - camX) * zoom + halfW;
+      const sy = (this.y[i] - camY) * zoom + halfH;
+      if (sx < -10 || sx > w + 10 || sy < -10 || sy > h + 10) continue;
+      const r = Math.max(0.8, this.size[i] * zoom);
+      ctx.moveTo(sx + r, sy);
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    }
+    ctx.fill();
+
     ctx.restore();
   }
 }

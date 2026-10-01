@@ -90,6 +90,18 @@
     </div>
   </header>
 
+  <!-- Cataclysm Extinction Crisis Alert Banner -->
+  <div class="cataclysm-banner hidden" id="cataclysm-banner" role="alert" aria-live="assertive">
+    <div class="cataclysm-banner-content">
+      <span class="cataclysm-icon" id="cataclysm-icon">⚠️</span>
+      <div class="cataclysm-text-wrap">
+        <div class="cataclysm-title" id="cataclysm-title">ВЕЛИКОЕ ВЫМИРАНИЕ</div>
+        <div class="cataclysm-desc" id="cataclysm-desc">Биосферный кризис в капле.</div>
+      </div>
+      <div class="cataclysm-phase-badge" id="cataclysm-phase-badge">ФАЗА: КРИЗИС</div>
+    </div>
+  </div>
+
   <!-- Lab Mode Diagnostics Ribbon (Visible only in Lab Mode) -->
   <div class="lab-ribbon glass-panel" id="lab-ribbon" aria-label="Laboratory Diagnostics">
     <div class="lab-ribbon-left">
@@ -101,6 +113,9 @@
       <span class="lab-metric">🧬 <span data-i18n="diversity_index">Shannon H'</span>: <strong id="lab-shannon-h">2.41</strong></span>
       <span class="lab-sep">•</span>
       <span class="lab-metric" id="lab-climate-metric">🌡️ <span data-i18n="climate_metric">Climate</span>: <strong id="lab-climate-text">29.4°C • TEMPERATE</strong></span>
+      <span class="lab-sep">•</span>
+      <span class="lab-metric" id="lab-stagnation-metric">💥 <span data-i18n="stagnation_metric">Stagnation</span>: <strong id="lab-stagnation-val">0%</strong></span>
+      <button class="lab-action-btn" id="btn-trigger-cataclysm" title="Инициировать Великое Вымирание (Эксперимент)">💥 Катаклизм</button>
     </div>
     <div class="lab-legend">
       <span class="legend-item"><span class="legend-dot green"></span> <span data-i18n="legend_grazer">Grazer Thrust</span></span>
@@ -211,6 +226,14 @@
       <div class="vital-row">
         <span class="vital-label" data-i18n="offspring">Offspring</span>
         <span class="vital-val" id="bio-offspring">3 children</span>
+      </div>
+      <div class="vital-row" id="bio-stage-row">
+        <span class="vital-label" data-i18n="stage">Стадия развития</span>
+        <span class="vital-val" id="bio-stage">Взрослая особь</span>
+      </div>
+      <div class="vital-row hidden" id="bio-founder-row">
+        <span class="vital-label" data-i18n="founder">Династия</span>
+        <span class="vital-val founder-val" id="bio-founder">👑 Наблюдатель</span>
       </div>
     </div>
 

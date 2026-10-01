@@ -22,6 +22,11 @@ export class DiveCockpitHUD {
     this.ciliaCanvas = null;
     this.ciliaCtx = null;
 
+    // Founder dynasty milestone tracking (20s continuous piloting)
+    this.pilotedSeconds = 0;
+    this.dynastyPromptShown = false;
+    this.lastUpdateTime = 0;
+
     this.setupDOM();
     this.setupCiliaCanvas();
     this.setupInputListeners();
@@ -120,6 +125,27 @@ export class DiveCockpitHUD {
 
       <!-- Cinematic Event Flash Overlays -->
       <div class="dive-event-overlay" id="dive-event-overlay"></div>
+
+      <!-- Founder Dynasty Modal (Appears after 20s of piloting) -->
+      <div class="dive-dynasty-modal glass-panel hidden" id="dive-dynasty-modal">
+        <div class="dynasty-modal-header">
+          <span class="dynasty-crown">👑</span>
+          <div class="dynasty-header-text">
+            <h3 class="dynasty-title" data-i18n="dynasty_title">РОДОСЛОВНАЯ НАБЛЮДАТЕЛЯ</h3>
+            <span class="dynasty-sub" data-i18n="dynasty_sub">Связь с аватаром активна более 20 секунд</span>
+          </div>
+        </div>
+        <p class="dynasty-desc" data-i18n="dynasty_desc">
+          Ваша воля направила эволюцию этой особи. Впишите имя Наблюдателя, чтобы навечно закрепить правящую династию в Кодексе видов:
+        </p>
+        <div class="dynasty-input-row">
+          <input type="text" id="dive-dynasty-input" class="dynasty-input" maxlength="24" data-i18n-placeholder="dynasty_placeholder" placeholder="Имя Наблюдателя..." autocomplete="off">
+          <button type="button" id="dive-dynasty-submit" class="dynasty-submit-btn" data-i18n="dynasty_enshrine">Увековечить</button>
+        </div>
+        <div class="dynasty-footer-row">
+          <button type="button" id="dive-dynasty-dismiss" class="dynasty-dismiss-btn" data-i18n="dynasty_later">Позже</button>
+        </div>
+      </div>
     `;
 
     this.exitBtn = document.getElementById('dive-exit-btn');
@@ -131,6 +157,40 @@ export class DiveCockpitHUD {
     boostBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       this.engine.triggerBoost();
+    });
+
+    // Dynasty naming listeners
+    const submitBtn = document.getElementById('dive-dynasty-submit');
+    const dismissBtn = document.getElementById('dive-dynasty-dismiss');
+    const modal = document.getElementById('dive-dynasty-modal');
+    const dynastyInput = document.getElementById('dive-dynasty-input');
+
+    dynastyInput?.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        submitBtn?.click();
+      }
+    });
+
+    submitBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const name = dynastyInput?.value?.trim();
+      const org = this.engine.currentOrg;
+      if (name && name.length > 0 && org) {
+        localStorage.setItem('aetheon_observer_name', name);
+        this.engine.app?.sendLineageFounder?.(org.speciesId, name);
+        modal?.classList.add('hidden');
+        this.showCinematicEvent(
+          i18n.getLang() === 'ru' ? '👑 ДИНАСТИЯ ОСНОВАНА' : '👑 DYNASTY FOUNDED',
+          i18n.getLang() === 'ru' ? `Наблюдатель «${name}» внесен в Кодекс` : `Observer "${name}" enshrined in Codex`,
+          '#f59e0b'
+        );
+      }
+    });
+
+    dismissBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      modal?.classList.add('hidden');
     });
   }
 
@@ -328,8 +388,10 @@ export class DiveCockpitHUD {
             joyKnob.style.transform = `translate(${kx}px, ${ky}px)`;
           }
 
-          this.steerX = kx / maxR;
-          this.steerY = ky / maxR;
+          // User-frame controls: dy < 0 is forward (+), dy > 0 is brake/reverse (-)
+          // dx > 0 is steer right (+), dx < 0 is steer left (-)
+          this.joyFwd = -ky / maxR;
+          this.joySide = kx / maxR;
         } else if (touch.identifier === this.lookTouchId) {
           const ldx = touch.clientX - this.lastTouchPos.x;
           const ldy = touch.clientY - this.lastTouchPos.y;
@@ -348,8 +410,11 @@ export class DiveCockpitHUD {
         if (touch.identifier === this.joystickTouchId) {
           this.joystickActive = false;
           this.joystickTouchId = null;
+          this.joyFwd = 0;
+          this.joySide = 0;
           this.steerX = 0;
           this.steerY = 0;
+          this.thrust = 0;
           if (joyKnob) joyKnob.style.transform = 'translate(0, 0)';
           if (joyBase) joyBase.style.display = 'none';
         } else if (touch.identifier === this.lookTouchId) {
@@ -379,6 +444,31 @@ export class DiveCockpitHUD {
     this.steerY = 0;
     this.lookYaw = 0;
     this.lookPitch = 0;
+    this.pilotedSeconds = 0;
+    this.dynastyPromptShown = false;
+    this.lastUpdateTime = 0;
+    document.getElementById('dive-dynasty-modal')?.classList.add('hidden');
+  }
+
+  checkAndShowDynastyPrompt(org) {
+    this.dynastyPromptShown = true;
+    const modal = document.getElementById('dive-dynasty-modal');
+    if (!modal || !org) return;
+
+    // Check if this species already has a founder recorded in codex
+    const app = this.engine.app;
+    const sp = app?.codexModal?.allSpecies?.find(s => s.id === org.speciesId);
+    if (sp && sp.founderName) {
+      return; // Already has an enshrined founder
+    }
+
+    modal.classList.remove('hidden');
+    const input = document.getElementById('dive-dynasty-input');
+    if (input) {
+      const savedName = localStorage.getItem('aetheon_observer_name') || '';
+      input.value = savedName;
+      setTimeout(() => input.focus(), 120);
+    }
   }
 
   // Update telemetry display every frame
@@ -387,28 +477,59 @@ export class DiveCockpitHUD {
     const isRu = i18n.getLang() === 'ru';
     const totalYaw = currentHeading + this.lookYaw;
 
-    // 1. Keyboard steering accumulation
-    if (!this.joystickActive) {
-      let sx = 0;
-      let sy = 0;
+    // Track active piloting time for the Founder Dynasty milestone (20s)
+    const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    if (!this.lastUpdateTime) this.lastUpdateTime = now;
+    const dt = Math.min(0.2, (now - this.lastUpdateTime) / 1000);
+    this.lastUpdateTime = now;
+    this.pilotedSeconds += dt;
+
+    if (this.pilotedSeconds >= 20 && !this.dynastyPromptShown) {
+      this.checkAndShowDynastyPrompt(org);
+    }
+
+    // 1. Steering & Thrust accumulation
+    let sx = 0;
+    let sy = 0;
+    let thrust = 0;
+
+    if (this.joystickActive) {
+      // Mobile touch joystick projected along camera viewing angle
+      const fwd = this.joyFwd || 0;
+      const side = this.joySide || 0;
+      // Forward unit vector: (cos(totalYaw), sin(totalYaw))
+      // Right unit vector in 2D (+90 deg): (-sin(totalYaw), cos(totalYaw))
+      sx = Math.cos(totalYaw) * fwd + (-Math.sin(totalYaw)) * side;
+      sy = Math.sin(totalYaw) * fwd + (Math.cos(totalYaw)) * side;
+      thrust = fwd;
+      this.steerX = sx;
+      this.steerY = sy;
+      this.thrust = thrust;
+    } else {
+      // Desktop Keyboard WASD
       if (this.keys.w) {
         sx += Math.cos(totalYaw);
         sy += Math.sin(totalYaw);
+        thrust += 1.0;
       }
       if (this.keys.s) {
-        sx -= Math.cos(totalYaw) * 0.6;
-        sy -= Math.sin(totalYaw) * 0.6;
+        sx -= Math.cos(totalYaw);
+        sy -= Math.sin(totalYaw);
+        thrust -= 0.6;
       }
       if (this.keys.a) {
-        sx += Math.cos(totalYaw - Math.PI * 0.5) * 0.8;
-        sy += Math.sin(totalYaw - Math.PI * 0.5) * 0.8;
+        // Steer/Strafe Left (-90 deg from totalYaw)
+        sx += Math.sin(totalYaw);
+        sy += -Math.cos(totalYaw);
       }
       if (this.keys.d) {
-        sx += Math.cos(totalYaw + Math.PI * 0.5) * 0.8;
-        sy += Math.sin(totalYaw + Math.PI * 0.5) * 0.8;
+        // Steer/Strafe Right (+90 deg from totalYaw)
+        sx += -Math.sin(totalYaw);
+        sy += Math.cos(totalYaw);
       }
       this.steerX = sx;
       this.steerY = sy;
+      this.thrust = thrust;
     }
 
     // 2. Draw live beating cellular cilia

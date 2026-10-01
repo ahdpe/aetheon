@@ -104,7 +104,8 @@ export class NetworkManager {
       if (typeof msg.id === 'number' && typeof msg.steerX === 'number' && typeof msg.steerY === 'number') {
         const sx = Math.max(-1.5, Math.min(1.5, msg.steerX));
         const sy = Math.max(-1.5, Math.min(1.5, msg.steerY));
-        this.engine.applySteer(msg.id, sx, sy);
+        const thrust = typeof msg.thrust === 'number' ? Math.max(-1.0, Math.min(1.5, msg.thrust)) : 1.0;
+        this.engine.applySteer(msg.id, sx, sy, thrust);
       }
     } else if (msg.type === 'dive_start') {
       const granted = this.engine.claimPilot(msg.id, ws.clientId);
@@ -116,6 +117,20 @@ export class NetworkManager {
       }));
     } else if (msg.type === 'dive_stop') {
       this.engine.releasePilot(ws.clientId);
+    } else if (msg.type === 'name_lineage') {
+      if (typeof msg.speciesId === 'number' && typeof msg.founderName === 'string') {
+        const cleanName = msg.founderName.trim().slice(0, 32);
+        if (cleanName.length > 0) {
+          const sp = this.engine.nameSpeciesFounder(msg.speciesId, cleanName);
+          if (sp) {
+            const codexPayload = JSON.stringify({
+              type: 'codex',
+              species: this.engine.lineage.getAllSpecies()
+            });
+            this.broadcastRaw(codexPayload);
+          }
+        }
+      }
     }
   }
 

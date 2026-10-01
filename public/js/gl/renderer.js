@@ -274,6 +274,15 @@ export class OceanRenderer {
     ctx.arc(chScreenX, chScreenY, chScreenR, 0, Math.PI * 2);
     ctx.clip();
 
+    // 3.1. Deep oceanic living fluid baseline (guarantees vibrant oceanic blue from frame 1)
+    const fluidGrad = ctx.createRadialGradient(chScreenX, chScreenY, chScreenR * 0.05, chScreenX, chScreenY, chScreenR);
+    fluidGrad.addColorStop(0, '#042845');
+    fluidGrad.addColorStop(0.55, '#02182b');
+    fluidGrad.addColorStop(1.0, '#010c18');
+    ctx.fillStyle = fluidGrad;
+    ctx.fillRect(chScreenX - chScreenR, chScreenY - chScreenR, chScreenR * 2, chScreenR * 2);
+
+    // 3.2. Continuous living chemical substrate & reef matrix
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.globalAlpha = this.isLabMode ? 0.70 : 0.42;
@@ -290,6 +299,17 @@ export class OceanRenderer {
       ctx.globalAlpha = 0.28;
       ctx.drawImage(this.thumbCanvas, originX, originY, wsPix, wsPix);
       ctx.globalCompositeOperation = 'source-over';
+    }
+
+    // 3.3. Initial synchronization indicator if live entities have not yet streamed
+    if (this.currEntities.size === 0) {
+      const pulse = 0.5 + 0.5 * Math.sin(time * 0.005);
+      ctx.fillStyle = `rgba(56, 189, 248, ${(0.40 + pulse * 0.35).toFixed(2)})`;
+      ctx.font = '500 13px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const isRu = (window.aetheonApp && window.aetheonApp.i18n && window.aetheonApp.i18n.getLang() === 'ru');
+      ctx.fillText(isRu ? '◈ Синхронизация с биосферой капли...' : '◈ Synchronizing with living droplet...', chScreenX, chScreenY);
     }
     ctx.restore();
 
@@ -320,6 +340,22 @@ export class OceanRenderer {
         ctx.lineWidth = 1.4;
         ctx.beginPath();
         ctx.arc(vx, vy, pulseR, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Ephemeral benthic fumaroles: eruptive pulse rings and sparkling plume halo
+      if (vent.isEphemeral) {
+        const fumPulse = vr * (1.15 + 0.35 * Math.sin(time * 0.007 + i * 2.1));
+        ctx.strokeStyle = `hsla(${hDeg}, 95%, 85%, ${(0.45 * (vent.intensity || 1.0)).toFixed(2)})`;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(vx, vy, fumPulse, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = `hsla(${hDeg}, 90%, 95%, ${(0.25 * (vent.intensity || 1.0)).toFixed(2)})`;
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.arc(vx, vy, fumPulse * 1.4, 0, Math.PI * 2);
         ctx.stroke();
       }
 
@@ -409,58 +445,95 @@ export class OceanRenderer {
 
   // Render organic soft-body Aetheobiont with translucent membrane, species-specific morphotype, markings, and cilia
   drawOrganism(ctx, x, y, r, org, heading, isSelected, time) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(heading);
-
+    const isPiloted = this.pilotedIds && (this.pilotedIds.has(org.id) || this.pilotedIds.has(Number(org.id)));
+    const pulse = Math.sin(time * 0.008 + org.id) * 0.12;
+    const bodyR = Math.max(1.8, r * (1.0 + pulse));
     const hue = Math.round(org.hue * 360);
     const speed = Math.sqrt((org.vx || 0) * (org.vx || 0) + (org.vy || 0) * (org.vy || 0));
     const morph = getSpeciesMorphology(org.speciesId || 1, org.hue, org.carnivory || 0.1, org.size || 7, speed);
     const isHunter = morph.isHunter;
 
-    const pulse = Math.sin(time * 0.008 + org.id) * 0.12;
-    const bodyR = Math.max(1.8, r * (1.0 + pulse));
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(heading);
+
+    // =========================================================================
+    // OPTICAL LOD TIER 0: Zoomed-out Microscopic Spores (bodyR < 4.8px)
+    // Renders as a lightweight glowing bioluminescent spore with core nucleus.
+    // Skips 20+ heavy Canvas path calls, bezier ribs, gradients, and cilia.
+    // =========================================================================
+    if (bodyR < 4.8 && !isSelected && !isPiloted) {
+      const haloR = bodyR * (isHunter ? 2.4 : 1.9);
+
+      // 1. Soft glowing halo
+      ctx.fillStyle = `hsla(${hue}, ${isHunter ? '95%' : '80%'}, ${isHunter ? '55%' : '50%'}, 0.32)`;
+      ctx.beginPath();
+      ctx.arc(0, 0, haloR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Body membrane disc
+      ctx.fillStyle = isHunter ? `hsla(${hue}, 90%, 46%, 0.88)` : `hsla(${hue}, 78%, 42%, 0.82)`;
+      ctx.beginPath();
+      ctx.arc(0, 0, bodyR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3. Bright nucleus
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(0, 0, Math.max(0.8, bodyR * 0.35), 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+      return;
+    }
+
     const rx = bodyR * morph.aspectX;
     const ry = bodyR * morph.aspectY;
+    const isHighDetail = (bodyR >= 8.5) || isSelected || isPiloted;
 
     // A. Bioluminescent Halo
     const haloR = Math.max(rx, ry) * (isHunter ? 2.4 : 2.0);
-    const glowGrad = ctx.createRadialGradient(0, 0, bodyR * 0.4, 0, 0, haloR);
-    glowGrad.addColorStop(0, `hsla(${hue}, 95%, ${isHunter ? '55%' : '50%'}, ${isHunter ? '0.35' : '0.22'})`);
-    glowGrad.addColorStop(1, 'transparent');
-    ctx.fillStyle = glowGrad;
-    ctx.beginPath();
-    ctx.arc(0, 0, haloR, 0, Math.PI * 2);
-    ctx.fill();
+    if (bodyR > 3.5 || isHunter) {
+      const glowGrad = ctx.createRadialGradient(0, 0, bodyR * 0.4, 0, 0, haloR);
+      glowGrad.addColorStop(0, `hsla(${hue}, 95%, ${isHunter ? '55%' : '50%'}, ${isHunter ? '0.35' : '0.22'})`);
+      glowGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = glowGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, haloR, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // B. Trailing Propulsion Flagellum (whip)
     drawFlagellum(ctx, rx, ry, morph, speed, time, org.id);
 
-    // C. Forward Sensory Antennules
-    drawAntennae(ctx, rx, ry, morph, time, org.id);
+    // C. Forward Sensory Antennules (only at high detail)
+    if (isHighDetail) {
+      drawAntennae(ctx, rx, ry, morph, time, org.id);
+    }
 
-    // D. Beating Cilia (whipping hairs along perimeter)
-    const ciliaCount = isHunter ? 14 : Math.max(8, Math.floor(bodyR * 1.3));
-    ctx.strokeStyle = `hsla(${hue}, 85%, 75%, 0.45)`;
-    ctx.lineWidth = isHunter ? 1.3 : 1.0;
-    
-    for (let c = 0; c < ciliaCount; c++) {
-      const angle = (c / ciliaCount) * Math.PI * 2;
-      const wave = Math.sin(time * 0.015 + angle * 3.0 + org.id) * (bodyR * 0.3);
-      const ciliaLen = bodyR * (isHunter ? 0.48 : 0.38) + wave;
-
-      const cx1 = Math.cos(angle) * (rx * 0.95);
-      const cy1 = Math.sin(angle) * (ry * 0.95);
-      const cx2 = Math.cos(angle) * (rx * 0.95 + ciliaLen);
-      const cy2 = Math.sin(angle) * (ry * 0.95 + ciliaLen);
-
+    // D. Beating Cilia (whipping hairs along perimeter) - Only at high detail
+    if (isHighDetail && bodyR > 4.5) {
+      const ciliaCount = isHunter ? 12 : Math.min(10, Math.max(6, Math.floor(bodyR * 1.1)));
+      ctx.strokeStyle = `hsla(${hue}, 85%, 75%, 0.45)`;
+      ctx.lineWidth = isHunter ? 1.3 : 1.0;
       ctx.beginPath();
-      ctx.moveTo(cx1, cy1);
-      ctx.lineTo(cx2, cy2);
+      for (let c = 0; c < ciliaCount; c++) {
+        const angle = (c / ciliaCount) * Math.PI * 2;
+        const wave = Math.sin(time * 0.015 + angle * 3.0 + org.id) * (bodyR * 0.3);
+        const ciliaLen = bodyR * (isHunter ? 0.48 : 0.38) + wave;
+
+        const cx1 = Math.cos(angle) * (rx * 0.95);
+        const cy1 = Math.sin(angle) * (ry * 0.95);
+        const cx2 = Math.cos(angle) * (rx * 0.95 + ciliaLen);
+        const cy2 = Math.sin(angle) * (ry * 0.95 + ciliaLen);
+
+        ctx.moveTo(cx1, cy1);
+        ctx.lineTo(cx2, cy2);
+      }
       ctx.stroke();
     }
 
-    // E. Translucent Viscoelastic Membrane (Species-specific shape: vibrio/bacillus/coccus/raptor/ovoid)
+    // E. Translucent Viscoelastic Membrane
     ctx.fillStyle = isHunter ? `hsla(${hue}, 85%, 35%, 0.72)` : `hsla(${hue}, 75%, 35%, 0.65)`;
     ctx.strokeStyle = `hsla(${hue}, 95%, 72%, 0.90)`;
     ctx.lineWidth = isHunter ? 1.8 : 1.3;
@@ -468,20 +541,22 @@ export class OceanRenderer {
     drawCellMembranePath(ctx, morph.shape, rx, ry, time, org.id);
     ctx.fill();
 
-    // E.1. Nomarski DIC (Differential Interference Contrast) Optical Relief
-    const dicGrad = ctx.createLinearGradient(-rx * 0.75, -ry * 0.75, rx * 0.75, ry * 0.75);
-    dicGrad.addColorStop(0, 'rgba(255, 255, 255, 0.28)'); // Upper-left refractive highlight
-    dicGrad.addColorStop(0.38, 'transparent');
-    dicGrad.addColorStop(0.68, 'transparent');
-    dicGrad.addColorStop(1, 'rgba(0, 0, 0, 0.35)');       // Lower-right differential shadow
-    ctx.fillStyle = dicGrad;
-    drawCellMembranePath(ctx, morph.shape, rx, ry, time, org.id);
-    ctx.fill();
+    // E.1. Nomarski DIC (Differential Interference Contrast) Optical Relief - Only at high detail
+    if (isHighDetail && bodyR > 5.5) {
+      const dicGrad = ctx.createLinearGradient(-rx * 0.75, -ry * 0.75, rx * 0.75, ry * 0.75);
+      dicGrad.addColorStop(0, 'rgba(255, 255, 255, 0.28)'); // Upper-left refractive highlight
+      dicGrad.addColorStop(0.38, 'transparent');
+      dicGrad.addColorStop(0.68, 'transparent');
+      dicGrad.addColorStop(1, 'rgba(0, 0, 0, 0.35)');       // Lower-right differential shadow
+      ctx.fillStyle = dicGrad;
+      drawCellMembranePath(ctx, morph.shape, rx, ry, time, org.id);
+      ctx.fill();
+    }
 
     ctx.stroke();
 
-    // F. Predatory Rostrum & Mandibles (If Apex Hunter)
-    if (isHunter) {
+    // F. Predatory Rostrum & Mandibles (Apex Hunter) - Only at high detail
+    if (isHunter && isHighDetail) {
       ctx.fillStyle = `hsla(${morph.accentHue}, 100%, 70%, 0.95)`;
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.0;
@@ -506,8 +581,10 @@ export class OceanRenderer {
       ctx.fill();
     }
 
-    // G. Distinctive Phenotypic Markings (Spots / Stripes / Spine / Twin Core)
-    drawCellMarkings(ctx, morph, rx, ry, hue, time, org.id);
+    // G. Distinctive Phenotypic Markings - Only at high detail
+    if (isHighDetail) {
+      drawCellMarkings(ctx, morph, rx, ry, hue, time, org.id);
+    }
 
     // H. Internal Organelles & Nucleus
     ctx.fillStyle = `hsla(${(hue + 40) % 360}, 90%, 75%, 0.85)`;
@@ -541,7 +618,6 @@ export class OceanRenderer {
     }
 
     // J. Piloted by Human Visitor Indicator (Dual Quantum Holographic Rings)
-    const isPiloted = this.pilotedIds && (this.pilotedIds.has(org.id) || this.pilotedIds.has(Number(org.id)));
     if (isPiloted) {
       const rotAngle = time * 0.003;
       const beaconR = Math.max(rx, ry) * (1.85 + Math.sin(time * 0.008) * 0.15);
@@ -771,12 +847,21 @@ export class OceanRenderer {
       const by = toScreenY(bloom.y);
       const br = bloom.r * camZoom;
 
-      // Soft ambient nutrient diffusion cloud
+      // Soft ambient nutrient diffusion cloud or organic detritus cloud
+      const isDetritus = (bloom.d === 1);
       const pulse = 1.0 + Math.sin(time * 0.005 + bloom.id) * 0.08;
       const grad = ctx.createRadialGradient(bx, by, 0, bx, by, br * pulse);
-      grad.addColorStop(0, 'rgba(163, 230, 53, 0.25)');
-      grad.addColorStop(0.5, 'rgba(132, 204, 22, 0.09)');
-      grad.addColorStop(1, 'transparent');
+      if (isDetritus) {
+        // Organic detritus cloud (warm amber / lipid breakdown halo)
+        grad.addColorStop(0, 'rgba(245, 158, 11, 0.32)');
+        grad.addColorStop(0.48, 'rgba(217, 119, 6, 0.12)');
+        grad.addColorStop(1, 'transparent');
+      } else {
+        // Algal chlorophyll nutrient bloom
+        grad.addColorStop(0, 'rgba(163, 230, 53, 0.25)');
+        grad.addColorStop(0.5, 'rgba(132, 204, 22, 0.09)');
+        grad.addColorStop(1, 'transparent');
+      }
 
       ctx.fillStyle = grad;
       ctx.beginPath();
@@ -788,7 +873,7 @@ export class OceanRenderer {
         ctx.save();
         ctx.beginPath();
         ctx.arc(bx, by, br, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(163, 230, 53, 0.65)';
+        ctx.strokeStyle = isDetritus ? 'rgba(245, 158, 11, 0.75)' : 'rgba(163, 230, 53, 0.65)';
         ctx.lineWidth = 1.2;
         ctx.setLineDash([4, 4]);
         ctx.stroke();
@@ -797,26 +882,28 @@ export class OceanRenderer {
         // Center reticle
         ctx.beginPath();
         ctx.arc(bx, by, 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#bef264';
+        ctx.fillStyle = isDetritus ? '#f59e0b' : '#bef264';
         ctx.fill();
 
         // Label
         ctx.font = '9px "JetBrains Mono", monospace';
-        const label = `✦ NUTRIENT BLOOM [${Math.round(bloom.e)} cal] • ACTIVE ATTRACTOR`;
+        const label = isDetritus
+          ? `☠ ORGANIC DETRITUS [${Math.round(bloom.e)} cal] • NECROMASS`
+          : `✦ NUTRIENT BLOOM [${Math.round(bloom.e)} cal] • ACTIVE ATTRACTOR`;
         ctx.fillStyle = 'rgba(6, 18, 10, 0.85)';
         const tw = ctx.measureText(label).width;
         ctx.fillRect(bx - tw * 0.5 - 4, by - br - 16, tw + 8, 14);
-        ctx.strokeStyle = 'rgba(163, 230, 53, 0.7)';
+        ctx.strokeStyle = isDetritus ? 'rgba(245, 158, 11, 0.7)' : 'rgba(163, 230, 53, 0.7)';
         ctx.lineWidth = 0.8;
         ctx.strokeRect(bx - tw * 0.5 - 4, by - br - 16, tw + 8, 14);
 
-        ctx.fillStyle = '#bef264';
+        ctx.fillStyle = isDetritus ? '#fcd34d' : '#bef264';
         ctx.fillText(label, bx - tw * 0.5, by - br - 6);
         ctx.restore();
       }
 
       // Maintain floating particles around active bloom
-      if (this.foodParticles.length < 20 && Math.random() < 0.12) {
+      if (this.foodParticles.length < 24 && Math.random() < 0.12) {
         const ang = Math.random() * Math.PI * 2;
         const d = Math.random() * bloom.r * 0.65;
         this.foodParticles.push({
@@ -828,7 +915,7 @@ export class OceanRenderer {
           alpha: 1.0,
           maxLife: 450,
           life: 0,
-          hue: 0.23 + (Math.random() - 0.5) * 0.06
+          hue: isDetritus ? (0.10 + (Math.random() - 0.5) * 0.05) : (0.23 + (Math.random() - 0.5) * 0.06)
         });
       }
     }
@@ -865,17 +952,18 @@ export class OceanRenderer {
         }
       }
 
-      // Grazing check against nearby organisms
+      // Grazing check against nearby organisms (optimized with fast bounding box check)
       let consumed = false;
       for (let o = 0; o < organisms.length; o++) {
         const org = organisms[o];
         const odx = org.x - p.x;
+        if (odx > 28 || odx < -28) continue;
         const ody = org.y - p.y;
+        if (ody > 28 || ody < -28) continue;
         const eatDist = (org.size + p.size) * 1.35;
         if (odx * odx + ody * ody < eatDist * eatDist) {
           consumed = true;
-          // Spawn little emerald sparkle feeding ripple
-          if (Math.random() < 0.4) {
+          if (Math.random() < 0.35) {
             this.addRipple(p.x, p.y, 'rgba(190, 242, 100, 0.75)', 24);
           }
           break;
@@ -898,14 +986,9 @@ export class OceanRenderer {
       const sz = p.size * camZoom;
 
       // Bioluminescent Emerald Halo
-      const haloGrad = ctx.createRadialGradient(sx, sy, sz * 0.2, sx, sy, sz * 3.2);
-      haloGrad.addColorStop(0, `rgba(190, 242, 100, ${(0.65 * alpha).toFixed(2)})`);
-      haloGrad.addColorStop(0.5, `rgba(132, 204, 22, ${(0.22 * alpha).toFixed(2)})`);
-      haloGrad.addColorStop(1, 'transparent');
-
-      ctx.fillStyle = haloGrad;
+      ctx.fillStyle = `rgba(132, 204, 22, ${(0.28 * alpha).toFixed(2)})`;
       ctx.beginPath();
-      ctx.arc(sx, sy, sz * 3.2, 0, Math.PI * 2);
+      ctx.arc(sx, sy, sz * 2.8, 0, Math.PI * 2);
       ctx.fill();
 
       // Crystalline nutrient core
@@ -1320,5 +1403,162 @@ export class OceanRenderer {
       x: (worldX - this.camera.x) * this.camera.zoom + this.camera.viewportW * 0.5,
       y: (worldY - this.camera.y) * this.camera.zoom + this.camera.viewportH * 0.5
     };
+  }
+
+  // Capture an authentic, high-resolution visual snapshot of the living droplet and its landscape
+  captureDropletSnapshot(targetSize = 480) {
+    try {
+      const snapCanvas = document.createElement('canvas');
+      snapCanvas.width = targetSize;
+      snapCanvas.height = targetSize;
+      const sCtx = snapCanvas.getContext('2d');
+      if (!sCtx) return null;
+
+      // Dark abyssal background
+      sCtx.fillStyle = '#020d1a';
+      sCtx.fillRect(0, 0, targetSize, targetSize);
+
+      const ch = this.chamber || { cx: 700, cy: 700, r: 620 };
+      const pad = 14;
+      const center = targetSize * 0.5;
+      const destR = center - pad;
+      const scale = destR / ch.r;
+
+      const toSnapX = (wx) => center + (wx - ch.cx) * scale;
+      const toSnapY = (wy) => center + (wy - ch.cy) * scale;
+
+      sCtx.save();
+      // Circular crop for droplet manifold
+      sCtx.beginPath();
+      sCtx.arc(center, center, destR, 0, Math.PI * 2);
+      sCtx.clip();
+
+      // 1. Deep oceanic gradient inside droplet
+      const oceanicGrad = sCtx.createRadialGradient(center, center, destR * 0.08, center, center, destR);
+      oceanicGrad.addColorStop(0, '#042845');
+      oceanicGrad.addColorStop(0.55, '#02182b');
+      oceanicGrad.addColorStop(0.92, '#010f1c');
+      oceanicGrad.addColorStop(1, '#00070e');
+      sCtx.fillStyle = oceanicGrad;
+      sCtx.fillRect(0, 0, targetSize, targetSize);
+
+      // 2. Living Bio-Calcite Reef Matrix & Chemical Landscape
+      if (this.thumbCanvas) {
+        const thumbX = toSnapX(0);
+        const thumbY = toSnapY(0);
+        const thumbSize = (this.worldSize || 1400) * scale;
+
+        sCtx.save();
+        sCtx.globalCompositeOperation = 'screen';
+        sCtx.drawImage(this.thumbCanvas, thumbX, thumbY, thumbSize, thumbSize);
+        // Second pass to ensure reefs and shoals are vibrantly luminous
+        sCtx.globalAlpha = 0.85;
+        sCtx.drawImage(this.thumbCanvas, thumbX, thumbY, thumbSize, thumbSize);
+        sCtx.restore();
+      }
+
+      // 3. Hydrothermal Vents & Ephemeral Fumaroles
+      const ventScale = (this.worldSize || 1400) / 128;
+      const vents = this.vents || [];
+      for (let i = 0; i < vents.length; i++) {
+        const v = vents[i];
+        const vx = toSnapX((v.x !== undefined ? v.x : 64) * ventScale);
+        const vy = toSnapY((v.y !== undefined ? v.y : 64) * ventScale);
+        const vr = Math.max(10, (v.radius || 7) * scale * 3.0);
+        const hue = Math.round((v.hue !== undefined ? v.hue : (i / 5)) * 360);
+
+        const vGrad = sCtx.createRadialGradient(vx, vy, 0, vx, vy, vr * 2.2);
+        vGrad.addColorStop(0, `hsla(${hue}, 95%, 75%, 0.85)`);
+        vGrad.addColorStop(0.4, `hsla(${hue}, 90%, 55%, 0.40)`);
+        vGrad.addColorStop(1, 'transparent');
+
+        sCtx.fillStyle = vGrad;
+        sCtx.beginPath();
+        sCtx.arc(vx, vy, vr * 2.2, 0, Math.PI * 2);
+        sCtx.fill();
+
+        // Vent chimney core
+        sCtx.fillStyle = '#ffffff';
+        sCtx.beginPath();
+        sCtx.arc(vx, vy, 2.5, 0, Math.PI * 2);
+        sCtx.fill();
+      }
+
+      // 4. Living Organism Population
+      const entities = Array.from(this.currEntities.values());
+      for (let i = 0; i < entities.length; i++) {
+        const org = entities[i];
+        const ox = toSnapX(org.x);
+        const oy = toSnapY(org.y);
+        const oRadius = Math.max(1.8, org.size * scale * 2.2);
+        const oHue = Math.round(org.hue * 360);
+
+        // Body glow
+        sCtx.fillStyle = `hsla(${oHue}, 90%, 65%, 0.90)`;
+        sCtx.beginPath();
+        sCtx.arc(ox, oy, oRadius, 0, Math.PI * 2);
+        sCtx.fill();
+
+        // Directional ciliary trail
+        if (org.vx || org.vy) {
+          const heading = Math.atan2(org.vy, org.vx);
+          sCtx.strokeStyle = `hsla(${oHue}, 80%, 85%, 0.7)`;
+          sCtx.lineWidth = 1.0;
+          sCtx.beginPath();
+          sCtx.moveTo(ox, oy);
+          sCtx.lineTo(ox - Math.cos(heading) * oRadius * 2.4, oy - Math.sin(heading) * oRadius * 2.4);
+          sCtx.stroke();
+        }
+
+        // Highlight piloted or Lazarus
+        if (this.pilotedIds && this.pilotedIds.has(org.id)) {
+          sCtx.strokeStyle = '#00f0ff';
+          sCtx.lineWidth = 1.2;
+          sCtx.beginPath();
+          sCtx.arc(ox, oy, oRadius + 2.5, 0, Math.PI * 2);
+          sCtx.stroke();
+        }
+      }
+
+      // 5. Intercellular Colony Bonds
+      if (this.colonyBonds && this.colonyBonds.length > 0) {
+        sCtx.strokeStyle = 'rgba(0, 240, 255, 0.45)';
+        sCtx.lineWidth = 1.0;
+        sCtx.beginPath();
+        for (let b = 0; b < this.colonyBonds.length; b += 2) {
+          const idA = this.colonyBonds[b];
+          const idB = this.colonyBonds[b + 1];
+          const oA = this.currEntities.get(idA);
+          const oB = this.currEntities.get(idB);
+          if (oA && oB) {
+            sCtx.moveTo(toSnapX(oA.x), toSnapY(oA.y));
+            sCtx.lineTo(toSnapX(oB.x), toSnapY(oB.y));
+          }
+        }
+        sCtx.stroke();
+      }
+
+      sCtx.restore();
+
+      // 6. Bathymetric depth circles and luminous meniscus rim
+      sCtx.beginPath();
+      sCtx.arc(center, center, destR * 0.65, 0, Math.PI * 2);
+      sCtx.strokeStyle = 'rgba(0, 240, 255, 0.15)';
+      sCtx.lineWidth = 1.0;
+      sCtx.setLineDash([4, 6]);
+      sCtx.stroke();
+      sCtx.setLineDash([]);
+
+      sCtx.beginPath();
+      sCtx.arc(center, center, destR, 0, Math.PI * 2);
+      sCtx.strokeStyle = 'rgba(0, 240, 255, 0.75)';
+      sCtx.lineWidth = 2.4;
+      sCtx.stroke();
+
+      return snapCanvas.toDataURL('image/jpeg', 0.90);
+    } catch (err) {
+      console.warn('[OceanRenderer] captureDropletSnapshot error:', err);
+      return null;
+    }
   }
 }

@@ -17,8 +17,9 @@ export class ChemicalGrid {
     this.nextSignal = new Float32Array(this.cellCount);
     this.nextSubstrate = new Float32Array(this.cellCount);
     
-    // Fixed hydrothermal vents (mineral/energy sources)
+    // Primary hydrothermal vents (mineral/energy sources) with tectonic micro-drift
     this.vents = [];
+    this.ephemeralFumaroles = [];
     this.initVents();
     this.seedInitialConditions();
   }
@@ -37,8 +38,13 @@ export class ChemicalGrid {
       const vx = Math.round(cx + Math.cos(angle) * ventDist);
       const vy = Math.round(cy + Math.sin(angle) * ventDist);
       this.vents.push({
+        id: `primary_vent_${i + 1}`,
         x: vx,
         y: vy,
+        baseX: vx,
+        baseY: vy,
+        driftPhase: i * 1.256,
+        driftSpeed: 0.00012 + i * 0.00004,
         radius: 7,
         power: 0.70,
         hue: ventHues[i]
@@ -57,7 +63,7 @@ export class ChemicalGrid {
   }
 
   // 10 Hz step: 2D Laplacian diffusion with reflective zero-flux boundaries + active hydrothermal recharge
-  step(ventFactors = null) {
+  step(ventFactors = null, tick = 0) {
     const N = this.size;
     const diffN = CONFIG.DIFFUSION_RATE_NUTRIENT;
     const diffW = CONFIG.DIFFUSION_RATE_WASTE;
@@ -112,10 +118,14 @@ export class ChemicalGrid {
         else if (sVal > 2.0) sVal = 2.0;
         nextSig[idx] = sVal;
 
-        // Substrate: gentle Laplacian smoothing for organic contours + ultra-slow erosion
+        // Substrate: differential erosion & biogenic calcite crystallization
         const avgSub = (sub[ym1 + x] + sub[yp1 + x] + sub[y0 + xm1] + sub[y0 + xp1]) * 0.25;
-        let subVal = (sub[idx] + 0.002 * (avgSub - sub[idx])) * 0.99998;
-        if (subVal < 0.002) subVal = 0.0;
+        const curSub = sub[idx];
+        // In open waters (<0.22), hydrodynamic currents dissolve loose silt rapidly (preventing flat flooding);
+        // within established coral reefs (>0.38), calcite crystals bind tightly and erode very slowly
+        const erosion = curSub > 0.38 ? 0.999988 : (curSub > 0.18 ? 0.99992 : 0.99968);
+        let subVal = (curSub + 0.003 * (avgSub - curSub)) * erosion;
+        if (subVal < 0.012) subVal = 0.0;
         else if (subVal > 1.0) subVal = 1.0;
         nextSub[idx] = subVal;
       }
@@ -127,7 +137,19 @@ export class ChemicalGrid {
     this.signal.set(nextSig);
     this.substrate.set(nextSub);
 
-    // Thermal vents continuous nutrient injection (modulated by climate vent factors)
+    // 1. Slow tectonic drift of the 5 primary hydrothermal vents
+    if (tick) {
+      for (let v = 0; v < this.vents.length; v++) {
+        const vent = this.vents[v];
+        if (vent.baseX !== undefined) {
+          const t = tick * vent.driftSpeed + vent.driftPhase;
+          vent.x = Math.max(14, Math.min(N - 15, Math.round(vent.baseX + Math.cos(t) * 3.8)));
+          vent.y = Math.max(14, Math.min(N - 15, Math.round(vent.baseY + Math.sin(t * 1.3) * 3.8)));
+        }
+      }
+    }
+
+    // 2. Primary thermal vents continuous nutrient injection (modulated by climate vent factors)
     for (let v = 0; v < this.vents.length; v++) {
       const vent = this.vents[v];
       const r = vent.radius;
@@ -151,6 +173,60 @@ export class ChemicalGrid {
             this.nutrients[idx] = Math.min(2.0, this.nutrients[idx] + pow * factor);
           }
         }
+      }
+    }
+
+    // 3. Ephemeral benthic fumaroles (occasional thermal fissures that erupt for 20-35 min)
+    if (Math.random() < 0.00008 && this.ephemeralFumaroles.length < 2) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = (0.12 + Math.random() * 0.32) * N;
+      const fx = Math.max(12, Math.min(N - 13, Math.round(N * 0.5 + Math.cos(angle) * dist)));
+      const fy = Math.max(12, Math.min(N - 13, Math.round(N * 0.5 + Math.sin(angle) * dist)));
+      this.ephemeralFumaroles.push({
+        id: `fum_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        x: fx,
+        y: fy,
+        radius: 5,
+        power: 0.65,
+        hue: (0.08 + Math.random() * 0.85) % 1.0,
+        life: 0,
+        maxLife: 15000 + Math.floor(Math.random() * 9000)
+      });
+    }
+
+    for (let f = this.ephemeralFumaroles.length - 1; f >= 0; f--) {
+      const fum = this.ephemeralFumaroles[f];
+      fum.life++;
+      const lifeRatio = fum.life / fum.maxLife;
+      const intensity = lifeRatio < 0.15 ? (lifeRatio / 0.15) : (lifeRatio > 0.75 ? (1.0 - lifeRatio) / 0.25 : 1.0);
+      const r = fum.radius;
+      const pow = fum.power * 0.22 * intensity;
+
+      const minY = Math.max(0, fum.y - r);
+      const maxY = Math.min(N - 1, fum.y + r);
+      const minX = Math.max(0, fum.x - r);
+      const maxX = Math.min(N - 1, fum.x + r);
+
+      for (let vy = minY; vy <= maxY; vy++) {
+        const dy = vy - fum.y;
+        const row = vy * N;
+        for (let vx = minX; vx <= maxX; vx++) {
+          const dx = vx - fum.x;
+          const dist2 = dx * dx + dy * dy;
+          if (dist2 <= r * r) {
+            const factor = Math.exp(-dist2 / (r * 1.4));
+            const idx = row + vx;
+            this.nutrients[idx] = Math.min(2.2, this.nutrients[idx] + pow * factor);
+            // Volcanic mineral mound precipitation beneath fumarole
+            if (Math.random() < 0.08) {
+              this.substrate[idx] = Math.min(1.0, this.substrate[idx] + 0.0035 * factor * intensity);
+            }
+          }
+        }
+      }
+
+      if (fum.life >= fum.maxLife) {
+        this.ephemeralFumaroles.splice(f, 1);
       }
     }
   }
@@ -325,10 +401,44 @@ export class ChemicalGrid {
         if (dist2 <= gridR * gridR) {
           const factor = Math.exp(-dist2 / (gridR * 1.1));
           const idx = row + x;
-          this.substrate[idx] = Math.min(1.0, this.substrate[idx] + amount * factor);
+          const existing = this.substrate[idx];
+          // Positive feedback: biomineralization nucleates and binds strongly where reefs already start
+          const bindAffinity = existing > 0.22 ? 1.5 : 0.85;
+          this.substrate[idx] = Math.min(1.0, existing + amount * factor * bindAffinity);
         }
       }
     }
+  }
+
+  // Get combined dynamic primary vents and active ephemeral fumaroles for rendering
+  getVentsState() {
+    const list = this.vents.map(v => ({
+      id: v.id,
+      x: v.x,
+      y: v.y,
+      radius: v.radius,
+      power: v.power,
+      hue: v.hue,
+      isEphemeral: false
+    }));
+
+    for (let i = 0; i < this.ephemeralFumaroles.length; i++) {
+      const f = this.ephemeralFumaroles[i];
+      const lifeRatio = f.life / f.maxLife;
+      const intensity = lifeRatio < 0.15 ? (lifeRatio / 0.15) : (lifeRatio > 0.75 ? (1.0 - lifeRatio) / 0.25 : 1.0);
+      list.push({
+        id: f.id,
+        x: f.x,
+        y: f.y,
+        radius: f.radius,
+        power: f.power * intensity,
+        hue: f.hue,
+        isEphemeral: true,
+        intensity
+      });
+    }
+
+    return list;
   }
 
   // Sample continuous substrate density at world coordinates [0, WORLD_SIZE)

@@ -88,6 +88,10 @@ export class DiveEngine {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
 
+  get currentOrg() {
+    return this.app?.renderer?.currEntities?.get(this.trackedId) || null;
+  }
+
   // Dive into organism
   enter(organismId) {
     if (!organismId) return;
@@ -216,7 +220,7 @@ export class DiveEngine {
     sound.playDroplet(720);
   }
 
-  sendSteer(sx, sy) {
+  sendSteer(sx, sy, thrust = 1.0) {
     if (!this.app.socket || !this.app.isConnected || !this.trackedId) return;
     const now = performance.now();
     if (now - this.lastSteerSentTime < this.steerThrottleMs) return;
@@ -226,7 +230,8 @@ export class DiveEngine {
       type: 'steer',
       id: this.trackedId,
       steerX: sx,
-      steerY: sy
+      steerY: sy,
+      thrust
     }));
   }
 
@@ -263,6 +268,7 @@ export class DiveEngine {
 
     // 3. Client-Side Steering & Zero-Latency Heading Prediction
     const isPlayerSteering = Math.hypot(this.hud.steerX, this.hud.steerY) > 0.05;
+    const thrust = (typeof this.hud.thrust === 'number') ? this.hud.thrust : 1.0;
 
     if (isPlayerSteering) {
       // Immediate local turn in player's intended direction
@@ -270,17 +276,20 @@ export class DiveEngine {
       let dH = (desiredHeading - this.currentHeading) % (Math.PI * 2);
       if (dH < -Math.PI) dH += Math.PI * 2;
       if (dH > Math.PI) dH -= Math.PI * 2;
-      this.currentHeading += dH * 0.22; // Quick, responsive turning
+      this.currentHeading += dH * 0.25; // Quick, responsive turning
 
-      // Local client acceleration
-      const maxSpd = (org.size || 6) > 5 ? 2.8 : 3.6;
-      org.vx += (Math.cos(this.currentHeading) * maxSpd - org.vx) * 0.15;
-      org.vy += (Math.sin(this.currentHeading) * maxSpd - org.vy) * 0.15;
+      // Local client acceleration based on active throttle thrust
+      const baseMaxSpd = (org.size || 6) > 5 ? 2.8 : 3.6;
+      const spdFactor = thrust > 0.1 ? 1.9 : (thrust < -0.1 ? -0.35 : 0.45);
+      const targetSpd = baseMaxSpd * spdFactor;
+
+      org.vx += (Math.cos(this.currentHeading) * targetSpd - org.vx) * 0.22;
+      org.vy += (Math.sin(this.currentHeading) * targetSpd - org.vy) * 0.22;
       org.x += org.vx * 0.12;
       org.y += org.vy * 0.12;
 
-      // Broadcast to server
-      this.sendSteer(this.hud.steerX, this.hud.steerY);
+      // Broadcast to server with thrust
+      this.sendSteer(this.hud.steerX, this.hud.steerY, thrust);
     } else {
       // Autonomous heading tracking
       const targetHeading = Math.atan2(org.vy, org.vx);

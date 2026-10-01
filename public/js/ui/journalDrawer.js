@@ -225,9 +225,10 @@ export class JournalDrawer {
       const item = document.createElement('div');
       const isEpoch = entry.type === 'epoch';
       const isSpecies = entry.type === 'species';
-      item.className = `journal-card ${isEpoch ? 'epoch' : ''} ${isSpecies ? 'species' : ''} ${highlightFirst && index === 0 ? 'card-incoming' : ''}`;
+      const isCataclysm = entry.type === 'cataclysm';
+      item.className = `journal-card ${isEpoch ? 'epoch' : ''} ${isSpecies ? 'species' : ''} ${isCataclysm ? 'cataclysm' : ''} ${highlightFirst && index === 0 ? 'card-incoming' : ''}`;
 
-      const icon = entry.icon || (isEpoch ? '🌅' : (isSpecies ? '🧬' : '📜'));
+      const icon = entry.icon || (isEpoch ? '🌅' : (isSpecies ? '🧬' : (isCataclysm ? '💥' : '📜')));
       const badge = isRu ? (entry.badgeRu || entry.badgeEn) : (entry.badgeEn || entry.badgeRu);
       const title = isRu ? (entry.titleRu || entry.titleEn) : entry.titleEn;
       const content = isRu ? (entry.contentRu || entry.contentEn) : entry.contentEn;
@@ -256,6 +257,19 @@ export class JournalDrawer {
         </div>
       ` : '';
 
+      // Contextual Visual Illustration: If news is about a species/creature, show its micro-portrait!
+      let visualHtml = '';
+      if (isSpecies || entry.species) {
+        visualHtml = this.renderOrganismPortraitSvg(entry.species || entry, isRu);
+      } else if (isCataclysm) {
+        visualHtml = `
+          <div class="journal-cataclysm-banner">
+            <span class="cataclysm-banner-icon">${icon}</span>
+            <span class="cataclysm-banner-text">${badge}</span>
+          </div>
+        `;
+      }
+
       item.innerHTML = `
         <div class="journal-card-header">
           <div class="journal-icon-wrap">
@@ -269,11 +283,98 @@ export class JournalDrawer {
             <div class="journal-title">${title || ''}</div>
           </div>
         </div>
+        ${visualHtml}
         <div class="journal-story">${content || ''}</div>
         ${insightHtml}
       `;
       this.timeline.appendChild(item);
     });
+  }
+
+  // Generate authentic micro-anatomical SVG portrait of a specimen
+  renderOrganismPortraitSvg(species, isRu = true) {
+    if (!species) return '';
+    const hue = Math.round((species.hue !== undefined ? species.hue : 0.52) * 360);
+    const isHunter = (species.carnivory || 0) > 0.38;
+    const size = Math.max(2.5, Math.min(9.5, species.size || 4.2));
+    const speed = (species.speedMax || 1.8).toFixed(1);
+    const sizeFormatted = size.toFixed(1);
+
+    const rx = isHunter ? 38 : 32;
+    const ry = isHunter ? 18 : 24;
+
+    let flagellaSvg = '';
+    if (isHunter) {
+      flagellaSvg = `
+        <path d="M 38 60 Q 15 50, 6 64 T -8 58" fill="none" stroke="hsla(${hue}, 85%, 75%, 0.85)" stroke-width="2.2" stroke-linecap="round" />
+        <path d="M 40 64 Q 20 68, 8 76" fill="none" stroke="hsla(${hue}, 80%, 70%, 0.55)" stroke-width="1.6" />
+      `;
+    } else {
+      flagellaSvg = `
+        <path d="M 35 60 Q 18 52, 10 65 T 2 58" fill="none" stroke="hsla(${hue}, 85%, 75%, 0.8)" stroke-width="1.8" stroke-linecap="round" />
+      `;
+    }
+
+    let ciliaSvg = '';
+    const ciliaCount = isHunter ? 16 : 22;
+    for (let i = 0; i < ciliaCount; i++) {
+      const a = (i / ciliaCount) * Math.PI * 2;
+      const cx1 = 70 + Math.cos(a) * rx;
+      const cy1 = 60 + Math.sin(a) * ry;
+      const cx2 = 70 + Math.cos(a) * (rx + 7);
+      const cy2 = 60 + Math.sin(a) * (ry + 7);
+      ciliaSvg += `<line x1="${cx1.toFixed(1)}" y1="${cy1.toFixed(1)}" x2="${cx2.toFixed(1)}" y2="${cy2.toFixed(1)}" stroke="hsla(${hue}, 80%, 80%, 0.45)" stroke-width="1.2" />`;
+    }
+
+    let hunterJaws = '';
+    if (isHunter) {
+      hunterJaws = `
+        <polygon points="106,56 122,60 106,64" fill="hsla(${(hue + 30) % 360}, 95%, 65%, 0.95)" stroke="#ffffff" stroke-width="0.8" />
+        <polygon points="86,40 96,33 93,42" fill="hsla(${hue}, 95%, 70%, 0.9)" />
+        <polygon points="86,80 96,87 93,78" fill="hsla(${hue}, 95%, 70%, 0.9)" />
+      `;
+    }
+
+    const nameStr = isRu ? (species.nameRu || species.nameLa || 'Экземпляр') : (species.nameEn || species.nameLa || 'Specimen');
+    const badgeLabel = isRu ? '🔬 МИКРО-ПОРТРЕТ ОСОБИ' : '🔬 SPECIMEN PORTRAIT';
+    const dietLabel = isHunter ? (isRu ? '⚔️ Хищник' : '⚔️ Predator') : (isRu ? '🌿 Продуцент' : '🌿 Grazer');
+
+    return `
+      <div class="journal-organism-portrait">
+        <div class="portrait-lens">
+          <svg viewBox="0 0 140 120" width="140" height="120" class="organism-svg-view">
+            <defs>
+              <radialGradient id="haloGrad_${species.id || hue}" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="hsla(${hue}, 95%, 60%, 0.35)" />
+                <stop offset="100%" stop-color="transparent" />
+              </radialGradient>
+              <linearGradient id="dicGrad_${species.id || hue}" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="rgba(255,255,255,0.4)" />
+                <stop offset="40%" stop-color="transparent" />
+                <stop offset="100%" stop-color="rgba(0,0,0,0.5)" />
+              </linearGradient>
+            </defs>
+            <ellipse cx="70" cy="60" rx="${rx * 1.6}" ry="${ry * 1.6}" fill="url(#haloGrad_${species.id || hue})" />
+            ${flagellaSvg}
+            ${ciliaSvg}
+            <ellipse cx="70" cy="60" rx="${rx}" ry="${ry}" fill="hsla(${hue}, 80%, 40%, 0.85)" stroke="hsla(${hue}, 95%, 75%, 0.95)" stroke-width="1.6" />
+            <ellipse cx="70" cy="60" rx="${rx}" ry="${ry}" fill="url(#dicGrad_${species.id || hue})" />
+            <circle cx="64" cy="58" r="${isHunter ? 7 : 9}" fill="hsla(${(hue + 40) % 360}, 90%, 70%, 0.85)" />
+            <circle cx="62" cy="56" r="${isHunter ? 3 : 4}" fill="#ffffff" opacity="0.8" />
+            ${hunterJaws}
+          </svg>
+        </div>
+        <div class="portrait-details">
+          <div class="portrait-badge">${badgeLabel}</div>
+          <div class="portrait-title">${nameStr}</div>
+          <div class="portrait-stats">
+            <span>📏 Ø ${sizeFormatted} мкм</span>
+            <span>⚡ ${speed} мкм/шаг</span>
+            <span>${dietLabel}</span>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   renderAtlas() {
@@ -301,6 +402,23 @@ export class JournalDrawer {
       const dominant = isRu ? (m.dominantSpeciesRu || m.dominantSpeciesEn) : m.dominantSpeciesEn;
       const apex = isRu ? (m.apexHunterRu || m.apexHunterEn) : m.apexHunterEn;
 
+      // Check if client cached a screenshot for this Atlas day, or generate live authentic landscape snapshot
+      let dayScreenshot = entry.screenshot;
+      if (!dayScreenshot) {
+        try {
+          dayScreenshot = localStorage.getItem(`aetheon_atlas_day_${entry.day}`);
+        } catch (_) {}
+      }
+      if (!dayScreenshot && this.app && this.app.renderer) {
+        dayScreenshot = this.app.renderer.captureDropletSnapshot(480);
+        if (dayScreenshot) {
+          entry.screenshot = dayScreenshot;
+          try {
+            localStorage.setItem(`aetheon_atlas_day_${entry.day}`, dayScreenshot);
+          } catch (_) {}
+        }
+      }
+
       card.innerHTML = `
         <div class="atlas-card-header">
           <div class="atlas-day-pill">
@@ -312,10 +430,10 @@ export class JournalDrawer {
 
         <div class="atlas-map-container">
           <div class="atlas-map-view">
-            ${entry.svgMap || ''}
+            ${dayScreenshot ? `<img src="${dayScreenshot}" class="atlas-screenshot-img" alt="Day ${entry.day} Real Landscape Snapshot" />` : (entry.svgMap || '')}
           </div>
           <div class="atlas-map-caption">
-            <span>🔬 ${i18n.t('atlas_survey_title')} • Ø 1240 μm</span>
+            <span>🗺️ ${isRu ? 'КАРТА ЛАНДШАФТА И РИФОВ' : 'BENTHIC LANDSCAPE & REEF SURVEY'} • Ø 1240 мкм</span>
             <span>DAY ${entry.day}</span>
           </div>
         </div>

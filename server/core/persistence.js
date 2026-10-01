@@ -39,6 +39,9 @@ export class PersistenceManager {
           childrenCount: org.childrenCount,
           phase: org.phase,
           heading: org.heading,
+          isLazarus: org.isLazarus || false,
+          isAvatarLineage: org.isAvatarLineage || false,
+          maturity: org.maturity !== undefined ? org.maturity : 1.0,
           genome: org.genome
         })),
         speciesList: engine.lineage.getAllSpecies(),
@@ -46,7 +49,8 @@ export class PersistenceManager {
         substrateBase64: (engine.grid && engine.grid.substrate) ? Buffer.from(engine.grid.substrate.buffer).toString('base64') : null,
         colonyData: engine.colonies ? engine.colonies.getSerializableData() : [],
         climate: engine.climate ? engine.climate.toJSON() : null,
-        atlasEntries: engine.atlas ? engine.atlas.toJSON() : []
+        atlasEntries: engine.atlas ? engine.atlas.toJSON() : [],
+        cataclysmData: engine.cataclysms ? engine.cataclysms.toJSON() : null
       };
 
       const tempPath = `${this.filePath}.tmp`;
@@ -75,6 +79,7 @@ export class PersistenceManager {
       if (data.epochNameRu) engine.naturalist.epochNameRu = data.epochNameRu;
       if (data.climate && engine.climate) engine.climate.fromJSON(data.climate);
       if (data.atlasEntries && engine.atlas) engine.atlas.fromJSON(data.atlasEntries);
+      if (data.cataclysmData && engine.cataclysms) engine.cataclysms.fromJSON(data.cataclysmData);
 
       if (data.speciesList && Array.isArray(data.speciesList)) {
         engine.lineage.speciesMap.clear();
@@ -120,6 +125,10 @@ export class PersistenceManager {
           org.childrenCount = saved.childrenCount || 0;
           org.phase = saved.phase;
           org.heading = saved.heading;
+          org.isLazarus = saved.isLazarus || false;
+          org.isAvatarLineage = saved.isAvatarLineage || false;
+          org.maturity = (saved.maturity !== undefined) ? saved.maturity : 1.0;
+          org.size = org.adultSize * (0.38 + 0.62 * org.maturity);
           return org;
         });
       }

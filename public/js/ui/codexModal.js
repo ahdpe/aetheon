@@ -238,6 +238,14 @@ export class CodexModal {
             </div>
           </div>
 
+          ${sp.founderName ? `
+            <div class="species-founder-pill">
+              <span class="founder-crown">👑</span>
+              <span class="founder-label">${isRu ? 'Династия:' : 'Dynasty:'}</span>
+              <strong class="founder-name">${sp.founderName}</strong>
+            </div>
+          ` : ''}
+
           <div class="species-traits-row">
             <span class="trait-chip" title="${isRu ? 'Размер клетки' : 'Cell scale'}">📏 ${sizeVal} μm</span>
             <span class="trait-chip" title="${isRu ? 'Скорость движения' : 'Velocity'}">⚡ ${speedVal}</span>

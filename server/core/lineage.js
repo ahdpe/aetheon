@@ -72,6 +72,7 @@ export class LineageManager {
       population: 0,
       peakPopulation: 0,
       totalCount: 0,
+      founderName: data.founderName || null,
       aiChronicle: null
     };
 
@@ -96,13 +97,14 @@ export class LineageManager {
   }
 
   // Check if daughter organism has diverged enough to form a new species
-  evaluateSpeciation(childGenome, parentSpeciesId) {
+  evaluateSpeciation(childGenome, parentSpeciesId, thresholdMultiplier = 1.0) {
     const parentSpecies = this.speciesMap.get(parentSpeciesId);
     if (!parentSpecies) return parentSpeciesId;
 
     const dist = this.calcGeneticDistance(childGenome, parentSpecies);
+    const effectiveThreshold = this.divergenceThreshold * thresholdMultiplier;
     
-    if (dist > this.divergenceThreshold) {
+    if (dist > effectiveThreshold) {
       // Divergence detected! Form a new species branch
       const isCarnivore = childGenome.carnivory > 0.4;
       const hueDegree = Math.round(childGenome.hue * 360);
@@ -157,6 +159,15 @@ export class LineageManager {
 
   getAllSpecies() {
     return Array.from(this.speciesMap.values());
+  }
+
+  setFounderName(speciesId, founderName) {
+    const sp = this.speciesMap.get(Number(speciesId));
+    if (sp) {
+      sp.founderName = String(founderName).trim().slice(0, 32);
+      return sp;
+    }
+    return null;
   }
 
   getRecentSpecies(limit = 10) {

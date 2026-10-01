@@ -28,6 +28,124 @@ export class AINaturalist {
     });
   }
 
+  advanceEpoch(nameRu, nameEn) {
+    this.currentEpoch++;
+    this.epochNameRu = nameRu;
+    this.epochNameEn = nameEn;
+    console.log(`[AINaturalist] Advanced to Epoch ${this.currentEpoch}: ${nameRu} / ${nameEn}`);
+  }
+
+  async chronicleCataclysm(type, phase, stats, details = null) {
+    const isSulfide = type === 'sulfide_anoxia';
+    const isCryo = type === 'cryo_freeze';
+    const isUV = type === 'uv_radiation';
+
+    let icon = '💥';
+    let badgeRu = '⚠️ ВЕЛИКОЕ ВЫМИРАНИЕ';
+    let badgeEn = '⚠️ GREAT EXTINCTION';
+    let titleRu = '';
+    let titleEn = '';
+    let contentRu = '';
+    let contentEn = '';
+    let insightRu = '';
+    let insightEn = '';
+
+    if (phase === 'premonition') {
+      icon = isSulfide ? '🌋' : (isCryo ? '❄️' : '⚡');
+      badgeRu = '⚠️ ПРЕДВЕСТИЕ КАТАКЛИЗМА';
+      badgeEn = '⚠️ CATACLYSM WARNING';
+
+      if (isSulfide) {
+        titleRu = 'Сейсмические толчки гидротермального дна';
+        titleEn = 'Hydrothermal Benthic Tremors';
+        contentRu = 'Датчики фиксируют критическое нарастание давления в магматических каналах. Из глубоководных жерл начинают подниматься темные шлейфы тяжелых сульфидов. Океан замер в тревожном ожидании...';
+        contentEn = 'Telemetry detects a critical pressure surge within the magmatic conduits. Dark plumes of heavy sulfides begin billowing from deep vents. The ocean holds its breath in tense stillness...';
+        insightRu = 'Организмы в открытой толще воды оказываются под угрозой. Самые безопасные зоны — глубокие рифовые расщелины.';
+        insightEn = 'Organisms in open water are most vulnerable. Deep reef crevices offer the only stable sanctuary.';
+      } else if (isCryo) {
+        titleRu = 'Дендритный иней на границе капли';
+        titleEn = 'Dendritic Frost at the Droplet Rim';
+        contentRu = 'Температура внешней среды стремительно падает. Поверхностное натяжение капли покрывается кристаллической коркой льда. Водяной объем сжимается, оттесняя жизнь к теплым жерлам.';
+        contentEn = 'Ambient laboratory temperature drops sharply. The droplet surface tension begins encrusting with crystalline ice. Life is driven back towards the warmth of thermal vents.';
+        insightRu = 'Только существа, находящиеся вблизи термальных источников, смогут сохранить тепло и избежать оледенения.';
+        insightEn = 'Only organisms clustered around the warm hydrothermal chimneys will survive the freeze.';
+      } else {
+        titleRu = 'Ионизационная вспышка фотонного шторма';
+        titleEn = 'Ionization Flare: Photon Tempest';
+        contentRu = 'Свет лабораторного микроскопа вспыхнул ослепительным высокоэнергетическим спектром. Ионизирующее излучение пронзает верхние слои капли, дестабилизируя липидные мембраны.';
+        contentEn = 'The laboratory illuminator flashes with a blinding high-energy spectrum. Ionizing radiation penetrates the surface waters, destabilizing fragile lipid membranes.';
+        insightRu = 'Высокая радиация смертельна для большинства, но вызывает взрывные мутации у наиболее стойких особей.';
+        insightEn = 'Intense radiation proves lethal to the majority, but sparks explosive mutations in the hardiest survivors.';
+      }
+    } else if (phase === 'crisis') {
+      icon = '💀';
+      badgeRu = '⚠️ ПИК ВЫМИРАНИЯ';
+      badgeEn = '⚠️ EXTINCTION PEAK';
+
+      titleRu = `Великое Вымирание: Коллапс биосферы (${stats?.organismCount || 'единицы'} выживших)`;
+      titleEn = `The Great Extinction: Biosphere Collapse (${stats?.organismCount || 'few'} survivors)`;
+      contentRu = 'Катастрофа достигла апогея. Более 95% популяции капли погибло. Некогда процветающие колонии растворились в воде, превратившись в толстый слой питательного органического детрита на дне. Лишь единичные, самые стойкие клетки борются за жизнь в микро-укрытиях.';
+      contentEn = 'The cataclysm has reached its zenith. Over 95% of the droplet population has perished. Thriving colonies have dissolved into rich benthic organic detritus. Only solitary, resilient survivors cling to life in sheltered sanctuaries.';
+      insightRu = 'Массовая гибель очищает экологическое пространство, подготавливая почву для взрывного скачка новой жизни.';
+      insightEn = 'Mass mortality clears out stagnant monopolies, preparing the stage for an explosive radiation of novel life.';
+    } else if (phase === 'lazarus_dawn') {
+      icon = '👑';
+      badgeRu = '🌅 ЛАЗАРЬ-ТАКСОНЫ • НОВАЯ ЭРА';
+      badgeEn = '🌅 LAZARUS TAXA • NEW ERA';
+
+      const survivorCount = Array.isArray(details) ? details.length : 5;
+      titleRu = `Эпоха ${this.currentEpoch}: Заря первопредков (${survivorCount} Лазаря)`;
+      titleEn = `Epoch ${this.currentEpoch}: Dawn of the Pioneers (${survivorCount} Lazarus Taxa)`;
+      contentRu = `Океан пережил катастрофу. В опустевших водах капли выжили лишь ${survivorCount} уникальных первопредков-Лазарей. Они унаследовали весь мир, богатый распавшимся био-детритом. Начинается Эпоха ${this.currentEpoch}: «${this.epochNameRu}».`;
+      contentEn = `The ocean has endured. In the emptied waters, only ${survivorCount} heroic Lazarus pioneers remain. They inherit an entire droplet enriched by the fallen world. Welcome to Epoch ${this.currentEpoch}: "${this.epochNameEn}".`;
+      insightRu = 'Эти выжившие — родоначальники всех будущих поколений. Их генетический код определит облик следующей эры.';
+      insightEn = 'These survivors are the sole architects of all future lineages. Their genomes will shape the next era of life.';
+    } else if (phase === 'radiation') {
+      icon = '✨';
+      badgeRu = '🧬 КЕМБРИЙСКИЙ ВЗРЫВ';
+      badgeEn = '🧬 CAMBRIAN EXPLOSION';
+
+      titleRu = 'Адаптивная радиация: Вспышка видообразования';
+      titleEn = 'Adaptive Radiation: Speciation Burst';
+      contentRu = 'Потомки первопредков-Лазарей стремительно делятся и мутируют с утроенной скоростью. На пустых экологических нишах возникают совершенно новые формы жизни с невиданной окраской, скоростью и повадками!';
+      contentEn = 'Offspring of the Lazarus pioneers divide and mutate at triple speed. Across vacated ecological niches, completely new life forms emerge with unprecedented morphologies, speeds, and behaviors!';
+      insightRu = 'Генетическое разнообразие полностью восстановилось. Экосистема преодолела тупик стагнации.';
+      insightEn = 'Genetic diversity is completely restored. The ecosystem has escaped the stagnation deadlock.';
+    }
+
+    this.addEntry({
+      type: 'cataclysm',
+      icon,
+      badgeRu,
+      badgeEn,
+      titleRu,
+      titleEn,
+      contentRu,
+      contentEn,
+      insightRu,
+      insightEn,
+      timestamp: Date.now()
+    });
+    this.lastObservationTime = Date.now();
+  }
+
+  recordFounderDynasty(speciesNameRu, speciesNameEn, founderName, hue = 0.5) {
+    this.addEntry({
+      type: 'dynasty',
+      icon: '👑',
+      badgeEn: 'Avatar Dynasty',
+      badgeRu: 'Династия Аватара',
+      titleEn: `Observer "${founderName}" Founds Dynasty`,
+      titleRu: `Наблюдатель «${founderName}» основывает династию`,
+      contentEn: `Direct psychic resonance established. Through sustained ciliary piloting, Observer "${founderName}" has steered the evolutionary fate of ${speciesNameEn}. The lineage now bears the founder's seal in the Codex of Species.`,
+      contentRu: `Установлен прямой контакт с аватаром. Управляя особью более 20 секунд, Наблюдатель «${founderName}» направил эволюционную траекторию вида «${speciesNameRu}». Родословная навечно запечатана в Кодексе видов.`,
+      insightEn: `Pilot descendants inherit enhanced metabolic efficiency and an indelible genetic marker.`,
+      insightRu: `Потомки этой особи наследуют повышенный метаболический КПД и особую метку династии.`,
+      timestamp: Date.now()
+    });
+    this.lastObservationTime = Date.now();
+  }
+
   addEntry(entry) {
     if (!entry) return;
 
@@ -95,22 +213,26 @@ export class AINaturalist {
     }
     this.lastJevScreenTime = now;
 
-    // 3. Minimum cooldown between published journal entries (8 minutes)
-    if (minutesSinceLastDispatch < 8) {
+    // 3. Minimum cooldown between published journal entries (20 minutes)
+    if (minutesSinceLastDispatch < 20) {
       return false;
     }
 
-    // 4. Local pre-screen: skip JEV call entirely if nothing noteworthy
+    // 4. Local pre-screen: strictly filter out routine background noise (like routine cell births)
     const kills = engineStats.recentKills || 0;
-    const births = engineStats.recentBirths || 0;
     const speciations = engineStats.recentSpeciations || 0;
     const colonyCount = engineStats.colonyCount || 0;
 
-    const hasSignificantEvent = kills >= 4 || births >= 8 || speciations > 0 || colonyCount > 0;
-    const longSilence = minutesSinceLastDispatch >= 15;
+    // Only genuine milestones qualify:
+    // - New speciation branch
+    // - Apex hunting rampage (10+ kills)
+    // - Multicellular supercolony expansion (4+ colonies)
+    // - Or rare deep ecological contemplation after 35+ minutes of silence
+    const hasSignificantEvent = speciations > 0 || kills >= 10 || colonyCount >= 4;
+    const longSilence = minutesSinceLastDispatch >= 35;
 
     if (!hasSignificantEvent && !longSilence) {
-      return false; // Nothing worth screening — save the API call
+      return false; // Skip ordinary baseline noise
     }
 
     // 5. Screen ecosystem dynamics with JEV micro-decisions
@@ -162,24 +284,23 @@ export class AINaturalist {
         type: 'choice',
         instructions: 'Should this ecological interval be published as a journal dispatch for visitors, or skipped as routine baseline?',
         criteria: {
-          publish: 'High predation kills (4+), rapid population boom (10+ births), speciation event, or more than 15 minutes since last chronicle',
-          skip: 'Minor baseline fluctuations, routine small birth counts (1-5), and no heavy predator kills'
+          publish: 'Speciation branch event, severe apex predator wave (10+ kills), multicellular supercolony, or 35+ min tranquil equilibrium milestone',
+          skip: 'Routine cell divisions/mitosis, minor predatory grazing, and background population fluctuations'
         }
       },
       editorial_focus: {
         type: 'choice',
         instructions: 'What is the primary driving drama or theme of this ecosystem moment?',
         criteria: {
-          predation_hunt: 'Active hunts, apex predators striking prey in open water',
-          population_boom: 'Sudden surge of cell divisions (mitosis) and crowding at vents',
           speciation_branch: 'A new lineage or species has adapted and split off',
-          extinction_threat: 'A species is dwindling or facing sharp decline',
-          tranquil_equilibrium: 'Peaceful harmony, steady metabolic drifting around mineral hearths'
+          predation_hunt: 'Apex predators striking in high numbers in open water',
+          reef_architecture: 'Colonies and bio-calcite mineral reefs growing around vents',
+          tranquil_equilibrium: 'Deep peaceful harmony and rhythmic metabolic drifting'
         }
       },
       urgency_level: {
         type: 'score',
-        instructions: 'Rate the urgency and drama of this moment from 0 (calm) to 2 (intense crisis or boom).',
+        instructions: 'Rate the urgency and drama of this moment from 0 (calm) to 2 (intense crisis or milestone).',
         criteria: ['calm / baseline', 'moderate activity', 'high drama']
       }
     };
@@ -282,6 +403,16 @@ JSON ONLY, NO MARKDOWN.`;
             badgeEn: isHunter ? 'New Predator' : 'New Grazer',
             badgeRu: isHunter ? 'Новый хищник' : 'Новый пастбищник',
             speciesId: species.id,
+            species: {
+              id: species.id,
+              hue: species.hue,
+              size: species.size,
+              carnivory: species.carnivory,
+              speedMax: species.speedMax,
+              nameLa: species.nameLa,
+              nameRu: species.nameRu,
+              nameEn: species.nameEn
+            },
             titleEn: response.titleEn || `New Species: ${species.nameLa}`,
             titleRu: response.titleRu || `Зарегистрирован новый вид: ${species.nameRu}`,
             contentEn: response.storyEn || response.descEn || `${species.nameEn} (${species.nameLa}) has emerged.`,
@@ -361,6 +492,16 @@ JSON ONLY, NO MARKDOWN.`;
       badgeEn,
       badgeRu,
       speciesId: species.id,
+      species: {
+        id: species.id,
+        hue: species.hue,
+        size: species.size,
+        carnivory: species.carnivory,
+        speedMax: species.speedMax,
+        nameLa: species.nameLa,
+        nameRu: species.nameRu,
+        nameEn: species.nameEn
+      },
       titleEn: `${icon} Discovered: ${species.nameLa} (${enName})`,
       titleRu: `${icon} Открыт вид: ${species.nameLa} («${ruName}»)`,
       contentEn: storyEn,
@@ -477,16 +618,16 @@ JSON format ONLY:
       storyRu = `В открытых водных коридорах развернулась стремительная охота! Быстрые хищники нанесли ${stats.recentKills || 3} точных ударов, заставив травоядных искать спасения у теплых минеральных жерл.`;
       insightEn = `Active predation prevents overgrazing and exerts evolutionary pressure for greater speed and defensive reflexes.`;
       insightRu = `Охота сдерживает перенаселение и стимулирует выработку защитной скорости у травоядных.`;
-    } else if (focusTheme === 'population_boom' || (stats.recentBirths || 0) > 8) {
-      icon = '🌾';
-      badgeEn = 'Colony Boom';
-      badgeRu = 'Всплеск делений';
-      titleEn = '🌾 Thermal Feeding Frenzy';
-      titleRu = `🌾 Демографический бум: ${stats.dominantSpeciesNameRu || 'Пастбищники'}`;
-      storyEn = `A sudden wave of ${stats.recentBirths || 10} cell divisions has swept through the hydrothermal reefs! The colony has expanded to ${stats.organismCount} organisms, with shimmering clusters contesting the richest feeding plumes.`;
-      storyRu = `Теплые гидротермальные оазисы всколыхнула волна из ${stats.recentBirths || 10} клеточных делений! Популяция выросла до ${stats.organismCount} особей, и вокруг жерл разгорелась плотная борьба за питательные шлейфы.`;
-      insightEn = `Abundant nutrient intake fuels exponential mitotic divisions, testing the carrying capacity of each thermal zone.`;
-      insightRu = `Избыток тепла и солей запускает митоз, проверяя пределы вместимости подводных оазисов.`;
+    } else if (focusTheme === 'reef_architecture' || (stats.colonyCount || 0) >= 3) {
+      icon = '🪸';
+      badgeEn = 'Reef Genesis';
+      badgeRu = 'Рост рифов';
+      titleEn = '🪸 Bio-Calcite Architecture';
+      titleRu = `🪸 Морфогенез рифов: оазисы жизни`;
+      storyEn = `Colonial organisms and mineral precipitates are weaving intricate bio-calcite shoals around the hydrothermal chimneys! These living limestone structures provide vital micro-shelter from ocean currents.`;
+      storyRu = `Органические колонии и минеральные осадки формируют причудливые био-кальцитовые рифы вокруг гидротермальных жерл! Эти живые известняковые хребты создают надежные микро-укрытия от течений.`;
+      insightEn = `Stigmergic reef building permanently alters the fluid landscape, creating enduring sanctuaries.`;
+      insightRu = `Стигмергия рифов меняет подводный ландшафт, формируя защитные лабиринты для будущих поколений.`;
     } else if (focusTheme === 'speciation_branch' || (stats.recentSpeciations || 0) > 0) {
       icon = '🧬';
       badgeEn = 'Speciation';

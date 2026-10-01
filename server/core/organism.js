@@ -23,6 +23,8 @@ export class Organism {
     this.phase = Math.random() * Math.PI * 2;
     this.heading = Math.random() * Math.PI * 2;
     this.playerSteer = { x: 0, y: 0, ticks: 0 };
+    this.isLazarus = false;
+    this.fatalDamage = false;
     
     // Genome vector
     if (genome) {
@@ -36,10 +38,15 @@ export class Organism {
     }
 
     // Cached phenotype parameters derived from genome
-    this.size = Math.max(2.0, Math.min(9.5, this.genome.size));
+    this.adultSize = Math.max(2.0, Math.min(9.5, this.genome.size));
+    // Ontogenesis: 0.0 = newborn juvenile (38% size), 1.0 = fully grown adult (100% size)
+    this.maturity = (parentId === 0) ? 1.0 : 0.0;
+    this.size = this.adultSize * (0.38 + 0.62 * this.maturity);
     this.hue = (this.genome.hue % 1.0 + 1.0) % 1.0;
     this.carnivory = Math.max(0.0, Math.min(1.0, this.genome.carnivory));
     this.maxSpeed = Math.max(0.8, Math.min(4.5, this.genome.speedMax));
+    this.isAvatarLineage = false;
+    this.pilotedTicks = 0;
   }
 
   static createRandomGenome(seedHue = null, forcePredator = null) {
@@ -63,8 +70,8 @@ export class Organism {
   }
 
   // Mutate genome with Cauchy-like heavy-tailed distribution for evolutionary leaps
-  createMutatedGenome() {
-    const rate = this.genome.mutationRate;
+  createMutatedGenome(rateMultiplier = 1.0) {
+    const rate = this.genome.mutationRate * rateMultiplier;
     const g = { ...this.genome };
 
     const mutateVal = (val, min, max, scale = 1.0) => {
@@ -114,6 +121,7 @@ export class Organism {
     let steerY = 0;
 
     if (isPiloted) {
+      this.pilotedTicks++;
       this.playerSteer.ticks--;
       // High-authority visitor steering impulse
       steerX = this.playerSteer.x * 6.5;
@@ -276,8 +284,22 @@ export class Organism {
 
     // Continuous rhythmic ciliary propulsion with chemotactic feeding sprint
     const ciliaryPulse = 0.5 + 0.5 * Math.sin(this.phase);
-    let speedMultiplier = isPiloted ? 1.45 : (0.7 + 0.5 * ciliaryPulse);
-    if (isLuredToFood && foodLureDist < 320) {
+    let speedMultiplier;
+    if (isPiloted) {
+      const thrust = (this.playerSteer && typeof this.playerSteer.thrust === 'number') ? this.playerSteer.thrust : 1.0;
+      if (thrust > 0.1) {
+        speedMultiplier = 2.1; // Full throttle forward thrust!
+        this.phase += 0.08;   // High-frequency ciliary flutter
+      } else if (thrust < -0.1) {
+        speedMultiplier = -0.35; // Active reverse brake
+      } else {
+        speedMultiplier = 0.45;  // Idle gentle cruise
+      }
+    } else {
+      speedMultiplier = 0.7 + 0.5 * ciliaryPulse;
+    }
+
+    if (isLuredToFood && foodLureDist < 320 && !isPiloted) {
       // Vigorous rush towards user-dropped food!
       const sprintFactor = Math.pow(1.0 - foodLureDist / 320, 0.75) * 1.15;
       speedMultiplier += sprintFactor;
@@ -345,6 +367,13 @@ export class Organism {
       this.energy = Math.max(40.0, this.energy);
     }
 
+    // 3.0. Ontogenesis & Somatic Maturation: juvenile growth into adult
+    if (this.maturity < 1.0) {
+      const growthRate = (this.energy > 55.0) ? 0.0035 : 0.0016;
+      this.maturity = Math.min(1.0, this.maturity + growthRate);
+      this.size = this.adultSize * (0.38 + 0.62 * this.maturity);
+    }
+
     // Cap maximum energy
     if (this.energy > CONFIG.MAX_ORGANISM_ENERGY) {
       this.energy = CONFIG.MAX_ORGANISM_ENERGY;
@@ -401,15 +430,15 @@ export class Organism {
 
   // Check if organism is eligible for Mitosis (Cell Division)
   canReproduce() {
-    return this.energy >= this.genome.splitThreshold && this.age > 40;
+    return this.energy >= this.genome.splitThreshold && this.age > 40 && this.maturity >= 0.85;
   }
 
   // Perform Mitosis: returns new child Organism
-  reproduce(speciesId) {
+  reproduce(speciesId, mutationMultiplier = 1.0) {
     this.energy *= 0.48; // Split energy between parent and child
     this.childrenCount++;
 
-    const mutatedGenome = this.createMutatedGenome();
+    const mutatedGenome = this.createMutatedGenome(mutationMultiplier);
     const spawnAngle = Math.random() * Math.PI * 2;
     const spawnDist = this.size * 1.5;
     
@@ -434,6 +463,12 @@ export class Organism {
       this.id,
       speciesId
     );
+
+    // Epigenetic inheritance: if parent was actively steered/piloted by a visitor
+    if (this.isAvatarLineage || this.pilotedTicks > 120) {
+      child.isAvatarLineage = true;
+      child.genome.metabolismEfficiency = Math.min(1.8, child.genome.metabolismEfficiency * 1.12);
+    }
     child.energy = this.energy * 0.95;
     return child;
   }
@@ -441,7 +476,7 @@ export class Organism {
   // Check if organism has perished
   isDead() {
     if (this.playerSteer && this.playerSteer.ticks > 0) return false; // Protected while visitor is piloting!
-    return this.energy <= 0.0 || this.age > 12000; // max lifespan ~20 mins of continuous life
+    return this.fatalDamage || this.energy <= 0.0 || this.age > 12000; // max lifespan ~20 mins of continuous life
   }
 
   // Pack compact binary representation for low-bandwidth 10 Hz broadcast
@@ -510,6 +545,10 @@ export class Organism {
       kills: this.kills,
       childrenCount: this.childrenCount,
       size: Math.round(this.size * 10) / 10,
+      adultSize: Math.round((this.adultSize || this.size) * 10) / 10,
+      maturity: Math.round((this.maturity !== undefined ? this.maturity : 1.0) * 100),
+      isAvatarLineage: Boolean(this.isAvatarLineage),
+      founderName: species ? (species.founderName || null) : null,
       speed: Math.round(Math.sqrt(this.vx * this.vx + this.vy * this.vy) * 10) / 10,
       hue: this.hue,
       carnivory: Math.round(this.carnivory * 100),

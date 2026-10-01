@@ -84,7 +84,20 @@ export const DICTIONARY = {
     dive_look: 'Look',
     dive_boost: 'Boost',
     dive_feed: 'Feed',
-    speed: 'SPEED'
+    speed: 'SPEED',
+    stage: 'Development Stage',
+    stage_juvenile: 'Juvenile (Offspring)',
+    stage_subadult: 'Growing Subadult',
+    stage_adult: 'Mature Adult',
+    dynasty_title: 'AVATAR DYNASTY',
+    dynasty_sub: 'Resonance active for over 20 seconds',
+    dynasty_desc: 'Your will has guided this specimen\'s evolution. Inscribe the Observer\'s name to permanently enshrine this ruling dynasty in the Species Codex:',
+    dynasty_enshrine: 'Enshrine',
+    dynasty_later: 'Later',
+    founder: 'Dynasty',
+    founder_prefix: 'Founder: ',
+    detritus_label: 'Organic Detritus',
+    dynasty_placeholder: 'Observer Name...'
   },
   ru: {
     organisms: 'организмов',
@@ -171,7 +184,20 @@ export const DICTIONARY = {
     dive_look: 'Обзор',
     dive_boost: 'Ускорение',
     dive_feed: 'Кормить',
-    speed: 'СКОРОСТЬ'
+    speed: 'СКОРОСТЬ',
+    stage: 'Стадия развития',
+    stage_juvenile: 'Ювенил (детеныш)',
+    stage_subadult: 'Подрастающая особь',
+    stage_adult: 'Взрослая особь',
+    dynasty_title: 'РОДОСЛОВНАЯ НАБЛЮДАТЕЛЯ',
+    dynasty_sub: 'Связь с аватаром активна более 20 секунд',
+    dynasty_desc: 'Ваша воля направила эволюцию этой особи. Впишите имя Наблюдателя, чтобы навечно закрепить правящую династию в Кодексе видов:',
+    dynasty_enshrine: 'Увековечить',
+    dynasty_later: 'Позже',
+    founder: 'Династия',
+    founder_prefix: 'Основатель: ',
+    detritus_label: 'Органический детрит',
+    dynasty_placeholder: 'Имя Наблюдателя...'
   }
 };
 

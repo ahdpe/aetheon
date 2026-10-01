@@ -6,7 +6,6 @@ import { CodexModal } from './ui/codexModal.js';
 import { AboutModal } from './ui/aboutModal.js';
 import { JournalDrawer } from './ui/journalDrawer.js';
 import { InputController } from './ui/controls.js';
-import { DiveEngine } from './dive/diveEngine.js';
 
 class AetheonApp {
   constructor() {
@@ -16,8 +15,9 @@ class AetheonApp {
     this.isConnected = false;
     this.journalEntries = [];
 
-    // 3D First-Person Dive Engine
-    this.diveEngine = new DiveEngine(this);
+    // 3D First-Person Dive Engine (Lazy loaded on demand to make page load instant)
+    this.diveEngine = null;
+    this.diveEnginePromise = null;
     this.i18n = i18n;
     this.sound = sound;
     window.sound = sound;
@@ -54,6 +54,31 @@ class AetheonApp {
       const hint = document.getElementById('interactive-hint');
       if (hint) hint.style.opacity = '0';
     }, 7000);
+
+    // 6. Preload 3D Dive Engine quietly after 2.5s (when 2D simulation is running smoothly)
+    setTimeout(() => {
+      if (!this.diveEngine) this.getDiveEngine();
+    }, 2500);
+  }
+
+  // Asynchronously get or initialize the 3D first-person dive engine
+  async getDiveEngine() {
+    if (this.diveEngine) return this.diveEngine;
+    if (!this.diveEnginePromise) {
+      this.diveEnginePromise = import('./dive/diveEngine.js').then(({ DiveEngine }) => {
+        this.diveEngine = new DiveEngine(this);
+        // Sync vents if already received
+        if (this.renderer && this.renderer.vents && this.diveEngine.environment) {
+          this.diveEngine.environment.updateVents(this.renderer.vents);
+        }
+        return this.diveEngine;
+      }).catch(err => {
+        console.error('[Aetheon] Failed to load 3D Dive Engine:', err);
+        this.diveEnginePromise = null;
+        return null;
+      });
+    }
+    return this.diveEnginePromise;
   }
 
   setupHUD() {
@@ -105,6 +130,15 @@ class AetheonApp {
       }
       if (this.lastStats) {
         this.updateStats(this.lastStats);
+      }
+    });
+
+    // Manual Cataclysm trigger in Lab Mode
+    const triggerBtn = document.getElementById('btn-trigger-cataclysm');
+    triggerBtn?.addEventListener('click', () => {
+      if (this.socket && this.isConnected) {
+        this.socket.send(JSON.stringify({ type: 'trigger_cataclysm' }));
+        sound.playDroplet(350);
       }
     });
   }
@@ -163,16 +197,33 @@ class AetheonApp {
       this.updateVisitors(msg.visitors);
       if (msg.journal && msg.journal.length > 0) {
         this.journalEntries = msg.journal;
-        this.updateTicker(msg.journal[0]);
-        this.journalDrawer.setEntries(msg.journal);
+        for (const e of this.journalEntries) {
+          if (!e.screenshot) {
+            try {
+              const cached = localStorage.getItem(`aetheon_snap_${e.id || e.timestamp}`);
+              if (cached) e.screenshot = cached;
+            } catch (_) {}
+          }
+        }
+        this.updateTicker(this.journalEntries[0]);
+        this.journalDrawer.setEntries(this.journalEntries);
       }
       if (msg.atlas && msg.atlas.length > 0) {
         this.journalDrawer.setAtlasEntries(msg.atlas);
       }
     } else if (msg.type === 'tick') {
+      if (msg.vents) {
+        this.renderer.setVents(msg.vents);
+        if (this.diveEngine && this.diveEngine.environment) {
+          this.diveEngine.environment.updateVents(msg.vents);
+        }
+      }
       this.renderer.onServerTick(msg);
       if (msg.visitors !== undefined) this.updateVisitors(msg.visitors);
       if (msg.stats) this.updateStats(msg.stats);
+      if (msg.cataclysm) {
+        this.updateCataclysmBanner(msg.cataclysm);
+      }
       if (this.renderer.isLabMode) this.updateLabTelemetry();
 
       // Play audio events for nearby occurrences
@@ -340,6 +391,16 @@ class AetheonApp {
     }
   }
 
+  sendLineageFounder(speciesId, founderName) {
+    if (this.socket && this.isConnected) {
+      this.socket.send(JSON.stringify({
+        type: 'name_lineage',
+        speciesId: Number(speciesId),
+        founderName: String(founderName).trim()
+      }));
+    }
+  }
+
   // Focus and track an active organism of the selected species in the ocean
   trackSpeciesInOcean(speciesId) {
     if (!this.renderer || !this.renderer.currEntities) return false;
@@ -371,6 +432,37 @@ class AetheonApp {
 
     sound.playDroplet(1500);
     return true;
+  }
+
+  updateCataclysmBanner(cataclysm) {
+    const banner = document.getElementById('cataclysm-banner');
+    if (!banner) return;
+    if (!cataclysm || !cataclysm.active || cataclysm.phase === 'dormant') {
+      banner.classList.add('hidden');
+      return;
+    }
+
+    banner.classList.remove('hidden');
+    const isRu = i18n.getLang() === 'ru';
+    const titleEl = document.getElementById('cataclysm-title');
+    const descEl = document.getElementById('cataclysm-desc');
+    const phaseEl = document.getElementById('cataclysm-phase-badge');
+    const iconEl = document.getElementById('cataclysm-icon');
+
+    if (titleEl) titleEl.textContent = isRu ? cataclysm.nameRu : cataclysm.nameEn;
+    if (descEl) descEl.textContent = isRu ? cataclysm.descRu : cataclysm.descEn;
+    if (iconEl) iconEl.textContent = cataclysm.icon || '⚠️';
+
+    const phaseLabels = {
+      premonition: isRu ? 'ПРЕДВЕСТИЕ' : 'PREMONITION',
+      crisis: isRu ? `ПИК ВЫМИРАНИЯ (${cataclysm.survivors || 'единицы'})` : `PEAK CRISIS (${cataclysm.survivors || 'few'})`,
+      lazarus_dawn: isRu ? 'ЗАРЯ ЛАЗАРЕЙ' : 'LAZARUS DAWN',
+      radiation: isRu ? 'КЕМБРИЙСКИЙ ВЗРЫВ' : 'CAMBRIAN RADIATION'
+    };
+
+    if (phaseEl) {
+      phaseEl.textContent = phaseLabels[cataclysm.phase] || cataclysm.phase.toUpperCase();
+    }
   }
 }
 

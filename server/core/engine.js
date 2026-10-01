@@ -8,6 +8,7 @@ import { ClimateEngine } from './climate.js';
 import { AtlasManager } from './atlasManager.js';
 import { AINaturalist } from '../ai/naturalist.js';
 import { PersistenceManager } from './persistence.js';
+import { CataclysmManager } from './cataclysmManager.js';
 
 export class SimulationEngine {
   constructor() {
@@ -24,6 +25,7 @@ export class SimulationEngine {
     this.persistence = new PersistenceManager();
     this.colonies = new ColonyManager();
     this.atlas = new AtlasManager(this);
+    this.cataclysms = new CataclysmManager(this);
     
     // Active visitor-created nutrient blooms
     this.nutrientBlooms = [];
@@ -98,12 +100,12 @@ export class SimulationEngine {
   step() {
     this.ticks++;
 
-    // 0. Advance active visitor nutrient blooms
+    // 0. Advance active visitor nutrient blooms and detritus clouds
     for (let b = this.nutrientBlooms.length - 1; b >= 0; b--) {
       const bloom = this.nutrientBlooms[b];
       bloom.age++;
       if (bloom.age % 4 === 0) {
-        this.grid.injectDrop(bloom.x, bloom.y, 0.4, bloom.radius);
+        this.grid.injectDrop(bloom.x, bloom.y, bloom.isDetritus ? 0.2 : 0.4, bloom.radius);
       }
       if (bloom.age >= bloom.maxAge || bloom.energy <= 0) {
         this.nutrientBlooms.splice(b, 1);
@@ -115,8 +117,13 @@ export class SimulationEngine {
     const effRadius = this.climate.getEffectiveRadius(CONFIG.CHAMBER_RADIUS);
     const tempFactor = 0.85 + 0.25 * this.climate.temperature;
 
-    // 1. Advance chemical diffusion & vents (modulated by climate vent factors)
-    this.grid.step(this.climate.ventFactors);
+    // 1. Advance chemical diffusion & vents (modulated by climate vent factors and tectonic ticks)
+    this.grid.step(this.climate.ventFactors, this.ticks);
+
+    // 1.5. Advance Cataclysms & Stagnation Detector
+    if (this.cataclysms) {
+      this.cataclysms.step();
+    }
 
     // 2. Clear & repopulate spatial hash
     this.spatialHash.clear();
@@ -154,6 +161,7 @@ export class SimulationEngine {
               this.recentWindow.kills++;
               if (strike.killed) {
                 deadSet.add(prey.id);
+                this.handleOrganismDeath(prey, true);
                 this.eventsBuffer.push({
                   type: 'predation',
                   x: prey.x,
@@ -180,6 +188,7 @@ export class SimulationEngine {
             const isCandPiloted = cand.playerSteer && cand.playerSteer.ticks > 0;
             if (!deadSet.has(cand.id) && cand !== org && !isCandPiloted && (cand.age > 4000 || cand.energy < 30)) {
               deadSet.add(cand.id);
+              this.handleOrganismDeath(cand, false);
               allowMitosis = true;
               break;
             }
@@ -187,12 +196,15 @@ export class SimulationEngine {
         }
 
         if (allowMitosis) {
-          const childSpeciesId = this.lineage.evaluateSpeciation(org.genome, org.speciesId);
+          const specThresholdMult = this.cataclysms ? this.cataclysms.getSpeciationThresholdMultiplier() : 1.0;
+          const mutMult = this.cataclysms ? this.cataclysms.getMutationMultiplier() : 1.0;
+          const childSpeciesId = this.lineage.evaluateSpeciation(org.genome, org.speciesId, specThresholdMult);
           if (childSpeciesId !== org.speciesId) {
             this.recentWindow.speciations++;
+            if (this.cataclysms) this.cataclysms.onSpeciation();
           }
           this.recentWindow.births++;
-          const child = org.reproduce(childSpeciesId);
+          const child = org.reproduce(childSpeciesId, mutMult);
           newChildren.push(child);
           this.eventsBuffer.push({
             type: 'birth',
@@ -213,12 +225,7 @@ export class SimulationEngine {
       // Natural death check
       if (org.isDead()) {
         deadSet.add(org.id);
-        // Dissolve organism mass back into nutrients
-        this.grid.injectDrop(org.x, org.y, org.size * 0.25, org.size * 1.5);
-        // Necro-calcification: deposit structural bio-calcite into substrate
-        if (this.grid.depositSubstrate) {
-          this.grid.depositSubstrate(org.x, org.y, 0.08 * (org.size / 10), org.size * 1.1);
-        }
+        this.handleOrganismDeath(org, false);
       }
     }
 
@@ -248,7 +255,8 @@ export class SimulationEngine {
     }
 
     // 6. Spontaneous Biogenesis (if population dips too low, vents nucleate fresh life)
-    if (this.organisms.length < CONFIG.MIN_ORGANISMS) {
+    const blockBiogenesis = this.cataclysms && this.cataclysms.isBiogenesisBlocked();
+    if (!blockBiogenesis && this.organisms.length < CONFIG.MIN_ORGANISMS) {
       const needed = CONFIG.MIN_ORGANISMS - this.organisms.length;
       const vents = this.grid.vents;
       const speciesList = this.lineage.getAllSpecies();
@@ -268,7 +276,7 @@ export class SimulationEngine {
       if (this.organisms[i].carnivory > 0.35) activeHunters++;
     }
 
-    if (activeHunters < 16) {
+    if (!blockBiogenesis && activeHunters < 16) {
       const neededHunters = 16 - activeHunters;
       const vents = this.grid.vents;
       let hunterSpecies = this.lineage.getSpecies(3); // Vibrionox vorax
@@ -356,19 +364,20 @@ export class SimulationEngine {
     return { success: false };
   }
 
-  // Handle visitor first-person ciliary steering impulse
-  applySteer(orgId, steerX, steerY) {
+  // Handle visitor first-person ciliary steering impulse with active throttle (thrust)
+  applySteer(orgId, steerX, steerY, thrust = 1.0) {
     for (let i = 0; i < this.organisms.length; i++) {
       const o = this.organisms[i];
       if (o.id === orgId) {
-        // Keep active steering authority for 15 ticks (1.5 seconds)
-        o.playerSteer = { x: steerX, y: steerY, ticks: 15 };
+        // Keep active steering authority for 12 ticks (~1.2 seconds)
+        o.playerSteer = { x: steerX, y: steerY, thrust, ticks: 12 };
         const mag = Math.hypot(steerX, steerY);
         if (mag > 0.05) {
           const targetHeading = Math.atan2(steerY, steerX);
           o.heading = targetHeading;
-          o.vx = Math.cos(targetHeading) * o.maxSpeed * 1.35;
-          o.vy = Math.sin(targetHeading) * o.maxSpeed * 1.35;
+          const spdMult = thrust > 0.1 ? 2.1 : (thrust < -0.1 ? -0.35 : 0.45);
+          o.vx = Math.cos(targetHeading) * o.maxSpeed * spdMult;
+          o.vy = Math.sin(targetHeading) * o.maxSpeed * spdMult;
         }
         return true;
       }
@@ -520,11 +529,70 @@ export class SimulationEngine {
         x: Math.round(b.x),
         y: Math.round(b.y),
         r: Math.round(b.radius),
-        e: Math.round(b.energy)
+        e: Math.round(b.energy),
+        d: b.isDetritus ? 1 : 0,
+        h: b.hue !== undefined ? Math.round(b.hue * 100) / 100 : undefined
       })),
       colonies: this.colonies.getBondPairs(),
       climate: this.climate.getBroadcastState(),
-      pilots: this.getPilotedIds()
+      pilots: this.getPilotedIds(),
+      vents: (this.ticks % 20 === 0 && this.grid.getVentsState) ? this.grid.getVentsState() : undefined,
+      cataclysm: this.cataclysms ? this.cataclysms.getBroadcastState() : undefined,
+      lazarus: this.cataclysms ? this.cataclysms.getLazarusIds() : undefined
     };
+  }
+
+  // Handle organism demise: release chemical nutrients, deposit bio-calcite reef substrate, and form organic detritus
+  handleOrganismDeath(org, isPredation = false) {
+    // 1. Dissolve organism mass into nutrients
+    this.grid.injectDrop(org.x, org.y, org.size * 0.25, org.size * 1.5);
+
+    // 2. Necro-calcification: deposit structural bio-calcite into substrate (bone reefs)
+    if (this.grid.depositSubstrate) {
+      this.grid.depositSubstrate(org.x, org.y, 0.12 * (org.size / 8), org.size * 1.5);
+    }
+
+    // 3. Detritus cloud: dead cells leave scavengeable necromass for grazers
+    if (org.size >= 3.0 && Math.random() < 0.65) {
+      this.spawnDetritusBloom(org.x, org.y, org.size, org.hue, org.energy);
+    }
+  }
+
+  spawnDetritusBloom(x, y, size, hue, energyRemaining) {
+    if (this.nutrientBlooms.length >= 28) {
+      const oldestDetritusIdx = this.nutrientBlooms.findIndex(b => b.isDetritus);
+      if (oldestDetritusIdx >= 0) {
+        this.nutrientBlooms.splice(oldestDetritusIdx, 1);
+      }
+    }
+    const detritusEnergy = Math.max(30.0, Math.min(180.0, (energyRemaining || 30) * 0.6 + size * 10));
+    const bloom = {
+      id: this.nextBloomId++,
+      x,
+      y,
+      energy: detritusEnergy,
+      radius: Math.max(14, size * 2.2),
+      maxAge: 220, // ~22 seconds
+      age: 0,
+      isDetritus: true,
+      hue: hue !== undefined ? hue : 0.12
+    };
+    this.nutrientBlooms.push(bloom);
+  }
+
+  nameSpeciesFounder(speciesId, founderName) {
+    const sp = this.lineage.setFounderName(speciesId, founderName);
+    if (sp && this.naturalist) {
+      this.naturalist.recordFounderDynasty(sp.nameRu || sp.nameLa, sp.nameEn || sp.nameLa, founderName, sp.hue);
+    }
+    return sp;
+  }
+
+  // Trigger an extinction cataclysm
+  triggerCataclysm(type) {
+    if (this.cataclysms) {
+      return this.cataclysms.triggerCataclysm(type, 'manual_trigger');
+    }
+    return false;
   }
 }

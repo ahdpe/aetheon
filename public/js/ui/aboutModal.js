@@ -180,6 +180,38 @@ export class AboutModal {
               <span class="ctrl-text">Переключить в <strong>Научный режим</strong>: измерительная сетка, полярные координаты, векторы тяги и границы привлечения.</span>
             </div>
           </div>
+        <div class="landscape-architecture-card glass-panel" style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.25rem;">
+          <div class="ai-card-badge" style="color: #34d399; border-color: rgba(52, 211, 153, 0.4);">БИОГЕОХИМИЯ И ТОПОГРАФИЯ СРЕДЫ</div>
+          <h3 class="ai-card-title" style="color: #ecfdf5; margin-bottom: 0.75rem;">Как устроен ландшафт под капотом</h3>
+          <p style="font-size: 0.95rem; line-height: 1.6; color: #cbd5e1; margin-bottom: 1rem;">
+            Ландшафт в капле Aetheon — это динамическая самоорганизующаяся геоморфологическая система, рождающаяся из жизнедеятельности самих микроорганизмов:
+          </p>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 0.5rem;">
+            <div style="background: rgba(2, 13, 26, 0.6); padding: 0.85rem; border-radius: 6px; border-left: 3px solid #10b981;">
+              <strong style="color: #6ee7b7; display: block; margin-bottom: 0.25rem;">🪸 Био-кальцит и Стигмергия:</strong>
+              <span style="font-size: 0.85rem; color: #94a3b8; line-height: 1.45; display: block;">
+                При питании и гибели клеток минеральные оболочки оседают на дно в слой <code>substrate</code>. В местах скопления колоний вырастают светящиеся коралловые рифы, которые физически замедляют течение нутриентов, создавая тихие природные лагуны.
+              </span>
+            </div>
+            <div style="background: rgba(2, 13, 26, 0.6); padding: 0.85rem; border-radius: 6px; border-left: 3px solid #06b6d4;">
+              <strong style="color: #67e8f9; display: block; margin-bottom: 0.25rem;">🌊 Дифференцированная эрозия:</strong>
+              <span style="font-size: 0.85rem; color: #94a3b8; line-height: 1.45; display: block;">
+                Гидродинамические потоки быстро вымывают рыхлый осадок из открытых вод, сохраняя глубокие синие каньоны. Но когда плотность кальцита превышает порог кристаллизации, минерал цементируется в стойкие коралловые хребты.
+              </span>
+            </div>
+            <div style="background: rgba(2, 13, 26, 0.6); padding: 0.85rem; border-radius: 6px; border-left: 3px solid #f59e0b;">
+              <strong style="color: #fcd34d; display: block; margin-bottom: 0.25rem;">🌋 Тектоника и Бродячие фумаролы:</strong>
+              <span style="font-size: 0.85rem; color: #94a3b8; line-height: 1.45; display: block;">
+                5 основных термальных источников медленно дрейфуют по дну, питая разные секторы капли. Периодически на дне открываются временные фумаролы: они извергают минеральные шлейфы и наращивают вокруг себя конические вулканы.
+              </span>
+            </div>
+            <div style="background: rgba(2, 13, 26, 0.6); padding: 0.85rem; border-radius: 6px; border-left: 3px solid #38bdf8;">
+              <strong style="color: #7dd3fc; display: block; margin-bottom: 0.25rem;">🏔️ Реальный 3D-рельеф дна:</strong>
+              <span style="font-size: 0.85rem; color: #94a3b8; line-height: 1.45; display: block;">
+                В режиме погружения в организм 3D-сетка дна динамически деформируется в реальном времени: рифы поднимаются в виде горных гряд высотой до 12 мкм, а жерла пульсируют мягким светом и искрами.
+              </span>
+            </div>
+          </div>
         </div>
 
         <div class="math-cta-card" style="margin-bottom: 1rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(6, 182, 212, 0.12)); border-color: rgba(16, 185, 129, 0.3);">
@@ -298,6 +330,38 @@ export class AboutModal {
             <div class="ctrl-item">
               <span class="ctrl-key">Key 'R' (or Lab button)</span>
               <span class="ctrl-text">Toggle <strong>Research Instrument Mode</strong>: velocity vector fields, sensory horizons, range calipers, and polar coordinates.</span>
+            </div>
+          </div>
+        <div class="landscape-architecture-card glass-panel" style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.25rem;">
+          <div class="ai-card-badge" style="color: #34d399; border-color: rgba(52, 211, 153, 0.4);">BIOGEOCHEMISTRY & TOPOGRAPHY</div>
+          <h3 class="ai-card-title" style="color: #ecfdf5; margin-bottom: 0.75rem;">How the Landscape Works Under the Hood</h3>
+          <p style="font-size: 0.95rem; line-height: 1.6; color: #cbd5e1; margin-bottom: 1rem;">
+            The landscape in Aetheon is not a static background, but a self-organizing geomorphological medium sculpted directly by living organisms:
+          </p>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 0.5rem;">
+            <div style="background: rgba(2, 13, 26, 0.6); padding: 0.85rem; border-radius: 6px; border-left: 3px solid #10b981;">
+              <strong style="color: #6ee7b7; display: block; margin-bottom: 0.25rem;">🪸 Bio-Calcite & Stigmergy:</strong>
+              <span style="font-size: 0.85rem; color: #94a3b8; line-height: 1.45; display: block;">
+                Cellular metabolism and mortality deposit mineral shells into the <code>substrate</code> layer. Where colonies thrive, bioluminescent coral reefs emerge, physically impeding nutrient dissipation to shelter offspring in quiet lagoons.
+              </span>
+            </div>
+            <div style="background: rgba(2, 13, 26, 0.6); padding: 0.85rem; border-radius: 6px; border-left: 3px solid #06b6d4;">
+              <strong style="color: #67e8f9; display: block; margin-bottom: 0.25rem;">🌊 Differential Erosion:</strong>
+              <span style="font-size: 0.85rem; color: #94a3b8; line-height: 1.45; display: block;">
+                Hydrodynamic currents wash away loose silt in open waters to preserve deep sapphire canyons. When calcite concentration passes crystallization thresholds, mineral cements into wave-resistant coral ridges.
+              </span>
+            </div>
+            <div style="background: rgba(2, 13, 26, 0.6); padding: 0.85rem; border-radius: 6px; border-left: 3px solid #f59e0b;">
+              <strong style="color: #fcd34d; display: block; margin-bottom: 0.25rem;">🌋 Tectonics & Ephemeral Fumaroles:</strong>
+              <span style="font-size: 0.85rem; color: #94a3b8; line-height: 1.45; display: block;">
+                The 5 primary hydrothermal vents drift along tectonic faults, sweeping warm plumes across colonies. Ephemeral fumaroles periodically erupt, pluming minerals and accreting volcanic mounds before cooling into seamounts.
+              </span>
+            </div>
+            <div style="background: rgba(2, 13, 26, 0.6); padding: 0.85rem; border-radius: 6px; border-left: 3px solid #38bdf8;">
+              <strong style="color: #7dd3fc; display: block; margin-bottom: 0.25rem;">🏔️ Dynamic 3D Seafloor Topography:</strong>
+              <span style="font-size: 0.85rem; color: #94a3b8; line-height: 1.45; display: block;">
+                Inside 3D Dive Mode, the seafloor mesh deforms in real time: reefs rise into majestic 12 μm submarine mountain crests, and vent domes pulse with luminous radiance and rising volcanic embers.
+              </span>
             </div>
           </div>
         </div>
@@ -618,6 +682,93 @@ export class AboutModal {
             а когнитивный ИИ переводит эту математическую энтропию в язык человеческих смыслов и научных хроник.
           </p>
         </article>
+
+        <!-- 09. Био-геохимия субстрата, гидродинамика рифов и термодинамический климат -->
+        <article class="math-section">
+          <div class="section-header">
+            <span class="sec-num">09</span>
+            <h3 class="sec-title">Морфогенез субстрата, стигмергия рифов и климатическое дыхание</h3>
+          </div>
+          <p>
+            Четвертый фундаментальный физический слой капли — био-минеральный кальцитовый субстрат <em>B(<strong>x</strong>, t)</em>. 
+            Он образуется в результате некрокальцификации (осаждения панцирей погибших особей) и гранулирования солей при фильтрации.
+          </p>
+          <div class="formula-box">
+            <div class="formula-label">УРАВНЕНИЕ ДИНАМИКИ СУБСТРАТА С НЕЛИНЕЙНОЙ ЭРОЗИЕЙ И КРИСТАЛЛИЗАЦИЕЙ:</div>
+            <div class="math-eq">
+              <span class="m-frac"><span class="m-top">∂B</span><span class="m-bot">∂t</span></span>
+              <span class="m-op">=</span> <span class="m-const">D<sub>B</sub></span> ∇²B
+              <span class="m-op">+</span> ∑ S<sub>necro, k</sub>(<strong>x</strong>) · (1 + 0.5 · [B &gt; Θ<sub>cryst</sub>])
+              <span class="m-op">+</span> ∑ S<sub>fum, j</sub>(<strong>x</strong>, t)
+              <span class="m-op">−</span> γ<sub>erosion</sub>(B) · B
+            </div>
+            <div class="formula-vars">
+              <div><strong>D<sub>B</sub> = 0.003:</strong> Коэффициент диффузионного сглаживания минеральных гребней.</div>
+              <div><strong>γ<sub>erosion</sub>(B):</strong> Кусочно-нелинейная функция гидродинамического вымывания:
+                <div class="sub-formula">
+                  γ(B) = 3.2 · 10⁻⁴ при B &lt; 0.18 (быстрое очищение открытых желобов и глубоких каньонов);<br>
+                  γ(B) = 1.2 · 10⁻⁵ при B ≥ 0.38 (высокая стабильность консолидированных коралловых рифов).
+                </div>
+              </div>
+              <div><strong>[B &gt; Θ<sub>cryst</sub>]:</strong> Положительная обратная связь кристаллизации (кооперативное зародышеобразование минералов на уже существующих рифах).</div>
+            </div>
+          </div>
+          <div class="formula-box">
+            <div class="formula-label">ЭКРАНИРОВАНИЕ ТЕЧЕНИЙ И РЕЛЬЕФНАЯ ТОПОЛОГИЯ ДНА (REEF IMPEDANCE):</div>
+            <div class="math-eq">
+              D<sub>eff</sub>(<strong>x</strong>) = D<sub>0</sub> · max(0.12, &nbsp; 1.0 − 0.88 · B(<strong>x</strong>))
+            </div>
+            <div class="formula-notes">
+              Плотный известняковый риф подавляет диффузию питательных солей на 88%, формируя тихие минеральные лагуны и естественные природные убежища от течений.
+            </div>
+          </div>
+          <div class="formula-box">
+            <div class="formula-label">3D-ВЫДАВЛИВАНИЕ БАТИМЕТРИЧЕСКОГО РЕЛЬЕФА В РЕЖИМЕ ПОГРУЖЕНИЯ:</div>
+            <div class="math-eq">
+              Y<sub>seabed</sub>(<strong>x</strong>) = Y<sub>base</sub>(<strong>x</strong>) + 12.0 · B(<strong>x</strong>)<sup>1.25</sup> + ∑ M<sub>vent, v</sub>(<strong>x</strong>)
+            </div>
+            <div class="formula-vars">
+              <div>При погружении в клетку плоский экран преобразуется в трехмерный ландшафт: рифы поднимаются со дна на высоту до 12 мкм, образуя величественные подводные хребты и гроты.</div>
+            </div>
+          </div>
+        </article>
+
+        <!-- 10. Онтогенез, некро-детрит, династии и оптический LOD -->
+        <article class="math-section">
+          <div class="section-header">
+            <span class="sec-num">10</span>
+            <h3 class="sec-title">Онтогенез, остаточный некро-детрит, династии и оптический LOD</h3>
+          </div>
+          <p>
+            Эволюция капли опирается на принципы индивидуального созревания, биогенного следа умерших клеток и сбалансированного антропогенного резонанса:
+          </p>
+          <div class="formula-box">
+            <div class="formula-label">ОНТОГЕНЕЗ И СОМАТИЧЕСКИЙ РОСТ (SOMATIC MATURATION):</div>
+            <div class="math-eq">
+              s(t) = s<sub>adult</sub> · [ 0.38 + 0.62 · m(t) ], &emsp; dm/dt = (E &gt; 55) ? 0.0035 : 0.0016
+            </div>
+            <div class="formula-vars">
+              <div><strong>s<sub>adult</sub>:</strong> Генетически заложенный предельный размер взрослой особи.</div>
+              <div><strong>m ∈ [0, 1]:</strong> Степень соматической зрелости клетки. Новорожденные особи рождаются крошечными (38% размера) и постепенно растут по мере питания. Деление (митоз) разрешено строго при достижении зрелости <strong>m ≥ 0.85</strong>.</div>
+            </div>
+          </div>
+          <div class="formula-box">
+            <div class="formula-label">ОСТАТОЧНЫЙ СЛЕД: НЕКРО-ДЕТРИТ И КОСТНЫЕ РИФЫ (DETRITUS CYCLE):</div>
+            <div class="math-eq">
+              D<sub>cloud</sub>(<strong>x</strong>) = E<sub>detritus</sub> · exp(−||<strong>x</strong> − <strong>x</strong><sub>death</sub>||² / 2r²), &emsp; ΔB = 0.12 · (s / 8)
+            </div>
+            <div class="formula-vars">
+              <div>При гибели клетки (естественной или от хищника) биомасса не исчезает в никуда: она оставляет после себя облако теплого органического детрита (питательный некромасс для пастбищников) и осаждает био-кальцит в твердый субстрат дна, наращивая природные костные рифы.</div>
+            </div>
+          </div>
+          <div class="formula-box">
+            <div class="formula-label">ДИНАСТИИ НАБЛЮДАТЕЛЕЙ И ОПТИЧЕСКИЙ LOD (AVATAR DYNASTIES & OPTICAL LOD):</div>
+            <div class="formula-vars">
+              <div><strong>Родословные Аватаров:</strong> Пилотирование особи человеком свыше 20 секунд связывает волю наблюдателя с биосферой капли. Имя наблюдателя навечно заносится в Кодекс видов как основателя правящей династии, а потомки наследуют повышенный метаболический КПД.</div>
+              <div><strong>Динамический оптический LOD:</strong> Трёхуровневая система адаптивной детализации: при общем обзоре капли (r &lt; 4.8px) микробы рендерятся как легкие биолюминесцентные споры (3 вызова вместо 25), плавно раскрывая реснички, рострумы и оптический рельеф Номарского (DIC) лишь при приближении камеры. Это гарантирует плавные 60 кадров/с на любых устройствах.</div>
+            </div>
+          </div>
+        </article>
       </div>
     `;
   }
@@ -883,6 +1034,93 @@ export class AboutModal {
             while the macro-scale cognitive model translates entropy into structured science and narrative history.
           </p>
         </article>
+
+        <!-- 09. Substrate Geodynamics, Reef Stigmergy & Climate Breathing -->
+        <article class="math-section">
+          <div class="section-header">
+            <span class="sec-num">09</span>
+            <h3 class="sec-title">Substrate Geodynamics, Reef Stigmergy & Planetary Climate</h3>
+          </div>
+          <p>
+            The fourth fundamental continuous layer is the bio-mineral calcite substrate <em>B(<strong>x</strong>, t)</em>. 
+            It accretes through necro-calcification (skeletal deposition upon organism mortality) and crystal filtration.
+          </p>
+          <div class="formula-box">
+            <div class="formula-label">SUBSTRATE DYNAMICS PDE WITH NON-LINEAR EROSION & CRYSTALLIZATION:</div>
+            <div class="math-eq">
+              <span class="m-frac"><span class="m-top">∂B</span><span class="m-bot">∂t</span></span>
+              <span class="m-op">=</span> <span class="m-const">D<sub>B</sub></span> ∇²B
+              <span class="m-op">+</span> ∑ S<sub>necro, k</sub>(<strong>x</strong>) · (1 + 0.5 · [B &gt; Θ<sub>cryst</sub>])
+              <span class="m-op">+</span> ∑ S<sub>fum, j</sub>(<strong>x</strong>, t)
+              <span class="m-op">−</span> γ<sub>erosion</sub>(B) · B
+            </div>
+            <div class="formula-vars">
+              <div><strong>D<sub>B</sub> = 0.003:</strong> Diffusion smoothing coefficient for organic limestone ridges.</div>
+              <div><strong>γ<sub>erosion</sub>(B):</strong> Piecewise non-linear hydrodynamic dissolution:
+                <div class="sub-formula">
+                  γ(B) = 3.2 · 10⁻⁴ when B &lt; 0.18 (rapid clearing of open channels and deep sapphire troughs);<br>
+                  γ(B) = 1.2 · 10⁻⁵ when B ≥ 0.38 (high structural persistence of cemented coral reefs).
+                </div>
+              </div>
+              <div><strong>[B &gt; Θ<sub>cryst</sub>]:</strong> Positive feedback nucleation bonus (cooperative crystal binding onto established reefs).</div>
+            </div>
+          </div>
+          <div class="formula-box">
+            <div class="formula-label">HYDRODYNAMIC CURRENT SHIELDING (REEF IMPEDANCE):</div>
+            <div class="math-eq">
+              D<sub>eff</sub>(<strong>x</strong>) = D<sub>0</sub> · max(0.12, &nbsp; 1.0 − 0.88 · B(<strong>x</strong>))
+            </div>
+            <div class="formula-notes">
+              Dense limestone reef structures impede nutrient diffusion by up to 88%, creating sheltered, nutrient-rich nurseries.
+            </div>
+          </div>
+          <div class="formula-box">
+            <div class="formula-label">DYNAMIC 3D BATHYMETRIC DISPLACEMENT IN DIVE MODE:</div>
+            <div class="math-eq">
+              Y<sub>seabed</sub>(<strong>x</strong>) = Y<sub>base</sub>(<strong>x</strong>) + 12.0 · B(<strong>x</strong>)<sup>1.25</sup> + ∑ M<sub>vent, v</sub>(<strong>x</strong>)
+            </div>
+            <div class="formula-vars">
+              <div>Inside First-Person Dive Mode, the seafloor mesh deforms in real time into towering 12 μm coral peaks and deep abyssal blue canyons.</div>
+            </div>
+          </div>
+        </article>
+
+        <!-- 10. Ontogenesis, Detritus, Dynasties & Optical LOD -->
+        <article class="math-section">
+          <div class="section-header">
+            <span class="sec-num">10</span>
+            <h3 class="sec-title">Ontogenesis, Necro-Detritus, Avatar Dynasties & Optical LOD</h3>
+          </div>
+          <p>
+            Droplet macro-evolution operates on somatic cell development, residual necromass stigmergy, and mindful observer interaction:
+          </p>
+          <div class="formula-box">
+            <div class="formula-label">SOMATIC ONTOGENESIS & JUVENILE GROWTH:</div>
+            <div class="math-eq">
+              s(t) = s<sub>adult</sub> · [ 0.38 + 0.62 · m(t) ], &emsp; dm/dt = (E &gt; 55) ? 0.0035 : 0.0016
+            </div>
+            <div class="formula-vars">
+              <div><strong>s<sub>adult</sub>:</strong> Genetically programmed adult cell radius.</div>
+              <div><strong>m ∈ [0, 1]:</strong> Somatic maturity quotient. Offspring are born tiny (38% scale) and gradually mature through sustained nutrient intake. Cell division (mitosis) is strictly gated until reaching adulthood (<strong>m ≥ 0.85</strong>).</div>
+            </div>
+          </div>
+          <div class="formula-box">
+            <div class="formula-label">RESIDUAL DETRITUS BLOOMS & BONE REEFS:</div>
+            <div class="math-eq">
+              D<sub>cloud</sub>(<strong>x</strong>) = E<sub>detritus</sub> · exp(−||<strong>x</strong> − <strong>x</strong><sub>death</sub>||² / 2r²), &emsp; ΔB = 0.12 · (s / 8)
+            </div>
+            <div class="formula-vars">
+              <div>When an organism perishes, its biomass dissolves into an amber organic detritus bloom (scavengeable necromass for grazers) while precipitating structural bio-calcite into the benthic seafloor matrix, creating permanent bone reefs.</div>
+            </div>
+          </div>
+          <div class="formula-box">
+            <div class="formula-label">AVATAR DYNASTIES & DYNAMIC OPTICAL LOD:</div>
+            <div class="formula-vars">
+              <div><strong>Avatar Dynasties:</strong> Piloting an organism for &gt;20 seconds establishes an evolutionary lineage. The Observer's name is permanently enshrined in the Species Codex as the dynasty founder, granting descendants epigenetic metabolic vitality.</div>
+              <div><strong>Dynamic Optical LOD:</strong> A 3-tier camera-distance rendering system renders distant cells (r &lt; 4.8px) as lightweight bioluminescent spores (reducing draw calls by 90%), smoothly transitioning into full ultra-microscopy Nomarski DIC relief, mandibles, and beating cilia only when zooming in close.</div>
+            </div>
+          </div>
+        </article>
       </div>
     `;
   }
@@ -970,6 +1208,20 @@ export class AboutModal {
             </div>
           </div>
         </div>
+
+        <div class="about-hero-card" style="margin-top: 1.5rem; background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(245, 158, 11, 0.08)); border-color: rgba(239, 68, 68, 0.25);">
+          <div class="hero-badge" style="color: #f87171; border-color: rgba(248, 113, 113, 0.4);">КАТАСТРОФИЗМ И ОБНОВЛЕНИЕ</div>
+          <h3 style="font-size: 1.25rem; font-weight: 700; color: #fecaca; margin-bottom: 0.5rem;">💥 Великие Вымирания и Выход из Эволюционного Тупика</h3>
+          <p style="color: #cbd5e1; font-size: 0.925rem; line-height: 1.6; margin-bottom: 0.75rem;">
+            В любой замкнутой экосистеме со временем может наступить <strong>эволюционный стазис</strong>: один сверхадаптированный вид занимает всю каплицу (монокультура), вытесняя конкурентов, или популяция входит в бесконечную статическую циклическую ловушку «хищник-жертва».
+          </p>
+          <p style="color: #cbd5e1; font-size: 0.925rem; line-height: 1.6; margin-bottom: 0.75rem;">
+            <strong>Детектор стазиса и Планетарный катаклизм:</strong> Если индекс разнообразия Шеннона H' падает ниже критического порога на протяжении сотен тысяч тактов, мир инициирует <em>Великое Вымирание</em> (сероводородный токсичный криз, криосферный коллапс или гипертермический шторм).
+          </p>
+          <p style="color: #cbd5e1; font-size: 0.925rem; line-height: 1.6;">
+            <strong>Эффект Лазаря и Бутылочное горлышко:</strong> Вымирает 90–95% популяции. Лишь единичные стойкие экстремофилы (2–5 особей) укрываются в глубинах рифов. После очищения среды освобождаются сотни экологических ниш, вызывая взрывной <em>Кембрийский радиационный скачок</em> — рождение абсолютно новых форм жизни!
+          </p>
+        </div>
       </div>
     `;
   }
@@ -1055,6 +1307,20 @@ export class AboutModal {
               <p class="feature-desc">Global phase shifts: toxic bloom bottlenecks, glacial crystallization cycles, and fossilized coral megaliths across the fluid manifold.</p>
             </div>
           </div>
+        </div>
+
+        <div class="about-hero-card" style="margin-top: 1.5rem; background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(245, 158, 11, 0.08)); border-color: rgba(239, 68, 68, 0.25);">
+          <div class="hero-badge" style="color: #f87171; border-color: rgba(248, 113, 113, 0.4);">CATASTROPHISM & RENEWAL</div>
+          <h3 style="font-size: 1.25rem; font-weight: 700; color: #fecaca; margin-bottom: 0.5rem;">💥 The Great Extinction Events: Overcoming Stagnation</h3>
+          <p style="color: #cbd5e1; font-size: 0.925rem; line-height: 1.6; margin-bottom: 0.75rem;">
+            In any closed evolutionary biome, ecosystems eventually encounter <strong>evolutionary stasis</strong>: a single hyper-adapted generalist dominates the entire water volume (monoculture), or populations get trapped in repetitive limit cycles.
+          </p>
+          <p style="color: #cbd5e1; font-size: 0.925rem; line-height: 1.6; margin-bottom: 0.75rem;">
+            <strong>Stasis Detector & Planetary Cataclysm:</strong> If the Shannon diversity index H' lingers below critical thresholds over hundreds of thousands of ticks, the world unleashes a <em>Great Dying Event</em> (anoxic toxic crises, cryogenic freezes, or hydrothermal super-plumes).
+          </p>
+          <p style="color: #cbd5e1; font-size: 0.925rem; line-height: 1.6;">
+            <strong>Lazarus Taxa & The Evolutionary Bottleneck:</strong> 90–95% of the population perishes. Only a handful of extremophile survivors (2–5 cells) endure within deep reef caves. As the medium normalizes, vacated ecological niches trigger explosive <em>Cambrian Adaptive Radiation</em> — forging radically new morphologies!
+          </p>
         </div>
       </div>
     `;
