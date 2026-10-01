@@ -21,17 +21,21 @@ export function getSpeciesMorphology(speciesId, hue = 0.5, carnivory = 0.1, size
 
   const isHunter = carnivory > 0.35;
 
-  // 1. Cell Body Shape
+  // 1. Cell Body Shape - Lineage genetic signature with predatory specialization
   let shape;
-  if (isHunter) {
+  const shapeRoll = rnd(1);
+  if (isHunter && shapeRoll < 0.40) {
     shape = 'raptor'; // Armored apex hunter with rostrum & lateral mandibles
+  } else if (shapeRoll < 0.22) {
+    shape = 'vibrio'; // Curved comma / crescent
+  } else if (shapeRoll < 0.44) {
+    shape = 'bacillus'; // Elongated cylindrical rod
+  } else if (shapeRoll < 0.64) {
+    shape = 'coccus'; // Spherical plump orb
+  } else if (shapeRoll < 0.82) {
+    shape = 'ovoid'; // Classic streamlined oval
   } else {
-    const shapeRoll = rnd(1);
-    if (shapeRoll < 0.22) shape = 'vibrio';     // Curved comma / crescent
-    else if (shapeRoll < 0.44) shape = 'bacillus'; // Elongated cylindrical rod
-    else if (shapeRoll < 0.64) shape = 'coccus';   // Spherical plump orb
-    else if (shapeRoll < 0.82) shape = 'ovoid';    // Classic streamlined oval
-    else shape = 'spirillum';                     // S-curved sinusoidal undulating
+    shape = 'spirillum'; // S-curved sinusoidal undulating
   }
 
   // 2. Marking Pattern (spots / stripes / spine / twin_core / stippled)

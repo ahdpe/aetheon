@@ -22,8 +22,9 @@ export class NetworkManager {
 
   setupListeners() {
     this.wss.on('connection', (ws, req) => {
+      ws.clientId = 'client_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
       this.clients.add(ws);
-      console.log(`[WS] Client connected from ${req.socket.remoteAddress}. Active clients: ${this.clients.size}`);
+      console.log(`[WS] Client connected from ${req.socket.remoteAddress} (ID: ${ws.clientId}). Active clients: ${this.clients.size}`);
 
       // Send initial hand-shake state
       const initialPayload = {
@@ -56,13 +57,15 @@ export class NetworkManager {
       });
 
       ws.on('close', () => {
+        this.engine.releasePilot(ws.clientId);
         this.clients.delete(ws);
-        console.log(`[WS] Client disconnected. Active clients: ${this.clients.size}`);
+        console.log(`[WS] Client disconnected (${ws.clientId}). Active clients: ${this.clients.size}`);
         this.broadcastVisitorCount();
       });
 
       ws.on('error', (err) => {
         console.warn('[Network] Client socket error:', err.message);
+        this.engine.releasePilot(ws.clientId);
         this.clients.delete(ws);
       });
     });
@@ -103,6 +106,16 @@ export class NetworkManager {
         const sy = Math.max(-1.5, Math.min(1.5, msg.steerY));
         this.engine.applySteer(msg.id, sx, sy);
       }
+    } else if (msg.type === 'dive_start') {
+      const granted = this.engine.claimPilot(msg.id, ws.clientId);
+      ws.send(JSON.stringify({
+        type: 'dive_response',
+        id: msg.id,
+        granted,
+        reason: granted ? 'ok' : 'occupied'
+      }));
+    } else if (msg.type === 'dive_stop') {
+      this.engine.releasePilot(ws.clientId);
     }
   }
 

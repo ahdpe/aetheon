@@ -68,6 +68,10 @@ export class DiveEngine {
     this.creatures = new DiveCreatureManager(this.scene);
     this.hud = new DiveCockpitHUD(this);
 
+    // Dynamic cellular bioluminescent illumination from piloted organism
+    this.pilotLight = new THREE.PointLight(0x00f0ff, 2.5, 95, 1.2);
+    this.scene.add(this.pilotLight);
+
     window.addEventListener('resize', () => this.onResize());
   }
 
@@ -87,6 +91,7 @@ export class DiveEngine {
     this.trackedId = organismId;
     this.isActive = true;
     this.isDying = false;
+    this.missingFrames = 0;
     this.prevEnergy = org.energy;
 
     // 1. Hide 2D ocean canvas smoothly and show 3D canvas & HUD
@@ -102,10 +107,18 @@ export class DiveEngine {
     this.audio.start();
     sound.playDroplet(2400);
 
+    // 2.5. Claim exclusive pilot authority on server
+    if (this.app.socket && this.app.isConnected) {
+      this.app.socket.send(JSON.stringify({
+        type: 'dive_start',
+        id: organismId
+      }));
+    }
+
     // 3. Initialize camera directly at organism coordinates in 3D centered space
     const x3d = org.x - 700;
     const z3d = org.y - 700;
-    this.camPos.set(x3d, 30, z3d);
+    this.camPos.set(x3d, 18, z3d);
     this.currentHeading = Math.atan2(org.vy, org.vx) || 0;
 
     // 4. Start 3D animation loop
@@ -116,6 +129,13 @@ export class DiveEngine {
   exit() {
     if (!this.isActive) return;
     this.isActive = false;
+
+    // Release pilot authority on server
+    if (this.app.socket && this.app.isConnected) {
+      this.app.socket.send(JSON.stringify({
+        type: 'dive_stop'
+      }));
+    }
 
     if (this.animFrameId) {
       cancelAnimationFrame(this.animFrameId);
@@ -240,7 +260,7 @@ export class DiveEngine {
 
     const camX = orgX3D + Math.cos(this.currentHeading) * forwardOffset;
     const camZ = orgZ3D + Math.sin(this.currentHeading) * forwardOffset;
-    const camY = 30.0 + Math.sin(time * 0.003 + org.id) * 3.5;
+    const camY = 18.0 + Math.sin(time * 0.003 + org.id) * 2.5;
 
     this.camPos.lerp(new THREE.Vector3(camX, camY, camZ), 0.28);
     this.camera.position.copy(this.camPos);
@@ -292,10 +312,19 @@ export class DiveEngine {
       }
     }
 
+    // 6.5. Update dynamic cellular pilot light
+    if (this.pilotLight) {
+      this.pilotLight.position.set(camX, camY - 2.0, camZ);
+      if (org.color) {
+        this.pilotLight.color.set(org.color);
+      }
+    }
+
     // 7. Update Subsystems
     const speed = Math.hypot(org.vx || 0, org.vy || 0);
-    this.environment.update(time, orgX3D, orgZ3D);
-    this.creatures.update(orgs, this.trackedId, this.app.renderer.colonyBonds, time);
+    const serverBlooms = this.app.renderer ? this.app.renderer.serverBlooms : [];
+    this.environment.update(time, orgX3D, orgZ3D, this.app.renderer.thumbCanvas, serverBlooms, org.color);
+    this.creatures.update(orgs, this.trackedId, this.app.renderer.colonyBonds, time, this.app.renderer.pilotedIds);
     this.hud.update(org, this.currentHeading, nearestVent, nearestPredatorDist, time);
     this.audio.update(org, speed, minVentDist, org.ciliaryFrequency);
   }

@@ -37,6 +37,7 @@ export class OceanRenderer {
     this.foodParticles = [];
     this.serverBlooms = [];
     this.colonyBonds = [];
+    this.pilotedIds = new Set();
     this.climate = null;
     this.vents = [];
     this.isLabMode = false;
@@ -199,6 +200,10 @@ export class OceanRenderer {
 
     if (packet.colonies) {
       this.colonyBonds = packet.colonies;
+    }
+
+    if (packet.pilots) {
+      this.pilotedIds = new Set(packet.pilots.map(Number));
     }
 
     if (packet.climate) {
@@ -520,7 +525,81 @@ export class OceanRenderer {
       ctx.stroke();
     }
 
+    // J. Piloted by Human Visitor Indicator (Dual Quantum Holographic Rings)
+    const isPiloted = this.pilotedIds && (this.pilotedIds.has(org.id) || this.pilotedIds.has(Number(org.id)));
+    if (isPiloted) {
+      const rotAngle = time * 0.003;
+      const beaconR = Math.max(rx, ry) * (1.85 + Math.sin(time * 0.008) * 0.15);
+
+      ctx.save();
+      ctx.rotate(rotAngle);
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.arc(0, 0, beaconR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Inner counter-rotating violet ring
+      ctx.rotate(-rotAngle * 2.2);
+      ctx.strokeStyle = '#a855f7';
+      ctx.lineWidth = 1.3;
+      ctx.setLineDash([3, 5]);
+      ctx.beginPath();
+      ctx.arc(0, 0, beaconR * 0.78, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // Orbiting beacon ticks
+      for (let p = 0; p < 4; p++) {
+        const pAng = rotAngle + (p * Math.PI * 0.5);
+        const px = Math.cos(pAng) * beaconR;
+        const py = Math.sin(pAng) * beaconR;
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(px, py, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
     ctx.restore();
+
+    // If piloted, draw sleek unrotated overhead badge so it's always readable
+    if (isPiloted) {
+      ctx.save();
+      const badgeY = y - Math.max(rx, ry) * 1.8 - 14;
+      ctx.font = '600 10px monospace';
+      const label = '👤 ПИЛОТ';
+      const textW = ctx.measureText(label).width;
+      const padX = 6;
+      const padY = 3;
+      const bW = textW + padX * 2;
+      const bH = 16;
+      const bX = x - bW * 0.5;
+      const bY = badgeY - bH * 0.5;
+
+      ctx.shadowColor = 'rgba(0, 240, 255, 0.8)';
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.90)';
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 1.2;
+
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(bX, bY, bW, bH, 4);
+      } else {
+        ctx.rect(bX, bY, bW, bH);
+      }
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#38bdf8';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, x, badgeY);
+      ctx.restore();
+    }
   }
 
   // Render intercellular membrane bonds between organisms in multicellular colonies

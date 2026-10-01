@@ -203,6 +203,8 @@ export class InputController {
     // 6. Keyboard shortcuts
     window.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      // Do not trigger 2D modals when piloting in 3D Dive mode (prevents 'A' key conflict)
+      if (this.client.diveEngine && this.client.diveEngine.isActive) return;
 
       if (e.key === 'r' || e.key === 'R' || e.key === 'к' || e.key === 'К') {
         const toggleBtn = document.getElementById('btn-mode-toggle');

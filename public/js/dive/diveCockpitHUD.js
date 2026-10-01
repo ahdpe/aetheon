@@ -218,23 +218,36 @@ export class DiveCockpitHUD {
         return;
       }
       const k = e.key.toLowerCase();
-      if (k === 'w' || e.key === 'ArrowUp') this.keys.w = true;
-      if (k === 'a' || e.key === 'ArrowLeft') this.keys.a = true;
-      if (k === 's' || e.key === 'ArrowDown') this.keys.s = true;
-      if (k === 'd' || e.key === 'ArrowRight') this.keys.d = true;
+      if (k === 'w' || k === 'ц' || e.key === 'ArrowUp') {
+        this.keys.w = true;
+        e.preventDefault();
+      }
+      if (k === 'a' || k === 'ф' || e.key === 'ArrowLeft') {
+        this.keys.a = true;
+        e.preventDefault();
+      }
+      if (k === 's' || k === 'ы' || e.key === 'ArrowDown') {
+        this.keys.s = true;
+        e.preventDefault();
+      }
+      if (k === 'd' || k === 'в' || e.key === 'ArrowRight') {
+        this.keys.d = true;
+        e.preventDefault();
+      }
       if (e.key === ' ') {
         this.keys.space = true;
         this.engine.triggerBoost();
+        e.preventDefault();
       }
     });
 
     window.addEventListener('keyup', (e) => {
       if (!this.engine.isActive) return;
       const k = e.key.toLowerCase();
-      if (k === 'w' || e.key === 'ArrowUp') this.keys.w = false;
-      if (k === 'a' || e.key === 'ArrowLeft') this.keys.a = false;
-      if (k === 's' || e.key === 'ArrowDown') this.keys.s = false;
-      if (k === 'd' || e.key === 'ArrowRight') this.keys.d = false;
+      if (k === 'w' || k === 'ц' || e.key === 'ArrowUp') this.keys.w = false;
+      if (k === 'a' || k === 'ф' || e.key === 'ArrowLeft') this.keys.a = false;
+      if (k === 's' || k === 'ы' || e.key === 'ArrowDown') this.keys.s = false;
+      if (k === 'd' || k === 'в' || e.key === 'ArrowRight') this.keys.d = false;
       if (e.key === ' ') this.keys.space = false;
     });
 
@@ -259,7 +272,7 @@ export class DiveCockpitHUD {
       prevMouseY = e.clientY;
 
       this.lookYaw -= dx * 0.006;
-      this.lookPitch = Math.max(-0.5, Math.min(0.5, this.lookPitch - dy * 0.004));
+      this.lookPitch = Math.max(-1.35, Math.min(1.35, this.lookPitch - dy * 0.004));
     });
 
     window.addEventListener('mouseup', () => {
@@ -318,7 +331,7 @@ export class DiveCockpitHUD {
           this.lastTouchPos = { x: touch.clientX, y: touch.clientY };
 
           this.lookYaw -= ldx * 0.007;
-          this.lookPitch = Math.max(-0.5, Math.min(0.5, this.lookPitch - ldy * 0.005));
+          this.lookPitch = Math.max(-1.35, Math.min(1.35, this.lookPitch - ldy * 0.005));
         }
       }
     }, { passive: true });

@@ -38,6 +38,9 @@ export class BioInspector {
 
     this.diveBtn?.addEventListener('click', () => {
       if (this.selectedId && this.client.diveEngine) {
+        if (this.renderer.pilotedIds && (this.renderer.pilotedIds.has(this.selectedId) || this.renderer.pilotedIds.has(Number(this.selectedId)))) {
+          return;
+        }
         this.renderer.camera.trackedEntityId = this.selectedId;
         this.isTracking = true;
         this.panel.classList.add('hidden');
@@ -55,6 +58,26 @@ export class BioInspector {
   select(organismId) {
     this.selectedId = organismId;
     this.panel.classList.remove('hidden');
+
+    // Immediately reflect pilot lock state
+    if (this.diveBtn) {
+      const isPiloted = this.renderer.pilotedIds && (this.renderer.pilotedIds.has(organismId) || this.renderer.pilotedIds.has(Number(organismId)));
+      const isRu = i18n.getLang() === 'ru';
+      if (isPiloted) {
+        this.diveBtn.disabled = true;
+        this.diveBtn.style.opacity = '0.55';
+        this.diveBtn.style.cursor = 'not-allowed';
+        this.diveBtn.title = isRu ? 'Организм уже управляется другим наблюдателем' : 'Organism is already piloted by another visitor';
+        this.diveBtn.innerHTML = `<span>🔒</span> <span>${isRu ? 'Занят пилотом' : 'Occupied'}</span>`;
+      } else {
+        this.diveBtn.disabled = false;
+        this.diveBtn.style.opacity = '1.0';
+        this.diveBtn.style.cursor = 'pointer';
+        this.diveBtn.title = '';
+        this.diveBtn.innerHTML = `<span>🤿</span> <span>${isRu ? 'Войти в клетку (3D)' : 'Dive Inside (3D)'}</span>`;
+      }
+    }
+
     // Request full profile from server
     this.client.sendInspect(organismId);
   }
@@ -149,5 +172,22 @@ export class BioInspector {
     }
 
     if (offspring) offspring.textContent = `${profile.childrenCount} ${i18n.t('unit_children')}`;
+
+    if (this.diveBtn) {
+      const isPiloted = this.renderer.pilotedIds && (this.renderer.pilotedIds.has(this.selectedId) || this.renderer.pilotedIds.has(Number(this.selectedId)));
+      if (isPiloted) {
+        this.diveBtn.disabled = true;
+        this.diveBtn.style.opacity = '0.55';
+        this.diveBtn.style.cursor = 'not-allowed';
+        this.diveBtn.title = isRu ? 'Организм уже управляется другим наблюдателем' : 'Organism is already piloted by another visitor';
+        this.diveBtn.innerHTML = `<span>🔒</span> <span>${isRu ? 'Занят пилотом' : 'Occupied'}</span>`;
+      } else {
+        this.diveBtn.disabled = false;
+        this.diveBtn.style.opacity = '1.0';
+        this.diveBtn.style.cursor = 'pointer';
+        this.diveBtn.title = '';
+        this.diveBtn.innerHTML = `<span>🤿</span> <span>${isRu ? 'Войти в клетку (3D)' : 'Dive Inside (3D)'}</span>`;
+      }
+    }
   }
 }

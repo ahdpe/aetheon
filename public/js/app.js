@@ -215,6 +215,14 @@ class AetheonApp {
         cur.unshift(msg.entry);
         this.journalDrawer.setAtlasEntries(cur);
       }
+    } else if (msg.type === 'dive_response') {
+      if (!msg.granted) {
+        if (this.diveEngine && this.diveEngine.isActive) {
+          this.diveEngine.exit();
+        }
+        console.warn('[Aetheon] Organism is already piloted by another visitor.');
+        sound.playDroplet(400);
+      }
     }
   }
 
@@ -367,4 +375,5 @@ class AetheonApp {
 // Boot application
 window.addEventListener('DOMContentLoaded', () => {
   window.aetheonApp = new AetheonApp();
+  window.app = window.aetheonApp;
 });

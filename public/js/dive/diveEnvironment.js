@@ -17,11 +17,19 @@ export class DiveEnvironment {
     this.hemiLight = null;
     this.sunLight = null;
 
+    // Dynamic Bioluminescent Seafloor Canvas Texture
+    this.seafloorCanvas = document.createElement('canvas');
+    this.seafloorCanvas.width = 512;
+    this.seafloorCanvas.height = 512;
+    this.seafloorCtx = this.seafloorCanvas.getContext('2d');
+    this.seafloorTexture = new THREE.CanvasTexture(this.seafloorCanvas);
+    this.lastSeafloorUpdate = 0;
+
     // Target colors for smooth atmospheric lerp
-    this.currentFogColor = new THREE.Color(0x061e33);
-    this.targetFogColor = new THREE.Color(0x061e33);
-    this.currentAmbColor = new THREE.Color(0x0e3554);
-    this.targetAmbColor = new THREE.Color(0x0e3554);
+    this.currentFogColor = new THREE.Color(0x0a2d48);
+    this.targetFogColor = new THREE.Color(0x0a2d48);
+    this.currentAmbColor = new THREE.Color(0x16466b);
+    this.targetAmbColor = new THREE.Color(0x16466b);
   }
 
   build(rawVents = []) {
@@ -83,41 +91,51 @@ export class DiveEnvironment {
   }
 
   setupLightingAndFog() {
-    // 1. Deep Oceanic Volumetric Fog (Horizontal Level)
-    this.scene.fog = new THREE.FogExp2(0x061e33, 0.0035);
+    // 1. Crystal-clear Deep Oceanic Fog (extended range: 90 to 650)
+    this.scene.fog = new THREE.Fog(0x051624, 90, 650);
 
-    // 2. Ambient Bioluminescent Glow (Bright enough so organisms are always luminous)
-    this.ambLight = new THREE.AmbientLight(0x0e3554, 1.8);
+    // 2. Ambient Bioluminescent Glow (Rich, luminous, crystal-clear water)
+    this.ambLight = new THREE.AmbientLight(0x0c2a44, 1.4);
     this.scene.add(this.ambLight);
 
     // 3. Meniscus Sunlight rays shining straight down along -Y
-    this.sunLight = new THREE.DirectionalLight(0x38bdf8, 1.6);
+    this.sunLight = new THREE.DirectionalLight(0x7dd3fc, 1.3);
     this.sunLight.position.set(0, 160, 0);
     this.scene.add(this.sunLight);
 
     // 4. Liquid Sky Hemisphere Light
-    this.hemiLight = new THREE.HemisphereLight(0x38bdf8, 0x04192b, 1.2);
+    this.hemiLight = new THREE.HemisphereLight(0x38bdf8, 0x051624, 1.1);
     this.scene.add(this.hemiLight);
   }
 
   setupDropletDome() {
-    // Surface Meniscus Liquid Ceiling overhead at Y = 75
+    // 1. Surface Meniscus Liquid Ceiling overhead at Y = 55 (curving gently upward)
     const domeGeo = new THREE.SphereGeometry(this.chamberRadius, 48, 24, 0, Math.PI * 2, 0, Math.PI * 0.5);
     const domeMat = new THREE.MeshBasicMaterial({
       color: 0x38bdf8,
-      wireframe: false,
       transparent: true,
-      opacity: 0.12,
+      opacity: 0.08,
       side: THREE.BackSide,
       blending: THREE.AdditiveBlending
     });
     const dome = new THREE.Mesh(domeGeo, domeMat);
-    dome.rotation.x = Math.PI; // Inverted dome covering the ceiling
-    dome.position.set(0, 80, 0);
-    dome.scale.set(1.0, 0.40, 1.0); // Flattened liquid droplet boundary
+    dome.position.set(0, 50, 0);
+    dome.scale.set(1.0, 0.12, 1.0); // Gentle liquid meniscus curve overhead
     this.scene.add(dome);
 
-    // Meniscus perimeter boundary ring on XZ plane
+    // 2. Laboratory Petri Dish Glass Cylinder Boundary (radius 620)
+    const wallGeo = new THREE.CylinderGeometry(this.chamberRadius, this.chamberRadius, 85, 64, 1, true);
+    const wallMat = new THREE.MeshBasicMaterial({
+      color: 0x00f0ff,
+      transparent: true,
+      opacity: 0.10,
+      side: THREE.DoubleSide
+    });
+    const wall = new THREE.Mesh(wallGeo, wallMat);
+    wall.position.set(0, 15, 0);
+    this.scene.add(wall);
+
+    // 3. Meniscus perimeter boundary ring on XZ plane
     const ringGeo = new THREE.RingGeometry(this.chamberRadius - 6, this.chamberRadius + 6, 80);
     const ringMat = new THREE.MeshBasicMaterial({
       color: 0x00f0ff,
@@ -127,7 +145,7 @@ export class DiveEnvironment {
     });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = -Math.PI * 0.5;
-    ring.position.set(0, 30, 0);
+    ring.position.set(0, 20, 0);
     this.scene.add(ring);
   }
 
@@ -144,33 +162,38 @@ export class DiveEnvironment {
       const vz = pos.getZ(i);
       const distFromCenter = Math.hypot(vx, vz);
 
-      let elevation = 0;
+      let elevation = -16.0;
       if (distFromCenter < this.chamberRadius) {
         // Natural undulating seabed
-        elevation += Math.sin(vx * 0.015) * Math.cos(vz * 0.015) * 7.0;
-        elevation += Math.sin(vx * 0.035 + vz * 0.03) * 4.0;
+        elevation += Math.sin(vx * 0.015) * Math.cos(vz * 0.015) * 3.2;
+        elevation += Math.sin(vx * 0.035 + vz * 0.03) * 1.8;
 
-        // Elevated vent mounds beneath each hydrothermal chimney
+        // Elevated vent mounds beneath each hydrothermal chimney (peaks at Y = -9.5)
         for (let v = 0; v < this.ventPositions3D.length; v++) {
           const vent = this.ventPositions3D[v];
           const vdist = Math.hypot(vx - vent.x, vz - vent.z);
-          if (vdist < 140) {
-            elevation += Math.cos((vdist / 140) * (Math.PI * 0.5)) * 24.0;
+          if (vdist < 110) {
+            elevation += Math.cos((vdist / 110) * (Math.PI * 0.5)) * 6.5;
           }
         }
       } else {
-        elevation -= 35.0; // Shelf drops off outside petri chamber
+        elevation -= 22.0; // Shelf drops off outside petri chamber
       }
 
       pos.setY(i, elevation);
     }
     planeGeo.computeVertexNormals();
 
+    this.renderSeafloorCanvas(null);
+
     const terrainMat = new THREE.MeshStandardMaterial({
-      color: 0x09223a,
-      roughness: 0.85,
-      metalness: 0.2,
-      flatShading: true
+      map: this.seafloorTexture,
+      emissiveMap: this.seafloorTexture,
+      emissive: new THREE.Color(0xffffff),
+      emissiveIntensity: 0.78,
+      roughness: 0.45,
+      metalness: 0.20,
+      flatShading: false
     });
 
     this.terrainMesh = new THREE.Mesh(planeGeo, terrainMat);
@@ -178,12 +201,136 @@ export class DiveEnvironment {
     this.scene.add(this.terrainMesh);
   }
 
+  // Draw vibrant bioluminescent seabed canvas texture matching 2D chemical map & local light
+  renderSeafloorCanvas(thumbCanvas = null, playerX3D = 0, playerZ3D = 0, serverBlooms = [], playerColor = '#00f0ff') {
+    const ctx = this.seafloorCtx;
+    const w = 512;
+    const h = 512;
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+
+    // 1. Deep abyssal substrate gradient
+    const bgGrad = ctx.createRadialGradient(cx, cy, 30, cx, cy, 260);
+    bgGrad.addColorStop(0, '#0e3a5f');
+    bgGrad.addColorStop(0.65, '#072640');
+    bgGrad.addColorStop(1, '#02101b');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Procedural organic sediment speckles & bio-calcite mineral grit
+    ctx.fillStyle = 'rgba(0, 240, 255, 0.04)';
+    for (let s = 0; s < 300; s++) {
+      const rx = (Math.sin(s * 12.9898) * 0.5 + 0.5) * w;
+      const ry = (Math.cos(s * 78.233) * 0.5 + 0.5) * h;
+      ctx.fillRect(rx, ry, 2, 2);
+    }
+
+    // 2. Draw live chemical and bio-calcite reef field from thumbnail if available
+    if (thumbCanvas) {
+      ctx.save();
+      ctx.globalAlpha = 0.82;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(thumbCanvas, 0, 0, w, h);
+      ctx.restore();
+    }
+
+    // 2.5. Draw Server Nutrient Blooms (Bioluminescent emerald/lime glowing carpets on seafloor)
+    if (serverBlooms && serverBlooms.length > 0) {
+      for (let b = 0; b < serverBlooms.length; b++) {
+        const bl = serverBlooms[b];
+        const bx = (bl.x / this.worldSize) * w;
+        const bz = (bl.y / this.worldSize) * h;
+        const br = Math.max(25, ((bl.r || 60) / this.worldSize) * w * 1.5);
+
+        const bGrad = ctx.createRadialGradient(bx, bz, 3, bx, bz, br);
+        bGrad.addColorStop(0, 'rgba(190, 242, 100, 0.92)');
+        bGrad.addColorStop(0.4, 'rgba(163, 230, 53, 0.65)');
+        bGrad.addColorStop(0.75, 'rgba(34, 197, 94, 0.25)');
+        bGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        ctx.save();
+        ctx.fillStyle = bGrad;
+        ctx.beginPath();
+        ctx.arc(bx, bz, br, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // 3. Draw Chamber Floor Boundary ring
+    const chamberR = (this.chamberRadius / this.worldSize) * w;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.45)';
+    ctx.lineWidth = 3.0;
+    ctx.shadowColor = '#00f0ff';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(cx, cy, chamberR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // 4. Draw Radiant Hydrothermal Vent Hearths & Geothermal Auras
+    for (let i = 0; i < this.ventPositions3D.length; i++) {
+      const vent = this.ventPositions3D[i];
+      // Convert centered 3D (-700..700) to seafloor canvas (0..512)
+      const vx = ((vent.x + this.worldSize * 0.5) / this.worldSize) * w;
+      const vz = ((vent.z + this.worldSize * 0.5) / this.worldSize) * h;
+      const vr = 125; // Expansive radiant glow on seabed
+
+      const ventGrad = ctx.createRadialGradient(vx, vz, 6, vx, vz, vr);
+      const hex = vent.color.toString(16).padStart(6, '0');
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      ventGrad.addColorStop(0, `#${hex}`);
+      ventGrad.addColorStop(0.2, `rgba(${r}, ${g}, ${b}, 0.85)`);
+      ventGrad.addColorStop(0.55, `rgba(${r}, ${g}, ${b}, 0.35)`);
+      ventGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      ctx.save();
+      ctx.fillStyle = ventGrad;
+      ctx.beginPath();
+      ctx.arc(vx, vz, vr, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Incandescent core orifice
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = `#${hex}`;
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.arc(vx, vz, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 5. Dynamic Cellular Illumination Halo directly beneath Piloted Organism
+    if (playerX3D !== undefined && playerZ3D !== undefined) {
+      const px = ((playerX3D + this.worldSize * 0.5) / this.worldSize) * w;
+      const pz = ((playerZ3D + this.worldSize * 0.5) / this.worldSize) * h;
+      const pRadius = 42;
+
+      const pGrad = ctx.createRadialGradient(px, pz, 2, px, pz, pRadius);
+      pGrad.addColorStop(0, playerColor || 'rgba(0, 240, 255, 0.75)');
+      pGrad.addColorStop(0.45, 'rgba(0, 240, 255, 0.28)');
+      pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      ctx.save();
+      ctx.fillStyle = pGrad;
+      ctx.beginPath();
+      ctx.arc(px, pz, pRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    this.seafloorTexture.needsUpdate = true;
+  }
+
   setupHydrothermalSmokers() {
     for (let i = 0; i < this.ventPositions3D.length; i++) {
       const vent = this.ventPositions3D[i];
 
-      // 1. Basalt Chimney Spire Column standing upright on XZ plane
-      const spireGeo = new THREE.CylinderGeometry(8, 22, 38, 10);
+      // 1. Basalt Chimney Spire Column standing upright from mound (Y = -10 to Y = +4)
+      const spireGeo = new THREE.CylinderGeometry(6, 14, 14, 10);
       const spireMat = new THREE.MeshStandardMaterial({
         color: 0x081320,
         roughness: 0.9,
@@ -192,11 +339,11 @@ export class DiveEnvironment {
         emissiveIntensity: 0.45
       });
       const spire = new THREE.Mesh(spireGeo, spireMat);
-      spire.position.set(vent.x, 19, vent.z);
+      spire.position.set(vent.x, -3, vent.z);
       this.scene.add(spire);
 
       // 2. Vent Hearth Core (Glowing orifice at top of chimney)
-      const glowGeo = new THREE.SphereGeometry(10, 14, 14);
+      const glowGeo = new THREE.SphereGeometry(6, 12, 12);
       const glowMat = new THREE.MeshBasicMaterial({
         color: vent.color,
         transparent: true,
@@ -204,12 +351,12 @@ export class DiveEnvironment {
         blending: THREE.AdditiveBlending
       });
       const glow = new THREE.Mesh(glowGeo, glowMat);
-      glow.position.set(vent.x, 38, vent.z);
+      glow.position.set(vent.x, 4, vent.z);
       this.scene.add(glow);
 
       // 3. High-Intensity Volumetric Point Light illuminating surrounding waters
-      const pLight = new THREE.PointLight(vent.color, 4.2, 340);
-      pLight.position.set(vent.x, 44, vent.z);
+      const pLight = new THREE.PointLight(vent.color, 3.4, 260);
+      pLight.position.set(vent.x, 7, vent.z);
       this.scene.add(pLight);
       this.ventLights.push(pLight);
 
@@ -323,20 +470,27 @@ export class DiveEnvironment {
       }
     }
 
-    const defaultFog = new THREE.Color(0x061e33);
-    const defaultAmb = new THREE.Color(0x0e3554);
+    const defaultFog = new THREE.Color(0x051624);
+    const defaultAmb = new THREE.Color(0x0c2a44);
 
     if (nearestVent && minVentDist < 260) {
-      // Transition smoothly into vent's glowing chromatic aura!
+      // Gentle chromatic tint near vents without washing out scene
       const ventFactor = Math.pow(1.0 - (minVentDist / 260), 1.2);
       const ventAtmoCol = new THREE.Color(nearestVent.atmoColor);
       const ventCoreCol = new THREE.Color(nearestVent.color);
 
-      this.targetFogColor.copy(defaultFog).lerp(ventAtmoCol, ventFactor * 0.85);
-      this.targetAmbColor.copy(defaultAmb).lerp(ventCoreCol, ventFactor * 0.45);
+      this.targetFogColor.copy(defaultFog).lerp(ventAtmoCol, ventFactor * 0.35);
+      this.targetAmbColor.copy(defaultAmb).lerp(ventCoreCol, ventFactor * 0.25);
+
+      if (this.ambLight) {
+        this.ambLight.intensity = 1.4 + ventFactor * 0.5;
+      }
     } else {
       this.targetFogColor.copy(defaultFog);
       this.targetAmbColor.copy(defaultAmb);
+      if (this.ambLight) {
+        this.ambLight.intensity = 1.4;
+      }
     }
 
     // Smooth lerp fog and ambient color
@@ -354,9 +508,15 @@ export class DiveEnvironment {
     }
   }
 
-  update(time, playerX3D = 0, playerZ3D = 0) {
+  update(time, playerX3D = 0, playerZ3D = 0, thumbCanvas = null, serverBlooms = [], playerColor = '#00f0ff') {
     // 1. Dynamic water atmosphere & vent lighting matching 2D
     this.updateAtmosphere(playerX3D, playerZ3D);
+
+    // 1.5. Dynamic Seafloor texture update (throttled every 450ms)
+    if (!this.lastSeafloorUpdate || time - this.lastSeafloorUpdate > 450) {
+      this.lastSeafloorUpdate = time;
+      this.renderSeafloorCanvas(thumbCanvas, playerX3D, playerZ3D, serverBlooms, playerColor);
+    }
 
     // 2. Animate chimney mineral plumes rising along +Y to surface
     for (let p = 0; p < this.plumeParticles.length; p++) {

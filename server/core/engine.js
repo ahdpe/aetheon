@@ -29,6 +29,10 @@ export class SimulationEngine {
     this.nutrientBlooms = [];
     this.nextBloomId = 1;
 
+    // Active human pilots in 3D Dive mode (Multiplayer exclusivity)
+    this.pilotedMap = new Map(); // orgId -> clientId
+    this.clientPilotMap = new Map(); // clientId -> orgId
+
     // Scratch buffer for spatial queries
     this.neighborScratch = [];
     this.eventsBuffer = []; // Broadcast events (births, deaths, predation strikes)
@@ -141,6 +145,10 @@ export class SimulationEngine {
         for (let n = 0; n < this.neighborScratch.length; n++) {
           const prey = this.neighborScratch[n];
           if (!deadSet.has(prey.id)) {
+            // Piloted defense: if human is piloting prey, it evades fatal one-shots!
+            if (prey.isPiloted && Math.random() < 0.70) {
+              continue; // 70% evasion chance while piloted!
+            }
             const strike = org.attemptPredation(prey, this.grid);
             if (strike) {
               this.recentWindow.kills++;
@@ -342,6 +350,51 @@ export class SimulationEngine {
     return false;
   }
 
+  // Claim exclusive pilot authority over an organism for a visitor
+  claimPilot(orgId, clientId) {
+    if (!clientId) return false;
+    const numId = Number(orgId);
+    const o = this.organisms.find(org => org.id === numId);
+    if (!o) return false;
+
+    // Check if currently occupied by another visitor
+    if (this.pilotedMap.has(numId)) {
+      const currentHolder = this.pilotedMap.get(numId);
+      if (currentHolder !== clientId) {
+        return false; // Occupied!
+      }
+    }
+
+    // Release any previous organism this client was piloting
+    if (this.clientPilotMap.has(clientId)) {
+      this.releasePilot(clientId);
+    }
+
+    this.pilotedMap.set(numId, clientId);
+    this.clientPilotMap.set(clientId, numId);
+    o.isPiloted = true;
+    o.energy = Math.max(o.energy, 95.0); // Vitality boost for pilot immersion
+    o.playerSteer = { x: 0, y: 0, ticks: 100 };
+    return true;
+  }
+
+  // Release pilot authority when visitor exits 3D mode or disconnects
+  releasePilot(clientId) {
+    if (!this.clientPilotMap.has(clientId)) return;
+    const orgId = this.clientPilotMap.get(clientId);
+    this.clientPilotMap.delete(clientId);
+    this.pilotedMap.delete(orgId);
+    const o = this.organisms.find(org => org.id === orgId);
+    if (o) {
+      o.isPiloted = false;
+      if (o.playerSteer) o.playerSteer.ticks = 0;
+    }
+  }
+
+  getPilotedIds() {
+    return Array.from(this.pilotedMap.keys());
+  }
+
   getStats() {
     const ageSeconds = Math.floor((Date.now() - this.genesisTime) / 1000);
     const days = Math.floor(ageSeconds / 86400);
@@ -444,7 +497,8 @@ export class SimulationEngine {
         e: Math.round(b.energy)
       })),
       colonies: this.colonies.getBondPairs(),
-      climate: this.climate.getBroadcastState()
+      climate: this.climate.getBroadcastState(),
+      pilots: this.getPilotedIds()
     };
   }
 }
