@@ -92,20 +92,21 @@ export class DiveEnvironment {
   }
 
   setupLightingAndFog() {
-    // 1. Crystal-clear Deep Oceanic Fog (extended range: 90 to 650)
-    this.scene.fog = new THREE.Fog(0x051624, 90, 650);
+    // 1. Crystal-clear Deep Oceanic Fog (Zero fog nearby: 340 to 1100 units)
+    this.scene.fog = new THREE.Fog(0x020d1a, 340, 1100);
+    this.scene.background = new THREE.Color(0x020d1a);
 
-    // 2. Ambient Bioluminescent Glow (Rich, luminous, crystal-clear water)
-    this.ambLight = new THREE.AmbientLight(0x0c2a44, 1.4);
+    // 2. Ambient Bioluminescent Glow (Rich, luminous, crystal-clear oceanic blue)
+    this.ambLight = new THREE.AmbientLight(0x163b5c, 2.0);
     this.scene.add(this.ambLight);
 
-    // 3. Meniscus Sunlight rays shining straight down along -Y
-    this.sunLight = new THREE.DirectionalLight(0x7dd3fc, 1.3);
-    this.sunLight.position.set(0, 160, 0);
+    // 3. Meniscus Sunlight rays shining at a gentle angle for 3D specular relief
+    this.sunLight = new THREE.DirectionalLight(0xbbe8f8, 2.2);
+    this.sunLight.position.set(60, 220, 80);
     this.scene.add(this.sunLight);
 
-    // 4. Liquid Sky Hemisphere Light
-    this.hemiLight = new THREE.HemisphereLight(0x38bdf8, 0x051624, 1.1);
+    // 4. Liquid Sky Hemisphere Light (Vibrant cyan sky / deep navy floor)
+    this.hemiLight = new THREE.HemisphereLight(0x38bdf8, 0x020d1a, 1.8);
     this.scene.add(this.hemiLight);
   }
 
@@ -276,16 +277,16 @@ export class DiveEnvironment {
       // Convert centered 3D (-700..700) to seafloor canvas (0..512)
       const vx = ((vent.x + this.worldSize * 0.5) / this.worldSize) * w;
       const vz = ((vent.z + this.worldSize * 0.5) / this.worldSize) * h;
-      const vr = 125; // Expansive radiant glow on seabed
+      const vr = 48; // Crisp, concentrated radiant pool directly beneath hemisphere
 
-      const ventGrad = ctx.createRadialGradient(vx, vz, 6, vx, vz, vr);
+      const ventGrad = ctx.createRadialGradient(vx, vz, 4, vx, vz, vr);
       const hex = vent.color.toString(16).padStart(6, '0');
       const r = parseInt(hex.slice(0, 2), 16);
       const g = parseInt(hex.slice(2, 4), 16);
       const b = parseInt(hex.slice(4, 6), 16);
       ventGrad.addColorStop(0, `#${hex}`);
-      ventGrad.addColorStop(0.2, `rgba(${r}, ${g}, ${b}, 0.85)`);
-      ventGrad.addColorStop(0.55, `rgba(${r}, ${g}, ${b}, 0.35)`);
+      ventGrad.addColorStop(0.25, `rgba(${r}, ${g}, ${b}, 0.75)`);
+      ventGrad.addColorStop(0.65, `rgba(${r}, ${g}, ${b}, 0.20)`);
       ventGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
       ctx.save();
@@ -297,9 +298,9 @@ export class DiveEnvironment {
       // Incandescent core orifice
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = `#${hex}`;
-      ctx.shadowBlur = 18;
+      ctx.shadowBlur = 12;
       ctx.beginPath();
-      ctx.arc(vx, vz, 10, 0, Math.PI * 2);
+      ctx.arc(vx, vz, 8, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -330,16 +331,12 @@ export class DiveEnvironment {
     for (let i = 0; i < this.ventPositions3D.length; i++) {
       const vent = this.ventPositions3D[i];
 
-      // 1. Luminous Bio-Calcite Hemisphere Dome (Outer translucent mantle, radius 22, height 22 from seabed)
-      const outerGeo = new THREE.SphereGeometry(22, 36, 20, 0, Math.PI * 2, 0, Math.PI * 0.5);
-      const outerMat = new THREE.MeshStandardMaterial({
+      // 1. Luminous Bio-Calcite Hemisphere Dome (Outer translucent mantle, radius 18, soft glow)
+      const outerGeo = new THREE.SphereGeometry(18, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.5);
+      const outerMat = new THREE.MeshBasicMaterial({
         color: vent.color,
-        roughness: 0.18,
-        metalness: 0.05,
         transparent: true,
-        opacity: 0.52,
-        emissive: new THREE.Color(vent.color),
-        emissiveIntensity: 0.70,
+        opacity: 0.38,
         blending: THREE.AdditiveBlending,
         side: THREE.DoubleSide,
         depthWrite: false
@@ -348,12 +345,12 @@ export class DiveEnvironment {
       outerDome.position.set(vent.x, -11.5, vent.z);
       this.scene.add(outerDome);
 
-      // 2. Inner Incandescent Geothermal Core Hemisphere (Concentrated warm radiance)
-      const coreGeo = new THREE.SphereGeometry(12, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.5);
+      // 2. Soft Inner Radiant Hearth (Small gentle nucleus, radius 5.5, soft white glow)
+      const coreGeo = new THREE.SphereGeometry(5.5, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.5);
       const coreMat = new THREE.MeshBasicMaterial({
         color: 0xffffff,
         transparent: true,
-        opacity: 0.85,
+        opacity: 0.45,
         blending: THREE.AdditiveBlending,
         depthWrite: false
       });
@@ -362,11 +359,11 @@ export class DiveEnvironment {
       this.scene.add(coreDome);
 
       // 3. Concentric Seabed Radiant Halo Ring on seafloor plane
-      const haloGeo = new THREE.RingGeometry(18, 42, 48);
+      const haloGeo = new THREE.RingGeometry(14, 34, 48);
       const haloMat = new THREE.MeshBasicMaterial({
         color: vent.color,
         transparent: true,
-        opacity: 0.38,
+        opacity: 0.32,
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
         depthWrite: false
@@ -484,57 +481,41 @@ export class DiveEnvironment {
     this.scene.add(this.marineSnow);
   }
 
-  // Dynamically update fog, ambient lighting, and water color based on player's position
+  // Dynamically update fog and lighting: Pristine crystal-clear oceanic sapphire water
   updateAtmosphere(playerX3D, playerZ3D) {
     if (this.ventPositions3D.length === 0) return;
 
-    let nearestVent = null;
     let minVentDist = Infinity;
-
     for (let i = 0; i < this.ventPositions3D.length; i++) {
       const vent = this.ventPositions3D[i];
       const d = Math.hypot(playerX3D - vent.x, playerZ3D - vent.z);
-      if (d < minVentDist) {
-        minVentDist = d;
-        nearestVent = vent;
-      }
+      if (d < minVentDist) minVentDist = d;
     }
 
-    const defaultFog = new THREE.Color(0x051624);
-    const defaultAmb = new THREE.Color(0x0c2a44);
+    // Pristine, crystal-clear oceanic sapphire water (NEVER murky or brown)
+    const baseFog = new THREE.Color(0x020d1a);
+    const baseAmb = new THREE.Color(0x163b5c);
 
-    if (nearestVent && minVentDist < 260) {
-      // Gentle chromatic tint near vents without washing out scene
-      const ventFactor = Math.pow(1.0 - (minVentDist / 260), 1.2);
-      const ventAtmoCol = new THREE.Color(nearestVent.atmoColor);
-      const ventCoreCol = new THREE.Color(nearestVent.color);
-
-      this.targetFogColor.copy(defaultFog).lerp(ventAtmoCol, ventFactor * 0.35);
-      this.targetAmbColor.copy(defaultAmb).lerp(ventCoreCol, ventFactor * 0.25);
-
+    // Subtle brightness lift when near geothermal energy without corrupting water purity
+    if (minVentDist < 220) {
+      const ventFactor = Math.pow(1.0 - (minVentDist / 220), 1.5);
       if (this.ambLight) {
-        this.ambLight.intensity = 1.4 + ventFactor * 0.5;
+        this.ambLight.intensity = 2.0 + ventFactor * 0.45;
       }
     } else {
-      this.targetFogColor.copy(defaultFog);
-      this.targetAmbColor.copy(defaultAmb);
       if (this.ambLight) {
-        this.ambLight.intensity = 1.4;
+        this.ambLight.intensity = 2.0;
       }
     }
 
-    // Smooth lerp fog and ambient color
-    this.currentFogColor.lerp(this.targetFogColor, 0.08);
-    this.currentAmbColor.lerp(this.targetAmbColor, 0.08);
-
     if (this.scene.fog) {
-      this.scene.fog.color.copy(this.currentFogColor);
+      this.scene.fog.color.copy(baseFog);
     }
     if (this.scene.background) {
-      this.scene.background.copy(this.currentFogColor);
+      this.scene.background.copy(baseFog);
     }
     if (this.ambLight) {
-      this.ambLight.color.copy(this.currentAmbColor);
+      this.ambLight.color.copy(baseAmb);
     }
   }
 

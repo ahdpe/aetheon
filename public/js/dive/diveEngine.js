@@ -46,10 +46,10 @@ export class DiveEngine {
     if (!this.canvas) return;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x061e33);
+    this.scene.background = new THREE.Color(0x020d1a);
     
-    // Perspective camera with wide immersive micro-lens FOV (72 deg)
-    this.camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.5, 900);
+    // Perspective camera with wide immersive micro-lens FOV (72 deg, range up to 1200)
+    this.camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.5, 1200);
     // Explicitly guarantee Y is up-vector: zero sideways tilt, zero roll!
     this.camera.up.set(0, 1, 0);
 
@@ -62,6 +62,8 @@ export class DiveEngine {
 
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.25;
 
     // Initialize subsystems
     const vents = this.app.renderer ? this.app.renderer.vents : [];
@@ -73,7 +75,7 @@ export class DiveEngine {
     this.hud = new DiveCockpitHUD(this);
 
     // Dynamic cellular bioluminescent illumination from piloted organism
-    this.pilotLight = new THREE.PointLight(0x00f0ff, 2.5, 95, 1.2);
+    this.pilotLight = new THREE.PointLight(0x00f0ff, 3.2, 140, 1.1);
     this.scene.add(this.pilotLight);
 
     window.addEventListener('resize', () => this.onResize());
