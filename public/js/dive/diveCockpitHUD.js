@@ -431,6 +431,8 @@ export class DiveCockpitHUD {
     if (this.container) {
       this.container.classList.remove('hidden');
     }
+    const overlay = document.getElementById('dive-event-overlay');
+    if (overlay) overlay.className = 'dive-event-overlay';
     this.resizeCiliaCanvas();
     i18n.applyTranslations();
   }
@@ -439,6 +441,8 @@ export class DiveCockpitHUD {
     if (this.container) {
       this.container.classList.add('hidden');
     }
+    const overlay = document.getElementById('dive-event-overlay');
+    if (overlay) overlay.className = 'dive-event-overlay';
     this.keys = { w: false, a: false, s: false, d: false, space: false };
     this.steerX = 0;
     this.steerY = 0;
@@ -641,6 +645,11 @@ export class DiveCockpitHUD {
     const el = document.getElementById('dive-event-overlay');
     if (!el) return;
     el.className = 'dive-event-overlay flash-rupture';
+    setTimeout(() => {
+      if (el.className.includes('flash-rupture')) {
+        el.className = 'dive-event-overlay';
+      }
+    }, 1200);
   }
 
   flashMitosis() {

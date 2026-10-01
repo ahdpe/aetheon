@@ -71,19 +71,33 @@ export class DiveCreatureManager {
         }
       }
 
-      // Animate undulating flagellum
-      this.animateFlagellum(group, time, org.id);
+      // Animate undulating flagellum and pulse nucleus for nearby entities (< 160 units)
+      if (dist < 160.0) {
+        this.animateFlagellum(group, time, org.id);
 
-      // Pulse nucleus with Kuramoto rhythm
-      const pulse = 1.0 + Math.sin(time * 0.008 + org.id) * 0.15;
-      if (group.userData.nucleus) {
-        group.userData.nucleus.scale.set(pulse, pulse, pulse);
+        // Pulse nucleus with Kuramoto rhythm
+        const pulse = 1.0 + Math.sin(time * 0.008 + org.id) * 0.15;
+        if (group.userData.nucleus) {
+          group.userData.nucleus.scale.set(pulse, pulse, pulse);
+        }
       }
     }
 
-    // 2. Hide entities that died or moved far out of range
+    // 2. Hide entities outside player view and cleanly dispose creatures that died on server
     for (const [id, group] of this.creaturePool.entries()) {
-      if (!activeIds.has(id)) {
+      if (!currentEntities.has(id)) {
+        // Creature has died on server: clean up from Three.js scene & GPU memory
+        this.scene.remove(group);
+        group.traverse((child) => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) {
+            if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+            else child.material.dispose();
+          }
+        });
+        this.creaturePool.delete(id);
+      } else if (!activeIds.has(id)) {
+        // Creature is alive, but outside player's visibility range
         group.visible = false;
       }
     }
@@ -474,11 +488,20 @@ export class DiveCreatureManager {
   cleanup() {
     for (const group of this.creaturePool.values()) {
       this.scene.remove(group);
+      group.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+          else child.material.dispose();
+        }
+      });
     }
     this.creaturePool.clear();
 
     for (const line of this.bondLines) {
       this.scene.remove(line);
+      if (line.geometry) line.geometry.dispose();
+      if (line.material) line.material.dispose();
     }
     this.bondLines = [];
   }

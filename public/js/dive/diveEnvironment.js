@@ -92,21 +92,21 @@ export class DiveEnvironment {
   }
 
   setupLightingAndFog() {
-    // 1. Crystal-clear Deep Oceanic Fog (Zero fog nearby: 340 to 1100 units)
-    this.scene.fog = new THREE.Fog(0x020d1a, 340, 1100);
+    // 1. Crystal-clear Deep Oceanic Fog (Pristine within 140 units, smooth atmospheric depth fade 140 to 320 units)
+    this.scene.fog = new THREE.Fog(0x020d1a, 140, 320);
     this.scene.background = new THREE.Color(0x020d1a);
 
-    // 2. Ambient Bioluminescent Glow (Rich, luminous, crystal-clear oceanic blue)
-    this.ambLight = new THREE.AmbientLight(0x163b5c, 2.0);
+    // 2. Ambient Bioluminescent Glow (Deep oceanic abyssal ambiance)
+    this.ambLight = new THREE.AmbientLight(0x071b2d, 0.85);
     this.scene.add(this.ambLight);
 
     // 3. Meniscus Sunlight rays shining at a gentle angle for 3D specular relief
-    this.sunLight = new THREE.DirectionalLight(0xbbe8f8, 2.2);
+    this.sunLight = new THREE.DirectionalLight(0x38bdf8, 0.65);
     this.sunLight.position.set(60, 220, 80);
     this.scene.add(this.sunLight);
 
-    // 4. Liquid Sky Hemisphere Light (Vibrant cyan sky / deep navy floor)
-    this.hemiLight = new THREE.HemisphereLight(0x38bdf8, 0x020d1a, 1.8);
+    // 4. Liquid Sky Hemisphere Light (Subtle cyan sky / deep navy floor)
+    this.hemiLight = new THREE.HemisphereLight(0x0e3a5f, 0x010c18, 0.55);
     this.scene.add(this.hemiLight);
   }
 
@@ -196,9 +196,9 @@ export class DiveEnvironment {
       map: this.seafloorTexture,
       emissiveMap: this.seafloorTexture,
       emissive: new THREE.Color(0xffffff),
-      emissiveIntensity: 0.78,
-      roughness: 0.45,
-      metalness: 0.20,
+      emissiveIntensity: 0.18,
+      roughness: 0.85,
+      metalness: 0.12,
       flatShading: false
     });
 
@@ -271,9 +271,9 @@ export class DiveEnvironment {
 
     // 1. Deep abyssal substrate gradient
     const bgGrad = ctx.createRadialGradient(cx, cy, 30, cx, cy, 260);
-    bgGrad.addColorStop(0, '#0e3a5f');
-    bgGrad.addColorStop(0.65, '#072640');
-    bgGrad.addColorStop(1, '#02101b');
+    bgGrad.addColorStop(0, '#042845');
+    bgGrad.addColorStop(0.65, '#02182b');
+    bgGrad.addColorStop(1, '#010c18');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, w, h);
 
@@ -288,7 +288,7 @@ export class DiveEnvironment {
     // 2. Draw live chemical and bio-calcite reef field from thumbnail if available
     if (thumbCanvas) {
       ctx.save();
-      ctx.globalAlpha = 0.82;
+      ctx.globalAlpha = 0.45;
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(thumbCanvas, 0, 0, w, h);
       ctx.restore();
@@ -416,22 +416,7 @@ export class DiveEnvironment {
       coreDome.position.set(vent.x, -11.5, vent.z);
       this.scene.add(coreDome);
 
-      // 3. Concentric Seabed Radiant Halo Ring on seafloor plane
-      const haloGeo = new THREE.RingGeometry(14, 34, 48);
-      const haloMat = new THREE.MeshBasicMaterial({
-        color: vent.color,
-        transparent: true,
-        opacity: 0.32,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-      });
-      const halo = new THREE.Mesh(haloGeo, haloMat);
-      halo.rotation.x = -Math.PI * 0.5;
-      halo.position.set(vent.x, -11.0, vent.z);
-      this.scene.add(halo);
-
-      // 4. Soft Pulsating Volumetric Point Light illuminating surrounding waters
+      // 3. Soft Pulsating Volumetric Point Light illuminating surrounding waters and seafloor
       const pLight = new THREE.PointLight(vent.color, 3.2, 280, 1.2);
       pLight.position.set(vent.x, 6, vent.z);
       this.scene.add(pLight);

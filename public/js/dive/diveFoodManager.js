@@ -69,37 +69,38 @@ export class DiveFoodManager {
 
   // Create a 3D Volumetric Nutrient Bloom at water column level (Y = 18)
   createBloom3D(bloom) {
+    const isDetritus = (bloom.d === 1 || bloom.isDetritus);
     const radius = Math.max(22, (bloom.r || 50) * 0.65);
     const group = new THREE.Group();
 
-    // 1. Volumetric Cloud Sphere
-    const cloudGeo = new THREE.SphereGeometry(radius, 24, 16);
-    const cloudMat = new THREE.MeshBasicMaterial({
-      color: 0x84cc16, // Vibrant emerald lime
+    // 1. Soft Volumetric Cloud Sprite (Feathered radial halo, zero sharp polygon edges!)
+    const cloudMat = new THREE.SpriteMaterial({
+      map: this.particleTexture,
+      color: isDetritus ? 0xf59e0b : 0x84cc16,
       transparent: true,
-      opacity: 0.35,
+      opacity: isDetritus ? 0.30 : 0.35,
       blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
       depthWrite: false
     });
-    const cloud = new THREE.Mesh(cloudGeo, cloudMat);
+    const cloud = new THREE.Sprite(cloudMat);
+    cloud.scale.set(radius * 2.2, radius * 2.2, 1.0);
     group.add(cloud);
 
-    // 2. Dense Golden Radiant Core
-    const coreGeo = new THREE.SphereGeometry(radius * 0.45, 18, 12);
-    const coreMat = new THREE.MeshBasicMaterial({
-      color: 0xfef08a, // Warm golden nectar core
+    // 2. Soft Radial Core Sprite (Feathered falloff matching 2D view, no sharp polygon disk!)
+    const coreMat = new THREE.SpriteMaterial({
+      map: this.particleTexture,
+      color: isDetritus ? 0xd97706 : 0xa3e635,
       transparent: true,
-      opacity: 0.65,
+      opacity: 0.50,
       blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
       depthWrite: false
     });
-    const core = new THREE.Mesh(coreGeo, coreMat);
+    const core = new THREE.Sprite(coreMat);
+    core.scale.set(radius * 1.3, radius * 1.3, 1.0);
     group.add(core);
 
     // 3. Volumetric Nutrient Point Light
-    const light = new THREE.PointLight(0xa3e635, 2.8, radius * 3.5, 1.2);
+    const light = new THREE.PointLight(isDetritus ? 0xf59e0b : 0xa3e635, 2.2, radius * 3.5, 1.2);
     group.add(light);
 
     // 4. Drifting Phytomanna Crystals / Sparkling Flakes inside bloom
@@ -233,12 +234,12 @@ export class DiveFoodManager {
           this.scene.remove(bloomObj.group);
           // Dispose geometries & materials
           try {
-            bloomObj.cloud.geometry.dispose();
-            bloomObj.cloud.material.dispose();
-            bloomObj.core.geometry.dispose();
-            bloomObj.core.material.dispose();
-            bloomObj.crystals.geometry.dispose();
-            bloomObj.crystals.material.dispose();
+            if (bloomObj.cloud.geometry) bloomObj.cloud.geometry.dispose();
+            if (bloomObj.cloud.material) bloomObj.cloud.material.dispose();
+            if (bloomObj.core.geometry) bloomObj.core.geometry.dispose();
+            if (bloomObj.core.material) bloomObj.core.material.dispose();
+            if (bloomObj.crystals.geometry) bloomObj.crystals.geometry.dispose();
+            if (bloomObj.crystals.material) bloomObj.crystals.material.dispose();
           } catch (e) {}
           this.bloomGroups.delete(id);
         } else {
@@ -273,12 +274,12 @@ export class DiveFoodManager {
     for (const [, bloomObj] of this.bloomGroups.entries()) {
       try {
         this.scene.remove(bloomObj.group);
-        bloomObj.cloud.geometry.dispose();
-        bloomObj.cloud.material.dispose();
-        bloomObj.core.geometry.dispose();
-        bloomObj.core.material.dispose();
-        bloomObj.crystals.geometry.dispose();
-        bloomObj.crystals.material.dispose();
+        if (bloomObj.cloud.geometry) bloomObj.cloud.geometry.dispose();
+        if (bloomObj.cloud.material) bloomObj.cloud.material.dispose();
+        if (bloomObj.core.geometry) bloomObj.core.geometry.dispose();
+        if (bloomObj.core.material) bloomObj.core.material.dispose();
+        if (bloomObj.crystals.geometry) bloomObj.crystals.geometry.dispose();
+        if (bloomObj.crystals.material) bloomObj.crystals.material.dispose();
       } catch (e) {}
     }
     this.bloomGroups.clear();
