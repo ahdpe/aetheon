@@ -1,6 +1,7 @@
 export class LineageManager {
   constructor() {
     this.speciesMap = new Map();
+    this.prototypeIndex = new Map();
     this.nextSpeciesId = 1;
     this.divergenceThreshold = 0.55; // Normalized genetic distance threshold for speciation
     
@@ -77,6 +78,7 @@ export class LineageManager {
     };
 
     this.speciesMap.set(id, species);
+    this.prototypeIndex.set(this.prototypeKey(species), species);
     return species;
   }
 
@@ -105,8 +107,15 @@ export class LineageManager {
     const effectiveThreshold = this.divergenceThreshold * thresholdMultiplier;
     
     if (dist > effectiveThreshold) {
+      let closest = null, nearest = effectiveThreshold * 0.65;
+      for (const candidate of this.prototypeIndex.values()) {
+        if (candidate.id === parentSpeciesId) continue;
+        const distance = this.calcGeneticDistance(childGenome, candidate);
+        if (distance < nearest) { closest = candidate; nearest = distance; }
+      }
+      if (closest) return closest.id;
       // Divergence detected! Form a new species branch
-      const isCarnivore = childGenome.carnivory > 0.4;
+      const isCarnivore = childGenome.carnivory > 0.35;
       const hueDegree = Math.round(childGenome.hue * 360);
       
       const newSpecies = this.createSpecies({
@@ -137,20 +146,40 @@ export class LineageManager {
       const sp = this.speciesMap.get(organisms[i].speciesId);
       if (sp) {
         sp.population++;
-        sp.totalCount++;
+
         if (sp.population > sp.peakPopulation) {
           sp.peakPopulation = sp.population;
         }
       }
     }
 
+    for (const sp of this.speciesMap.values()) {
+      if (sp.population > 0) sp.extinctTime = null;
+    }
     // Mark extinctions
     const now = Date.now();
     for (const species of this.speciesMap.values()) {
-      if (species.population === 0 && !species.extinctTime && species.totalCount > 10) {
+      if (species.population === 0 && !species.extinctTime && species.peakPopulation > 0) {
         species.extinctTime = now;
       }
     }
+  }
+
+  prototypeKey(s) { return [s.hue,s.carnivory,s.size,s.speedMax].join(':'); }
+  rebuildIndex(legacy = false) {
+    this.prototypeIndex.clear();
+    for (const sp of this.speciesMap.values()) {
+      if (!legacy && sp.canonicalId && sp.canonicalId !== sp.id) continue;
+      const key = this.prototypeKey(sp), existing = this.prototypeIndex.get(key);
+      if (legacy && existing) sp.canonicalId = existing.id;
+      else this.prototypeIndex.set(key, sp);
+    }
+  }
+  getCatalogSpecies() { return this.getAllSpecies().filter(s => !s.canonicalId || s.canonicalId === s.id); }
+
+  recordBirth(id) {
+    const sp = this.speciesMap.get(id);
+    if (sp) sp.totalCount++;
   }
 
   getSpecies(id) {

@@ -1,3 +1,4 @@
+import { escapeHtml } from './safeHtml.js';
 import { i18n } from '../i18n.js';
 
 export class BioInspector {
@@ -197,7 +198,7 @@ export class BioInspector {
         founderRow.classList.remove('hidden');
         const genText = profile.dynastyGen > 1 ? ` • F${profile.dynastyGen}` : ` • F1 (${isRu ? 'Основатель' : 'Founder'})`;
         const countText = profile.dynastyLivingCount ? ` (${profile.dynastyLivingCount} ${isRu ? 'особ.' : 'living'})` : '';
-        founderVal.innerHTML = `<span style="color:#fbbf24;font-weight:700;">👑 ${profile.dynastyName}</span><span style="opacity:0.85;font-size:0.88em;">${genText}${countText}</span>`;
+        founderVal.innerHTML = `<span style="color:#fbbf24;font-weight:700;">👑 ${escapeHtml(profile.dynastyName)}</span><span style="opacity:0.85;font-size:0.88em;">${genText}${countText}</span>`;
       } else if (profile.isAvatarLineage) {
         founderRow.classList.remove('hidden');
         founderVal.textContent = `✨ ${isRu ? 'Потомок Аватара' : 'Avatar Lineage'}`;

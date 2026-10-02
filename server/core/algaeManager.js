@@ -1,3 +1,4 @@
+import { random } from './random.js';
 import { CONFIG } from '../config.js';
 
 /**
@@ -27,13 +28,13 @@ export class AlgaeManager {
     const baseDists = [240, 360, 210, 390, 280, 340, 220, 380];
 
     for (let i = 0; i < count; i++) {
-      const angle = baseAngles[i] + (Math.random() - 0.5) * 0.3;
-      const dist = baseDists[i] + (Math.random() - 0.5) * 40;
+      const angle = baseAngles[i] + (random() - 0.5) * 0.3;
+      const dist = baseDists[i] + (random() - 0.5) * 40;
       const x = Math.round(this.cx + Math.cos(angle) * dist);
       const y = Math.round(this.cy + Math.sin(angle) * dist);
-      const radius = 34.0 + Math.random() * 16.0; // 34 to 50 μm radius
-      const hue = 0.38 + Math.random() * 0.08;   // Emerald to cyan-teal (136° to 165°)
-      const frondCount = 10 + Math.floor(Math.random() * 8);
+      const radius = 34.0 + random() * 16.0; // 34 to 50 μm radius
+      const hue = 0.38 + random() * 0.08;   // Emerald to cyan-teal (136° to 165°)
+      const frondCount = 10 + Math.floor(random() * 8);
 
       this.isles.push({
         id: this.nextId++,
@@ -41,10 +42,10 @@ export class AlgaeManager {
         y,
         radius,
         baseRadius: radius,
-        density: 0.85 + Math.random() * 0.15, // 0.2 to 1.0 health
+        density: 0.85 + random() * 0.15, // 0.2 to 1.0 health
         hue: Math.round(hue * 1000) / 1000,
         frondCount,
-        phase: Math.random() * Math.PI * 2
+        phase: random() * Math.PI * 2
       });
     }
   }

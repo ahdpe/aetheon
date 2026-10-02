@@ -1,3 +1,4 @@
+import { random } from './random.js';
 import { CONFIG } from '../config.js';
 
 let nextOrganismId = 1;
@@ -7,8 +8,8 @@ export class Organism {
     this.id = nextOrganismId++;
     this.x = x;
     this.y = y;
-    this.vx = (Math.random() - 0.5) * 1.5;
-    this.vy = (Math.random() - 0.5) * 1.5;
+    this.vx = (random() - 0.5) * 1.5;
+    this.vy = (random() - 0.5) * 1.5;
     
     this.energy = CONFIG.INITIAL_ORGANISM_ENERGY;
     this.age = 0;
@@ -20,8 +21,8 @@ export class Organism {
     this.childrenCount = 0;
     
     // Internal Kuramoto phase and membrane morphology
-    this.phase = Math.random() * Math.PI * 2;
-    this.heading = Math.random() * Math.PI * 2;
+    this.phase = random() * Math.PI * 2;
+    this.heading = random() * Math.PI * 2;
     this.playerSteer = { x: 0, y: 0, ticks: 0 };
     this.isLazarus = false;
     this.fatalDamage = false;
@@ -55,23 +56,26 @@ export class Organism {
     this.founderId = null;
   }
 
+  static getNextId() { return nextOrganismId; }
+  static setNextId(id) { nextOrganismId = id; }
+
   static createRandomGenome(seedHue = null, forcePredator = null) {
-    const isPredator = forcePredator !== null ? forcePredator : (Math.random() < 0.12);
-    const baseHue = seedHue !== null ? seedHue : (isPredator ? 0.95 + Math.random() * 0.1 : 0.45 + Math.random() * 0.25);
+    const isPredator = forcePredator !== null ? forcePredator : (random() < 0.12);
+    const baseHue = seedHue !== null ? seedHue : (isPredator ? 0.95 + random() * 0.1 : 0.45 + random() * 0.25);
     
     return {
-      size: isPredator ? 5.5 + Math.random() * 2.5 : 2.8 + Math.random() * 2.6,
+      size: isPredator ? 5.5 + random() * 2.5 : 2.8 + random() * 2.6,
       hue: baseHue % 1.0,
-      speedMax: isPredator ? 2.6 + Math.random() * 1.4 : 1.2 + Math.random() * 1.4,
-      carnivory: isPredator ? 0.70 + Math.random() * 0.25 : Math.random() * 0.15,
-      chemotaxisNutrient: isPredator ? 0.15 : 0.9 + Math.random() * 0.8,
-      chemotaxisWaste: -0.6 + (Math.random() - 0.5) * 0.4, // usually avoid waste
-      ciliaryFrequency: 0.15 + Math.random() * 0.35,
-      phaseCoupling: Math.random() * 0.8,
-      splitThreshold: isPredator ? 220.0 + Math.random() * 40 : 80.0 + Math.random() * 30,
-      metabolismEfficiency: 0.9 + Math.random() * 0.25,
-      mutationRate: 0.05 + Math.random() * 0.05,
-      adhesion: isPredator ? Math.random() * 0.35 : 0.3 + Math.random() * 0.6
+      speedMax: isPredator ? 2.6 + random() * 1.4 : 1.2 + random() * 1.4,
+      carnivory: isPredator ? 0.70 + random() * 0.25 : random() * 0.15,
+      chemotaxisNutrient: isPredator ? 0.15 : 0.9 + random() * 0.8,
+      chemotaxisWaste: -0.6 + (random() - 0.5) * 0.4, // usually avoid waste
+      ciliaryFrequency: 0.15 + random() * 0.35,
+      phaseCoupling: random() * 0.8,
+      splitThreshold: isPredator ? 220.0 + random() * 40 : 80.0 + random() * 30,
+      metabolismEfficiency: 0.9 + random() * 0.25,
+      mutationRate: 0.05 + random() * 0.05,
+      adhesion: isPredator ? random() * 0.35 : 0.3 + random() * 0.6
     };
   }
 
@@ -82,8 +86,8 @@ export class Organism {
 
     const mutateVal = (val, min, max, scale = 1.0) => {
       // Small Gaussian mutation + occasional Cauchy jump
-      const r = (Math.random() - 0.5) * 2;
-      const jump = Math.random() < 0.05 ? r * 4.0 : r;
+      const r = (random() - 0.5) * 2;
+      const jump = random() < 0.05 ? r * 4.0 : r;
       const delta = jump * rate * scale;
       return Math.max(min, Math.min(max, val + delta));
     };
@@ -345,7 +349,7 @@ export class Organism {
       this.heading += Math.max(-maxTurn, Math.min(maxTurn, angleDiff * turnRate));
     } else {
       // Gentle forward wander
-      this.heading += (Math.random() - 0.5) * 0.08;
+      this.heading += (random() - 0.5) * 0.08;
     }
 
     // Continuous rhythmic ciliary propulsion with chemotactic feeding sprint
@@ -445,10 +449,6 @@ export class Organism {
       }
     }
 
-    // Maintain vital energy baseline while actively piloted by visitor
-    if (isPiloted) {
-      this.energy = Math.max(40.0, this.energy);
-    }
 
     // 3.0. Ontogenesis & Somatic Maturation: juvenile growth into adult
     if (this.maturity < 1.0) {
@@ -479,7 +479,7 @@ export class Organism {
       // 1. Algae Sanctuary / Kelp Thicket Evasion: 35% evasion chance if inside algae grove
       if (algaeManager && algaeManager.isInsideShelter) {
         const shelter = algaeManager.isInsideShelter(prey.x, prey.y);
-        if (shelter && Math.random() < 0.35) {
+        if (shelter && random() < 0.35) {
           this.vx *= 0.7;
           this.vy *= 0.7;
           return false;
@@ -490,7 +490,7 @@ export class Organism {
       if (grid && grid.getSubstrate) {
         const preySub = grid.getSubstrate(prey.x, prey.y);
         if (preySub > 0.20 && this.size > prey.size * 1.2) {
-          if (Math.random() < 0.25) {
+          if (random() < 0.25) {
             this.vx *= 0.75;
             this.vy *= 0.75;
             return false;
@@ -498,20 +498,8 @@ export class Organism {
         }
       }
 
-      if (prey.playerSteer && prey.playerSteer.ticks > 0) {
-        // Piloted organism cannot be insta-devoured: predatory strike & evasive recoil!
-        const bite = Math.min(prey.energy * 0.25, 20.0);
-        prey.energy -= bite;
-        this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 0.7);
-        const d = Math.hypot(dx, dy) || 1.0;
-        prey.vx += (dx / d) * 3.5;
-        prey.vy += (dy / d) * 3.5;
-        prey.panicTicks = 30;
-        return { killed: false, preyId: prey.id };
-      }
-
       // Check if prey can be swallowed whole: if hunter is 25% larger, or prey is wounded (<48 energy), or 40% fatal grab
-      const canSwallowWhole = (this.size > prey.size * 1.25) || (prey.energy < 48.0) || (Math.random() < 0.40);
+      const canSwallowWhole = (this.size > prey.size * 1.25) || (prey.energy < 48.0) || (random() < 0.40);
 
       if (canSwallowWhole) {
         // Full ingestion / kill!
@@ -574,7 +562,7 @@ export class Organism {
     this.childrenCount++;
 
     const mutatedGenome = this.createMutatedGenome(mutationMultiplier);
-    const spawnAngle = Math.random() * Math.PI * 2;
+    const spawnAngle = random() * Math.PI * 2;
     const spawnDist = this.size * 1.5;
     
     let childX = this.x + Math.cos(spawnAngle) * spawnDist;
@@ -602,7 +590,7 @@ export class Organism {
     // Epigenetic inheritance: if parent was actively steered/piloted by a visitor or belongs to an avatar lineage
     if (this.isAvatarLineage || this.pilotedTicks > 120 || this.dynastyName) {
       child.isAvatarLineage = true;
-      child.genome.metabolismEfficiency = Math.min(1.8, child.genome.metabolismEfficiency * 1.12);
+
     }
 
     // Dynasty Branch Inheritance: direct offspring inherit dynasty and increment generation
@@ -617,7 +605,7 @@ export class Organism {
 
   // Check if organism has perished
   isDead() {
-    if (this.playerSteer && this.playerSteer.ticks > 0) return false; // Protected while visitor is piloting!
+
     return this.fatalDamage || this.energy <= 0.0 || this.age > 12000; // max lifespan ~20 mins of continuous life
   }
 

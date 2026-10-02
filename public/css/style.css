@@ -3706,3 +3706,7 @@ body.mode-lab .interactive-hint {
 
 
 
+
+.codex-pager { display:flex; align-items:center; justify-content:center; gap:1rem; padding:1rem; flex-wrap:wrap; }
+.codex-pager button { color:#b8f9e5; background:#102d35; border:1px solid #3a6971; border-radius:10px; padding:.6rem 1rem; cursor:pointer; }
+.codex-pager button:disabled { opacity:.4; cursor:default; }

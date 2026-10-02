@@ -1,5 +1,5 @@
 export const DICTIONARY = {
-  en: {
+  en: { stagnation_metric: 'Stagnation',
     organisms: 'organisms',
     species: 'species',
     gen: 'gen',
@@ -51,7 +51,7 @@ export const DICTIONARY = {
     nav_journal: 'Journal',
     open_journal_feed: '▲ Open Journal',
     journal_drawer_title: 'Naturalist Journal • Evolution Feed',
-    journal_drawer_subtitle: 'Live cognitive observations streamed from Venice AI (LLaMA 3.3 70B)',
+    journal_drawer_subtitle: 'Events and discoveries from the shared living ocean',
     btn_species_catalog: '🧬 Species Codex',
     drawer_collapse: '▼ Collapse',
     live_tooltip: 'Evolution Timeline & Journal',
@@ -107,7 +107,7 @@ export const DICTIONARY = {
     detritus_label: 'Organic Detritus',
     dynasty_placeholder: 'Observer Name...'
   },
-  ru: {
+  ru: { stagnation_metric: 'Стагнация',
     organisms: 'организмов',
     species: 'видов',
     gen: 'пок.',

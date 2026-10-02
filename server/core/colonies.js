@@ -62,7 +62,7 @@ export class ColonyManager {
    * Must be O(total bonds) — very lightweight at 10 Hz.
    */
   applyBondPhysics(organismsById) {
-    for (const [colonyId, colony] of this.colonies.entries()) {
+    for (const [colonyId, colony] of [...this.colonies.entries()]) {
       for (let b = 0; b < colony.bonds.length; b++) {
         const bond = colony.bonds[b];
         const orgA = organismsById.get(bond.a);
@@ -111,42 +111,48 @@ export class ColonyManager {
         continue;
       }
 
-      // Collective metabolism: redistribute 10% of surplus energy to weakest member
-      if (colony.memberIds.size >= 2) {
-        let minEnergy = Infinity;
-        let minOrg = null;
-        let totalSurplus = 0;
-        let surplusDonors = 0;
+      for (const component of this.splitDisconnected(colony)) {
+        const members = [...component.memberIds].map(id => organismsById.get(id)).filter(Boolean);
+        const recipient = members.reduce((min, o) => !min || o.energy < min.energy ? o : min, null);
+        if (!recipient) continue;
+        const donors = members.filter(o => o !== recipient && o.energy > 60);
+        const surplus = donors.reduce((sum, o) => sum + (o.energy - 60) * 0.005, 0);
+        const transfer = Math.max(0, Math.min(surplus, 2, CONFIG.MAX_ORGANISM_ENERGY - recipient.energy));
+        if (!transfer || !surplus) continue;
+        for (const donor of donors) donor.energy -= transfer * ((donor.energy - 60) * 0.005) / surplus;
+        recipient.energy += transfer;
 
-        for (const memberId of colony.memberIds) {
-          const org = organismsById.get(memberId);
-          if (!org) continue;
-          if (org.energy < minEnergy) {
-            minEnergy = org.energy;
-            minOrg = org;
-          }
-          if (org.energy > 60) {
-            totalSurplus += (org.energy - 60) * 0.005; // 0.5% of surplus per tick
-            surplusDonors++;
-          }
-        }
-
-        if (minOrg && totalSurplus > 0.1 && surplusDonors > 0) {
-          // Transfer pooled surplus to weakest member
-          const transfer = Math.min(totalSurplus, 2.0); // cap transfer per tick
-          minOrg.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, minOrg.energy + transfer);
-
-          // Deduct proportionally from donors
-          const perDonor = transfer / surplusDonors;
-          for (const memberId of colony.memberIds) {
-            const org = organismsById.get(memberId);
-            if (org && org !== minOrg && org.energy > 60) {
-              org.energy -= perDonor;
-            }
-          }
-        }
       }
     }
+  }
+
+  splitDisconnected(colony) {
+    const adjacency = new Map([...colony.memberIds].map(id => [id, []]));
+    for (const b of colony.bonds) { adjacency.get(b.a)?.push(b.b); adjacency.get(b.b)?.push(b.a); }
+    const remaining = new Set(colony.memberIds), components = [];
+    while (remaining.size) {
+      const stack = [remaining.values().next().value], component = new Set();
+      while (stack.length) {
+        const id = stack.pop();
+        if (!remaining.delete(id)) continue;
+        component.add(id); stack.push(...(adjacency.get(id) ?? []));
+      }
+      components.push(component);
+    }
+    if (components.length < 2) return [colony];
+    const surviving = [];
+    this.colonies.delete(colony.id);
+    for (const id of colony.memberIds) this.orgToColony.delete(id);
+    let first = true;
+    for (const members of components) {
+      if (members.size < 2) continue;
+      const id = first ? colony.id : nextColonyId++;
+      first = false;
+      this.colonies.set(id, { id, memberIds: members, bonds: colony.bonds.filter(b => members.has(b.a) && members.has(b.b)), createdAt: colony.createdAt });
+      surviving.push(this.colonies.get(id));
+      for (const member of members) this.orgToColony.set(member, id);
+    }
+    return surviving;
   }
 
   /**

@@ -54,7 +54,7 @@ class AetheonApp {
 
     // 4. Start 60-120 FPS render loop
     const frame = (time) => {
-      this.renderer.render(time);
+      if (!document.hidden && !this.diveEngine?.isActive) this.renderer.render(time);
       requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
@@ -65,10 +65,7 @@ class AetheonApp {
       if (hint) hint.style.opacity = '0';
     }, 7000);
 
-    // 6. Preload 3D Dive Engine quietly after 2.5s (when 2D simulation is running smoothly)
-    setTimeout(() => {
-      if (!this.diveEngine) this.getDiveEngine();
-    }, 2500);
+
   }
 
   // Asynchronously get or initialize the 3D first-person dive engine
@@ -139,7 +136,7 @@ class AetheonApp {
       }
       this.journalDrawer?.render();
       if (this.codexModal && this.codexModal.activeSpecies.length > 0) {
-        this.codexModal.renderData(this.codexModal.activeSpecies);
+        this.codexModal.applyFilterAndRender();
       }
       if (this.lastStats) {
         this.updateStats(this.lastStats);
@@ -270,7 +267,7 @@ class AetheonApp {
     } else if (msg.type === 'inspect_result') {
       this.inspector.updateProfile(msg.profile);
     } else if (msg.type === 'codex_data') {
-      this.codexModal.renderData(msg.species, msg.journal, msg.dynasties);
+      this.codexModal.renderData(msg.species, msg.journal, msg.dynasties, msg.meta);
       if (msg.journal && msg.journal.length > 0) {
         this.journalEntries = msg.journal;
         this.journalDrawer.setEntries(msg.journal);
@@ -349,7 +346,8 @@ class AetheonApp {
     const isRu = i18n.getLang() === 'ru';
 
     if (epochEl) {
-      epochEl.textContent = isRu ? (entry.titleRu || entry.titleEn) : entry.titleEn;
+      const prefix = entry.legacyUnverified ? (isRu ? 'Архив · ' : 'Archive · ') : '';
+      epochEl.textContent = prefix + (isRu ? (entry.titleRu || entry.titleEn) : entry.titleEn);
     }
     if (textEl) {
       textEl.textContent = isRu ? (entry.contentRu || entry.contentEn) : entry.contentEn;
@@ -425,9 +423,9 @@ class AetheonApp {
     }
   }
 
-  sendGetCodex() {
+  sendGetCodex(options = {}) {
     if (this.socket && this.isConnected) {
-      this.socket.send(JSON.stringify({ type: 'get_codex' }));
+      this.socket.send(JSON.stringify({ type: 'get_codex', ...options }));
     }
   }
 

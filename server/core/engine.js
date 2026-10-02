@@ -1,3 +1,4 @@
+import { random } from './random.js';
 import { CONFIG } from '../config.js';
 import { ChemicalGrid } from './chemicalGrid.js';
 import { SpatialHash } from './spatialHash.js';
@@ -60,20 +61,6 @@ export class SimulationEngine {
     const restored = this.persistence.loadSnapshot(this);
     if (!restored) {
       this.seedPrimordialFauna();
-    } else {
-      // Ensure all restored organisms are strictly inside the circular chamber
-      const CX = CONFIG.CHAMBER_CENTER_X;
-      const CY = CONFIG.CHAMBER_CENTER_Y;
-      const maxR = CONFIG.CHAMBER_RADIUS - 15.0;
-      for (let i = 0; i < this.organisms.length; i++) {
-        const o = this.organisms[i];
-        const dist = Math.hypot(o.x - CX, o.y - CY);
-        if (dist > maxR) {
-          const ang = Math.atan2(o.y - CY, o.x - CX);
-          o.x = CX + Math.cos(ang) * (maxR - 20);
-          o.y = CY + Math.sin(ang) * (maxR - 20);
-        }
-      }
     }
     if (this.atlas) {
       this.atlas.init();
@@ -88,8 +75,8 @@ export class SimulationEngine {
     
     for (let i = 0; i < 280; i++) {
       const vent = vents[i % vents.length];
-      const angle = Math.random() * Math.PI * 2;
-      const dist = Math.random() * 60 + 5;
+      const angle = random() * Math.PI * 2;
+      const dist = random() * 60 + 5;
       
       const wx = vent.x * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + Math.cos(angle) * dist;
       const wy = vent.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + Math.sin(angle) * dist;
@@ -164,13 +151,9 @@ export class SimulationEngine {
         for (let n = 0; n < this.neighborScratch.length; n++) {
           const prey = this.neighborScratch[n];
           if (!deadSet.has(prey.id)) {
-            // Piloted defense: if human is piloting prey, it evades fatal one-shots!
-            if (prey.isPiloted && Math.random() < 0.70) {
-              continue; // 70% evasion chance while piloted!
-            }
             const strike = org.attemptPredation(prey, this.grid, this.algae);
             if (strike) {
-              this.recentWindow.kills++;
+              if (strike.killed) this.recentWindow.kills++;
               if (strike.killed) {
                 deadSet.add(prey.id);
                 this.handleOrganismDeath(prey, true);
@@ -193,12 +176,11 @@ export class SimulationEngine {
         let allowMitosis = false;
         if ((this.organisms.length + newChildren.length) < this.maxOrganisms) {
           allowMitosis = true;
-        } else if (this.organisms.length >= this.maxOrganisms && Math.random() < 0.25) {
+        } else if (this.organisms.length >= this.maxOrganisms && random() < 0.25) {
           // Turnover: cull an old or depleted organism to maintain generational turnover
           for (let k = 0; k < this.organisms.length; k++) {
             const cand = this.organisms[k];
-            const isCandPiloted = cand.playerSteer && cand.playerSteer.ticks > 0;
-            if (!deadSet.has(cand.id) && cand !== org && !isCandPiloted && (cand.age > 4000 || cand.energy < 30)) {
+            if (!deadSet.has(cand.id) && cand !== org && (cand.age > 4000 || cand.energy < 30)) {
               deadSet.add(cand.id);
               this.handleOrganismDeath(cand, false);
               allowMitosis = true;
@@ -210,13 +192,17 @@ export class SimulationEngine {
         if (allowMitosis) {
           const specThresholdMult = this.cataclysms ? this.cataclysms.getSpeciationThresholdMultiplier() : 1.0;
           const mutMult = this.cataclysms ? this.cataclysms.getMutationMultiplier() : 1.0;
-          const childSpeciesId = this.lineage.evaluateSpeciation(org.genome, org.speciesId, specThresholdMult);
-          if (childSpeciesId !== org.speciesId) {
+          const child = org.reproduce(org.speciesId, mutMult);
+          const nextSpeciesBefore = this.lineage.nextSpeciesId;
+          const childSpeciesId = this.lineage.evaluateSpeciation(child.genome, org.speciesId, specThresholdMult);
+          child.speciesId = childSpeciesId;
+          this.lineage.recordBirth(childSpeciesId);
+          if (this.lineage.nextSpeciesId > nextSpeciesBefore) {
             this.recentWindow.speciations++;
             if (this.cataclysms) this.cataclysms.onSpeciation();
           }
           this.recentWindow.births++;
-          const child = org.reproduce(childSpeciesId, mutMult);
+
           newChildren.push(child);
           this.eventsBuffer.push({
             type: 'birth',
@@ -273,11 +259,11 @@ export class SimulationEngine {
       const vents = this.grid.vents;
       const speciesList = this.lineage.getAllSpecies();
       for (let k = 0; k < needed; k++) {
-        const vent = vents[Math.floor(Math.random() * vents.length)];
-        const wx = vent.x * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 40;
-        const wy = vent.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 40;
-        const isHunter = Math.random() < 0.15;
-        const sp = isHunter ? (speciesList[2] || speciesList[0]) : speciesList[Math.floor(Math.random() * 2)];
+        const vent = vents[Math.floor(random() * vents.length)];
+        const wx = vent.x * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (random() - 0.5) * 40;
+        const wy = vent.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (random() - 0.5) * 40;
+        const isHunter = random() < 0.15;
+        const sp = isHunter ? (speciesList[2] || speciesList[0]) : speciesList[Math.floor(random() * 2)];
         this.organisms.push(new Organism(wx, wy, Organism.createRandomGenome(sp.hue, isHunter), 1, 0, sp.id));
       }
     }
@@ -289,7 +275,7 @@ export class SimulationEngine {
     }
 
     if (!blockBiogenesis && activeHunters < 4) {
-      const neededHunters = Math.min(2, 4 - activeHunters);
+      const neededHunters = Math.min(2, 4 - activeHunters, Math.max(0, this.maxOrganisms - this.organisms.length));
       let hunterSpecies = this.lineage.getSpecies(3); // Vibrionox vorax
       if (!hunterSpecies) {
         hunterSpecies = this.lineage.getAllSpecies().find(s => s.carnivory > 0.45) || this.lineage.getAllSpecies()[2];
@@ -299,8 +285,8 @@ export class SimulationEngine {
       const CY = CONFIG.CHAMBER_CENTER_Y;
       for (let h = 0; h < neededHunters; h++) {
         // Disperse in pelagic open water AWAY from hydrothermal vents to allow grazers to thrive
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 180 + Math.random() * 220;
+        const angle = random() * Math.PI * 2;
+        const dist = 180 + random() * 220;
         const wx = CX + Math.cos(angle) * dist;
         const wy = CY + Math.sin(angle) * dist;
         const org = new Organism(wx, wy, Organism.createRandomGenome(hunterSpecies.hue, true), 1, 0, hunterSpecies.id);
@@ -343,7 +329,11 @@ export class SimulationEngine {
 
   // Handle external visitor perturbation (dropping nutrients, stirring water)
   injectInteraction(type, x, y, options = {}) {
+    if (![x, y].every(Number.isFinite)) return { success: false, reason: 'invalid_coordinates' };
     if (type === 'nutrient_drop') {
+      const now = Date.now();
+      if (now - (this.lastVisitorFeed ?? 0) < 5000) return { success: false, reason: 'world_cooldown' };
+      if (this.nutrientBlooms.filter(b => !b.isDetritus).length >= 8) return { success: false, reason: 'world_quota' };
       const CX = CONFIG.CHAMBER_CENTER_X;
       const CY = CONFIG.CHAMBER_CENTER_Y;
       const R = CONFIG.CHAMBER_RADIUS;
@@ -374,18 +364,17 @@ export class SimulationEngine {
         maxAge: 350,   // ~35 seconds active lifespan
         age: 0
       };
+      this.lastVisitorFeed = now;
       this.nutrientBlooms.push(bloom);
       this.grid.injectDrop(dropX, dropY, 4.5, 95);
       return { success: true, type: 'nutrient_drop', x: dropX, y: dropY, bloom };
-    } else if (type === 'thermal_burst') {
-      this.grid.injectDrop(x, y, 4.0, 110);
-      return { success: true, type: 'thermal_burst', x, y };
     }
     return { success: false };
   }
 
   // Handle visitor first-person ciliary steering impulse with active throttle (thrust)
-  applySteer(orgId, steerX, steerY, thrust = 1.0) {
+  applySteer(orgId, steerX, steerY, thrust = 1.0, clientId = null) {
+    if (!clientId || this.pilotedMap.get(orgId) !== clientId || ![steerX, steerY, thrust].every(Number.isFinite)) return false;
     for (let i = 0; i < this.organisms.length; i++) {
       const o = this.organisms[i];
       if (o.id === orgId) {
@@ -428,7 +417,7 @@ export class SimulationEngine {
     this.pilotedMap.set(numId, clientId);
     this.clientPilotMap.set(clientId, numId);
     o.isPiloted = true;
-    o.energy = Math.max(o.energy, 95.0); // Vitality boost for pilot immersion
+
     o.playerSteer = { x: 0, y: 0, ticks: 100 };
     return true;
   }
@@ -530,20 +519,20 @@ export class SimulationEngine {
 
   // Pack low-latency 10 Hz broadcast packet for clients
   getBroadcastPacket() {
-    const orgData = new Float32Array(this.organisms.length * 10);
+    const orgData = new Array(this.organisms.length * 10);
     let ptr = 0;
     for (let i = 0; i < this.organisms.length; i++) {
       const o = this.organisms[i];
       orgData[ptr++] = o.id;
-      orgData[ptr++] = o.x;
-      orgData[ptr++] = o.y;
-      orgData[ptr++] = o.vx;
-      orgData[ptr++] = o.vy;
-      orgData[ptr++] = o.energy;
-      orgData[ptr++] = o.size;
-      orgData[ptr++] = o.hue;
+      orgData[ptr++] = Math.round(o.x * 10) / 10;
+      orgData[ptr++] = Math.round(o.y * 10) / 10;
+      orgData[ptr++] = Math.round(o.vx * 100) / 100;
+      orgData[ptr++] = Math.round(o.vy * 100) / 100;
+      orgData[ptr++] = Math.round(o.energy * 1) / 1;
+      orgData[ptr++] = Math.round(o.size * 10) / 10;
+      orgData[ptr++] = Math.round(o.hue * 100) / 100;
       orgData[ptr++] = o.speciesId;
-      orgData[ptr++] = o.carnivory;
+      orgData[ptr++] = Math.round(o.carnivory * 100) / 100;
     }
 
     return {
@@ -582,7 +571,7 @@ export class SimulationEngine {
 
     // 3. Detritus cloud: dead cells leave scavengeable necromass for grazers
     // Throttled: only adult organisms (maturity >= 0.7, size >= 4.0) with bounded probability or predation or forced test
-    const shouldSpawn = forceDetritus || (org.maturity >= 0.7 && org.size >= 4.0 && (isPredation ? Math.random() < 0.45 : Math.random() < 0.25));
+    const shouldSpawn = forceDetritus || (org.maturity >= 0.7 && org.size >= 4.0 && (isPredation ? random() < 0.45 : random() < 0.25));
     if (shouldSpawn) {
       this.spawnDetritusBloom(org.x, org.y, org.size, org.hue, org.energy);
     }
@@ -613,7 +602,7 @@ export class SimulationEngine {
 
   foundDynasty(orgId, founderName) {
     const cleanName = String(founderName || '').trim().slice(0, 32);
-    if (!cleanName) return null;
+    if (!cleanName || /[<>\x00-\x1f]/.test(cleanName) || this.activeDynasties.has(cleanName)) return null;
     const org = this.organisms.find(o => o.id === orgId);
     if (!org) return null;
     if (org.dynastyName) {

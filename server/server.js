@@ -23,6 +23,9 @@ const MIME_TYPES = {
   '.woff2': 'font/woff2'
 };
 
+const stepTimes = [];
+let lastHealthTick = 0, lastHealthTime = performance.now();
+
 // Create zero-dependency lightweight HTTP server
 const server = http.createServer((req, res) => {
   const rawUrl = req.url.split('?')[0];
@@ -37,13 +40,25 @@ const server = http.createServer((req, res) => {
   if (reqPath.startsWith('/aetheon')) {
     reqPath = reqPath.slice('/aetheon'.length);
   }
+  if (reqPath === '/health') {
+    const times = [...stepTimes].sort((a,b) => a-b), now = performance.now();
+    const measuredHz = (engine.ticks - lastHealthTick) / Math.max(0.001, (now-lastHealthTime)/1000);
+    lastHealthTick = engine.ticks; lastHealthTime = now;
+    res.writeHead(200, { 'Content-Type':'application/json', 'Cache-Control':'no-store' });
+    res.end(JSON.stringify({ status:'ok', version:'2.0-foundation', ticks:engine.ticks, worldCreatedAt:engine.genesisTime,
+      organisms:engine.organisms.length, registeredMorphs:engine.lineage.getCatalogSpecies().length, archivedLabels:engine.lineage.speciesMap.size, visitors:network.clients.size,
+      measuredHz:Math.round(measuredHz*100)/100, stepP95Ms:Math.round((times[Math.floor(times.length*.95)]??0)*100)/100 }));
+    return;
+  }
   if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
   console.log('[HTTP]', req.method, reqPath);
 
-  const filePath = path.join(PUBLIC_DIR, reqPath);
+  let filePath;
+  try { filePath = path.resolve(PUBLIC_DIR, '.' + decodeURIComponent(reqPath)); }
+  catch { res.writeHead(400); res.end(); return; }
 
   // Security check to avoid directory traversal
-  if (!filePath.startsWith(PUBLIC_DIR)) {
+  if (!filePath.startsWith(PUBLIC_DIR + path.sep)) {
     res.writeHead(403, { 'Content-Type': 'text/plain' });
     res.end('403 Forbidden');
     return;
@@ -72,6 +87,9 @@ const server = http.createServer((req, res) => {
 // Initialize simulation core
 console.log('[Server] Initializing AETHEON simulation engine...');
 const engine = new SimulationEngine();
+// Commit the upgraded full checkpoint before accepting visitors, including the first migration.
+if (!engine.persistence.saveSnapshot(engine)) throw new Error('Initial world checkpoint could not be committed');
+lastHealthTick = engine.ticks; lastHealthTime = performance.now();
 
 // Attach WebSocket network manager
 const network = new NetworkManager(server, engine);
@@ -84,10 +102,11 @@ setInterval(() => {
   const now = performance.now();
   // Step simulation
   engine.step();
+  stepTimes.push(performance.now() - now);
+  if (stepTimes.length > 600) stepTimes.shift();
 
   // Broadcast delta packet to connected clients
-  const packet = engine.getBroadcastPacket();
-  network.broadcastTick(packet);
+  if (network.clients.size > 0) network.broadcastTick(engine.getBroadcastPacket());
 
   lastTickTime = now;
 }, TICK_INTERVAL);

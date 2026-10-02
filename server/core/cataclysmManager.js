@@ -1,3 +1,4 @@
+import { random } from './random.js';
 import { CONFIG } from '../config.js';
 
 export const CATACLYSM_TYPES = {
@@ -55,7 +56,7 @@ export class CataclysmManager {
   // Calculate Shannon Genetic Diversity Index: H = -sum(p_i * ln(p_i))
   calcShannonDiversity() {
     const orgs = this.engine.organisms;
-    if (!orgs || orgs.length === 0) return 0;
+    if (!orgs || orgs.length === 0) return { H: 0, maxDominance: 0, speciesCount: 0 };
 
     const countsBySpecies = new Map();
     for (let i = 0; i < orgs.length; i++) {
@@ -143,8 +144,8 @@ export class CataclysmManager {
       case CATACLYSM_PHASES.CRISIS:
         this.stepCrisis(progress);
         // Crisis concludes when target survivor count (3-6) is reached or timer expires
-        const nonPilotedAlive = this.engine.organisms.filter(o => !o.isPiloted).length;
-        if (this.phaseTicks >= this.phaseMaxTicks || nonPilotedAlive <= 5) {
+        const alive = this.engine.organisms.length;
+        if (this.phaseTicks >= this.phaseMaxTicks || alive <= 5) {
           this.transitionTo(CATACLYSM_PHASES.LAZARUS_DAWN);
         }
         break;
@@ -188,9 +189,7 @@ export class CataclysmManager {
     const orgs = this.engine.organisms;
     const targetSurvivors = 5;
     
-    // Protect human-piloted organisms completely (Quantum Shielding)
-    const pilotedIds = new Set(this.engine.getPilotedIds());
-    const candidates = orgs.filter(o => !pilotedIds.has(o.id));
+    const candidates = orgs.slice();
 
     // If population is still above the target survivor threshold, apply selective pressure
     if (candidates.length > targetSurvivors) {
@@ -268,7 +267,7 @@ export class CataclysmManager {
 
     // Keep pioneers supplied with vital energy so they thrive and do not starve
     for (const org of this.engine.organisms) {
-      if (this.lazarusIds.has(org.id) || org.isPiloted) {
+      if (this.lazarusIds.has(org.id)) {
         org.energy = Math.max(org.energy, 185.0);
       }
     }
@@ -280,8 +279,8 @@ export class CataclysmManager {
     if (this.engine.ticks % 25 === 0) {
       const vents = this.engine.grid.vents;
       for (const v of vents) {
-        const vx = v.x * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 120;
-        const vy = v.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 120;
+        const vx = v.x * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (random() - 0.5) * 120;
+        const vy = v.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (random() - 0.5) * 120;
         this.engine.grid.injectDrop(vx, vy, 1.8, 110);
       }
     }
@@ -475,7 +474,11 @@ export class CataclysmManager {
       phaseMaxTicks: this.phaseMaxTicks,
       stagnationScore: this.stagnationScore,
       extinctionsCount: this.extinctionsCount,
-      lazarusIds: Array.from(this.lazarusIds)
+      ticksSinceLastSpeciation: this.ticksSinceLastSpeciation,
+      lastObservedDiversity: this.lastObservedDiversity,
+      stagnationCooldownTicks: this.stagnationCooldownTicks,
+      lazarusIds: Array.from(this.lazarusIds),
+      lazarusOrganisms: this.lazarusOrganisms
     };
   }
 
@@ -486,9 +489,15 @@ export class CataclysmManager {
     this.phaseTicks = data.phaseTicks || 0;
     this.phaseMaxTicks = data.phaseMaxTicks || 0;
     this.stagnationScore = data.stagnationScore || 0.0;
-    this.extinctionsCount = data.extinctionsCount || 0;
+    this.extinctionsCount = data.extinctionsCount ?? 0;
+    this.ticksSinceLastSpeciation = data.ticksSinceLastSpeciation ?? 0;
+    this.lastObservedDiversity = data.lastObservedDiversity ?? 1.5;
+    this.stagnationCooldownTicks = data.stagnationCooldownTicks ?? 0;
     if (Array.isArray(data.lazarusIds)) {
       this.lazarusIds = new Set(data.lazarusIds);
     }
+    this.lazarusOrganisms = data.lazarusOrganisms ?? this.engine.organisms
+      .filter(o => this.lazarusIds.has(o.id))
+      .map(o => ({ id: o.id, speciesId: o.speciesId, hue: o.hue, size: o.size, generation: o.generation }));
   }
 }

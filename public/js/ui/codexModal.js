@@ -1,3 +1,4 @@
+import { escapeHtml } from './safeHtml.js';
 import { i18n } from '../i18n.js';
 import { getSpeciesMorphology, drawCellMembranePath, drawCellMarkings, drawFlagellum, drawAntennae } from '../gl/morphology.js';
 
@@ -22,6 +23,8 @@ export class CodexModal {
     this.countDynasties = document.getElementById('count-dynasties');
 
     this.currentFilter = 'all';
+    this.offset = 0;
+    this.meta = null;
     this.searchQuery = '';
     this.allSpecies = [];
     this.allDynasties = [];
@@ -58,7 +61,7 @@ export class CodexModal {
         chips.forEach(c => c.classList.remove('active'));
         chip.classList.add('active');
         this.currentFilter = chip.getAttribute('data-filter') || 'all';
-        this.applyFilterAndRender();
+        this.offset = 0; this.requestPage();
       });
     });
 
@@ -68,7 +71,7 @@ export class CodexModal {
       if (this.searchClearBtn) {
         this.searchClearBtn.classList.toggle('hidden', !this.searchQuery.trim());
       }
-      this.applyFilterAndRender();
+      this.offset = 0; clearTimeout(this.searchTimer); this.searchTimer = setTimeout(() => this.requestPage(), 550);
     });
 
     this.searchClearBtn?.addEventListener('click', () => {
@@ -76,7 +79,7 @@ export class CodexModal {
         this.searchInput.value = '';
         this.searchQuery = '';
         this.searchClearBtn.classList.add('hidden');
-        this.applyFilterAndRender();
+        this.offset = 0; this.requestPage();
       }
     });
 
@@ -87,8 +90,35 @@ export class CodexModal {
     });
   }
 
+  requestPage() {
+    clearTimeout(this.pageTimer);
+    this.pageTimer = setTimeout(() => this.client.sendGetCodex({ filter: this.currentFilter, query: this.searchQuery, offset: this.offset }), 200);
+  }
+  renderPager() {
+    if (!this.pager) {
+      this.pager = document.createElement('div'); this.pager.className = 'codex-pager';
+      this.speciesGrid.after(this.pager);
+    }
+    this.pager.replaceChildren();
+    if (!this.meta || this.currentFilter === 'dynasties') return;
+    const isRu = i18n.getLang() === 'ru';
+    const text = document.createElement('span');
+    text.textContent = `${this.meta.total ? this.meta.offset + 1 : 0}–${Math.min(this.meta.total, this.meta.offset + 48)} / ${this.meta.total}`;
+    const prev = document.createElement('button'), next = document.createElement('button');
+    prev.textContent = isRu ? '← Назад' : '← Previous'; next.textContent = isRu ? 'Далее →' : 'Next →';
+    prev.disabled = this.meta.offset === 0; next.disabled = this.meta.offset + 48 >= this.meta.total;
+    prev.onclick = () => { this.offset = Math.max(0, this.meta.offset - 48); this.requestPage(); };
+    next.onclick = () => { this.offset = this.meta.offset + 48; this.requestPage(); };
+    this.pager.append(prev, text, next);
+    if (this.meta.legacyAliases) {
+      const note = document.createElement('small');
+      note.textContent = isRu ? `Одинаковые старые морфы объединены. ${this.meta.legacyAliases} прежних записей сохранены в архиве мира.` : `Identical legacy morphs are grouped. ${this.meta.legacyAliases} old labels remain in the world archive.`;
+      note.style.flexBasis = '100%'; this.pager.append(note);
+    }
+  }
+
   open() {
-    this.client.sendGetCodex();
+    this.requestPage();
     this.dialog.showModal();
     this.startAnimation();
   }
@@ -114,11 +144,13 @@ export class CodexModal {
     }
   }
 
-  renderData(speciesList, journalEntries = null, dynasties = null) {
+  renderData(speciesList, journalEntries = null, dynasties = null, meta = null) {
+    if (meta) this.meta = meta;
     if (speciesList) this.allSpecies = speciesList;
     if (dynasties) this.allDynasties = dynasties;
     this.updateFilterCounts();
     this.applyFilterAndRender();
+    this.renderPager();
   }
 
   updateFilterCounts() {
@@ -132,12 +164,9 @@ export class CodexModal {
     const extinct = this.allSpecies.filter(s => s.extinctTime !== null || s.population === 0).length;
     const dynastiesCount = (this.allDynasties || []).length;
 
-    if (this.countAll) this.countAll.textContent = total;
-    if (this.countAlive) this.countAlive.textContent = alive;
-    if (this.countHunter) this.countHunter.textContent = hunter;
-    if (this.countGrazer) this.countGrazer.textContent = grazer;
-    if (this.countFilter) this.countFilter.textContent = filter;
-    if (this.countExtinct) this.countExtinct.textContent = extinct;
+    for (const [name, value] of Object.entries({ All: total, Alive: alive, Hunter: hunter, Grazer: grazer, Filter: filter, Extinct: extinct })) {
+      if (this[`count${name}`]) this[`count${name}`].textContent = this.meta?.counts?.[name.toLowerCase()] ?? value;
+    }
     if (this.countDynasties) this.countDynasties.textContent = dynastiesCount;
   }
 
@@ -235,7 +264,7 @@ export class CodexModal {
 
       card.innerHTML = `
         <div class="species-visual-container">
-          <canvas class="species-canvas" width="140" height="140" data-species-id="${sp.id}" aria-label="${nameTitle} live microscope portrait"></canvas>
+          <canvas class="species-canvas" width="140" height="140" data-species-id="${sp.id}" aria-label="${escapeHtml(nameTitle)} live microscope portrait"></canvas>
           <div class="species-lens-ring"></div>
           <div class="species-diet-badge ${dietClass}">${dietIcon} ${dietLabel}</div>
           ${isExtinct ? `<div class="species-extinct-tag">${isRu ? 'ВЫМЕРШИЙ' : 'EXTINCT'}</div>` : ''}
@@ -244,8 +273,8 @@ export class CodexModal {
           <div class="species-card-head">
             <span class="species-badge-dot" style="background: hsl(${hDeg}, 90%, 60%); box-shadow: 0 0 10px hsl(${hDeg}, 90%, 60%);"></span>
             <div class="species-title-wrap">
-              <h3 class="card-title">${nameTitle}</h3>
-              <div class="card-common">${nameCommon}</div>
+              <h3 class="card-title">${escapeHtml(nameTitle)}</h3>
+              <div class="card-common">${escapeHtml(nameCommon)}</div>
             </div>
           </div>
 
@@ -253,7 +282,7 @@ export class CodexModal {
             <div class="species-founder-pill">
               <span class="founder-crown">👑</span>
               <span class="founder-label">${isRu ? 'Династия:' : 'Dynasty:'}</span>
-              <strong class="founder-name">${sp.founderName}</strong>
+              <strong class="founder-name">${escapeHtml(sp.founderName)}</strong>
             </div>
           ` : ''}
 
@@ -263,13 +292,13 @@ export class CodexModal {
             <span class="trait-chip" title="${isRu ? 'Хемотаксис к пище' : 'Chemotaxis'}">🧲 ${affinityVal}</span>
           </div>
 
-          <div class="card-desc">${desc}</div>
+          <div class="card-desc">${escapeHtml(desc)}</div>
 
           <div class="card-stats">
             <span class="species-status-pill ${isExtinct ? 'status-extinct' : 'status-alive'}">
               ${isExtinct ? '💀 ' + (isRu ? 'Вымерший вид' : 'Extinct') : '🟢 ' + sp.population + ' ' + (isRu ? 'в чаше' : 'active')}
             </span>
-            <span class="species-total-count">${isRu ? 'Всего:' : 'Total:'} ${sp.totalCount}</span>
+            <span class="species-total-count">${sp.countingSince ? (isRu ? 'Рождений с обновления:' : 'Births since update:') : (isRu ? 'Рождений:' : 'Births:')} ${sp.totalCount}</span>
           </div>
 
           <div class="species-actions-row">
@@ -355,8 +384,8 @@ export class CodexModal {
           <div class="species-card-head">
             <span class="species-badge-dot" style="background: hsl(${hDeg}, 90%, 60%); box-shadow: 0 0 10px hsl(${hDeg}, 90%, 60%);"></span>
             <div class="species-title-wrap">
-              <h3 class="card-title" style="color: #fbbf24; font-size: 1.25rem;">👑 ${dyn.name}</h3>
-              <div class="card-common">${spName} (${dyn.speciesNameLa})</div>
+              <h3 class="card-title" style="color: #fbbf24; font-size: 1.25rem;">👑 ${escapeHtml(dyn.name)}</h3>
+              <div class="card-common">${escapeHtml(spName)} (${escapeHtml(dyn.speciesNameLa)})</div>
             </div>
           </div>
 
@@ -380,7 +409,7 @@ export class CodexModal {
 
           ${isAlive ? `
             <div class="species-actions-row">
-              <button class="species-track-btn dynasty-track-btn" data-dynasty-name="${dyn.name}">
+              <button class="species-track-btn dynasty-track-btn" data-dynasty-name="${escapeHtml(dyn.name)}">
                 🎯 ${isRu ? 'Найти и следить' : 'Track in Ocean'}
               </button>
             </div>

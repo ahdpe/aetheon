@@ -1,3 +1,4 @@
+import { random } from './random.js';
 import { CONFIG } from '../config.js';
 
 export class ChemicalGrid {
@@ -55,7 +56,7 @@ export class ChemicalGrid {
   seedInitialConditions() {
     // Seed ambient nutrients across the manifold
     for (let i = 0; i < this.cellCount; i++) {
-      this.nutrients[i] = 0.15 + Math.random() * 0.1;
+      this.nutrients[i] = 0.15 + random() * 0.1;
       this.waste[i] = 0.0;
       this.signal[i] = 0.0;
       this.substrate[i] = 0.0;
@@ -177,20 +178,20 @@ export class ChemicalGrid {
     }
 
     // 3. Ephemeral benthic fumaroles (occasional thermal fissures that erupt for 20-35 min)
-    if (Math.random() < 0.00008 && this.ephemeralFumaroles.length < 2) {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = (0.12 + Math.random() * 0.32) * N;
+    if (random() < 0.00008 && this.ephemeralFumaroles.length < 2) {
+      const angle = random() * Math.PI * 2;
+      const dist = (0.12 + random() * 0.32) * N;
       const fx = Math.max(12, Math.min(N - 13, Math.round(N * 0.5 + Math.cos(angle) * dist)));
       const fy = Math.max(12, Math.min(N - 13, Math.round(N * 0.5 + Math.sin(angle) * dist)));
       this.ephemeralFumaroles.push({
-        id: `fum_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        id: `fum_${Date.now()}_${Math.floor(random() * 1000)}`,
         x: fx,
         y: fy,
         radius: 5,
         power: 0.65,
-        hue: (0.08 + Math.random() * 0.85) % 1.0,
+        hue: (0.08 + random() * 0.85) % 1.0,
         life: 0,
-        maxLife: 15000 + Math.floor(Math.random() * 9000)
+        maxLife: 15000 + Math.floor(random() * 9000)
       });
     }
 
@@ -218,7 +219,7 @@ export class ChemicalGrid {
             const idx = row + vx;
             this.nutrients[idx] = Math.min(2.2, this.nutrients[idx] + pow * factor);
             // Volcanic mineral mound precipitation beneath fumarole
-            if (Math.random() < 0.08) {
+            if (random() < 0.08) {
               this.substrate[idx] = Math.min(1.0, this.substrate[idx] + 0.0035 * factor * intensity);
             }
           }

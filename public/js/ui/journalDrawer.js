@@ -1,3 +1,4 @@
+import { escapeHtml } from './safeHtml.js';
 import { i18n } from '../i18n.js';
 import { sound } from '../audio/sound.js';
 
@@ -246,13 +247,13 @@ export class JournalDrawer {
         }
       }
 
-      const badgeHtml = badge ? `<span class="journal-badge">${badge}</span>` : '';
+      const badgeHtml = (badge ? `<span class="journal-badge">${escapeHtml(badge)}</span>` : '') + (entry.legacyUnverified ? `<span class="journal-badge">${isRu ? 'Архив: данные не проверены' : 'Archive: unverified data'}</span>` : '');
       const insightHtml = insight ? `
         <div class="journal-insight-box">
           <span class="insight-lamp">💡</span>
           <div class="insight-body">
             <span class="insight-tag">${isRu ? 'Суть процесса:' : 'Key insight:'}</span>
-            <span class="insight-text">${insight}</span>
+            <span class="insight-text">${escapeHtml(insight)}</span>
           </div>
         </div>
       ` : '';
@@ -264,8 +265,8 @@ export class JournalDrawer {
       } else if (isCataclysm) {
         visualHtml = `
           <div class="journal-cataclysm-banner">
-            <span class="cataclysm-banner-icon">${icon}</span>
-            <span class="cataclysm-banner-text">${badge}</span>
+            <span class="cataclysm-banner-icon">${escapeHtml(icon)}</span>
+            <span class="cataclysm-banner-text">${escapeHtml(badge)}</span>
           </div>
         `;
       }
@@ -273,18 +274,18 @@ export class JournalDrawer {
       item.innerHTML = `
         <div class="journal-card-header">
           <div class="journal-icon-wrap">
-            <span class="journal-icon">${icon}</span>
+            <span class="journal-icon">${escapeHtml(icon)}</span>
           </div>
           <div class="journal-header-info">
             <div class="journal-meta-row">
               ${badgeHtml}
               <span class="journal-time">${timeStr}</span>
             </div>
-            <div class="journal-title">${title || ''}</div>
+            <div class="journal-title">${escapeHtml(title || '')}</div>
           </div>
         </div>
         ${visualHtml}
-        <div class="journal-story">${content || ''}</div>
+        <div class="journal-story">${escapeHtml(content || '')}</div>
         ${insightHtml}
       `;
       this.timeline.appendChild(item);
@@ -366,7 +367,7 @@ export class JournalDrawer {
         </div>
         <div class="portrait-details">
           <div class="portrait-badge">${badgeLabel}</div>
-          <div class="portrait-title">${nameStr}</div>
+          <div class="portrait-title">${escapeHtml(nameStr)}</div>
           <div class="portrait-stats">
             <span>📏 Ø ${sizeFormatted} мкм</span>
             <span>⚡ ${speed} мкм/шаг</span>
@@ -430,7 +431,7 @@ export class JournalDrawer {
             <span class="atlas-day-badge">${i18n.t('atlas_day_badge')} ${entry.day}</span>
             <span class="atlas-date">${entry.date || ''}</span>
           </div>
-          <h3 class="atlas-day-title">${title}</h3>
+          <h3 class="atlas-day-title">${escapeHtml(title)}</h3>
         </div>
 
         <div class="atlas-map-container">
@@ -496,7 +497,7 @@ export class JournalDrawer {
             <span class="monograph-icon">📜</span>
             <span class="monograph-author">${isRu ? 'Хроника эволюции от Venice AI' : 'Evolution Monograph by Venice AI'}</span>
           </div>
-          <div class="monograph-content">${summary}</div>
+          <div class="monograph-content">${escapeHtml(summary)}</div>
         </div>
       `;
 

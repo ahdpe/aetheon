@@ -196,8 +196,8 @@ export class AtlasManager {
 
     let titleEn = `Day ${dayIndex}: The Great Biosphere Expansion`;
     let titleRu = `День ${dayIndex}: Экспансия Биосферы и Рост Рифов`;
-    let summaryEn = `A pivotal 24-hour cycle in the droplet. The population sustained ${stats.organismCount || 280} living entities across ${stats.speciesCount || 40} stabilized species. Mineral calcite precipitation covered ${stats.reefCoverage || 16}% of the manifold, channeling hydrothermal currents into sheltered nurseries.`;
-    let summaryRu = `Знаменательный 24-часовой цикл в микрокапле. Популяция удерживает ${stats.organismCount || 280} живых особей в ${stats.speciesCount || 40} стабилизировавшихся видах. Био-кальцитовые рифы покрыли ${stats.reefCoverage || 16}% дна, направляя теплые минеральные шлейфы в защищенные лагуны.`;
+    let summaryEn = `A pivotal 24-hour cycle in the droplet. The population sustained ${stats.organismCount ?? 280} living entities across ${stats.speciesCount ?? 40} stabilized species. Mineral calcite precipitation covered ${stats.reefCoverage ?? 16}% of the manifold, channeling hydrothermal currents into sheltered nurseries.`;
+    let summaryRu = `Знаменательный 24-часовой цикл в микрокапле. Популяция удерживает ${stats.organismCount ?? 280} живых особей в ${stats.speciesCount ?? 40} стабилизировавшихся видах. Био-кальцитовые рифы покрыли ${stats.reefCoverage ?? 16}% дна, направляя теплые минеральные шлейфы в защищенные лагуны.`;
 
     if (dayIndex === 1) {
       titleEn = `Day I: Genesis & The Primordial Dawn`;
@@ -210,7 +210,7 @@ export class AtlasManager {
       day: dayIndex,
       date: dateFormatted,
       timestamp: Date.now(),
-      epoch: stats.epoch || 1,
+      epoch: stats.epoch ?? 1,
       epochNameEn: stats.epochNameEn || 'The Primordial Dawn',
       epochNameRu: stats.epochNameRu || 'Первичный Рассвет',
       titleEn,
@@ -219,17 +219,17 @@ export class AtlasManager {
       summaryRu,
       svgMap,
       metrics: {
-        population: stats.organismCount || 280,
-        speciesCount: stats.speciesCount || 50,
-        generation: stats.generation || 1,
-        coloniesCount: stats.colonyCount || 0,
-        largestColonySize: stats.largestColonySize || 0,
-        reefCoverage: stats.reefCoverage || 16,
+        population: stats.organismCount ?? 280,
+        speciesCount: stats.speciesCount ?? 50,
+        generation: stats.generation ?? 1,
+        coloniesCount: stats.colonyCount ?? 0,
+        largestColonySize: stats.largestColonySize ?? 0,
+        reefCoverage: stats.reefCoverage ?? 16,
         dominantSpeciesEn: stats.dominantSpeciesNameEn || 'Grazer',
         dominantSpeciesRu: stats.dominantSpeciesNameRu || 'Пастбищник',
         apexHunterEn: stats.topPredatorNameEn || 'Hunter',
         apexHunterRu: stats.topPredatorNameRu || 'Ловчий',
-        temperatureC: stats.temperatureCelsius || 28.5
+        temperatureC: stats.temperatureCelsius ?? 28.5
       }
     };
 

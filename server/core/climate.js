@@ -88,7 +88,7 @@ export class ClimateEngine {
       ticks: this.ticks,
       temperature: this.temperature,
       frost: this.frost,
-      season: this.season
+      season: this.season, targetFrost: this.targetFrost, ventFactors: this.ventFactors
     };
   }
 
@@ -99,5 +99,7 @@ export class ClimateEngine {
     if (typeof data.temperature === 'number') this.temperature = data.temperature;
     if (typeof data.frost === 'number') this.frost = data.frost;
     if (typeof data.season === 'string') this.season = data.season;
+    this.targetFrost = data.targetFrost ?? 0;
+    if (data.ventFactors) this.ventFactors = data.ventFactors.slice();
   }
 }
