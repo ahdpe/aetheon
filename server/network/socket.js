@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { CONFIG } from '../config.js';
+import { visitorCookie } from '../core/nursery.js';
 
 export class NetworkManager {
   constructor(server, engine) {
@@ -43,6 +44,9 @@ export class NetworkManager {
         catch { ws.close(1008, 'Origin rejected'); return; }
       }
       ws.clientId = randomUUID();
+      const localProxy=['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+      const address=localProxy&&typeof req.headers['x-real-ip']==='string'?req.headers['x-real-ip']:req.socket.remoteAddress;
+      ws.nurseryIdentity=this.engine.nursery.identity(visitorCookie(req.headers.cookie),address);
       ws.alive = true; ws.on('pong', () => { ws.alive = true; });
       ws.tokens = 40; ws.refillTime = Date.now(); ws.lastActions = new Map();
       this.clients.add(ws);
@@ -96,13 +100,18 @@ export class NetworkManager {
 
   handleClientMessage(ws, msg) {
     const now = Date.now();
-    const cooldowns = { interact: 10000, get_codex: 150, get_atlas: 2000, inspect: 500, get_family: 1000, get_tour: 2000, found_dynasty: 60000, name_lineage: 60000, dive_start: 500 };
+    const cooldowns = { interact: 10000, get_codex: 150, get_atlas: 2000, inspect: 500, get_family: 1000, get_tour: 2000, found_dynasty: 60000, name_lineage: 60000, dive_start: 500, get_nursery:1000, nursery_release:5000 };
     const cooldown = cooldowns[msg.type];
     if (cooldown) {
       if (now - (ws.lastActions?.get(msg.type) ?? 0) < cooldown) return;
       ws.lastActions ??= new Map(); ws.lastActions.set(msg.type, now);
     }
-    if (msg.type === 'interact') {
+    if(msg.type==='get_nursery') {
+      ws.send(JSON.stringify({type:'nursery_status',...this.engine.nursery.status(this.engine,ws.nurseryIdentity??{visitor:null,address:null})}));
+    } else if(msg.type==='nursery_release') {
+      const result=this.engine.nursery.submit(this.engine,ws.nurseryIdentity??{visitor:null,address:null},msg);
+      ws.send(JSON.stringify({type:'nursery_result',requestId:msg.requestId,...result}));
+    } else if (msg.type === 'interact') {
       const res = this.engine.injectInteraction(msg.action, msg.x, msg.y);
       if (res.success) {
         // Broadcast ripple effect to all visitors so they see each other's touch!

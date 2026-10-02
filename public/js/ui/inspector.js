@@ -17,6 +17,19 @@ export class BioInspector {
     this.isTracking = false;
     this.lastProfile = null;
 
+    this.followBar = document.createElement('aside');
+    this.followBar.className = 'cell-follow-bar glass-panel';
+    this.followBar.hidden = true;
+    this.followLabel = document.createElement('span');
+    this.followDetails = document.createElement('button');
+    this.followStop = document.createElement('button');
+    this.followBar.append(this.followLabel, this.followDetails, this.followStop);
+    document.body.append(this.followBar);
+    this.followDetails.addEventListener('click', () => {
+      if (this.selectedId) this.select(this.selectedId);
+    });
+    this.followStop.addEventListener('click', () => this.close());
+
     this.setupListeners();
   }
 
@@ -34,9 +47,8 @@ export class BioInspector {
     });
 
     this.trackBtn?.addEventListener('click', () => {
-      this.isTracking = !this.isTracking;
-      this.renderer.camera.trackedEntityId = this.isTracking ? this.selectedId : null;
-      this.trackBtn.style.borderColor = this.isTracking ? 'var(--accent-cyan)' : 'var(--border-subtle)';
+      if (this.isTracking) this.stopTracking();
+      else this.startTracking();
     });
 
     this.diveBtn?.addEventListener('click', async () => {
@@ -47,6 +59,7 @@ export class BioInspector {
         this.renderer.camera.trackedEntityId = this.selectedId;
         this.isTracking = true;
         this.panel.classList.add('hidden');
+        this.followBar.hidden = true;
         const engine = await this.client.getDiveEngine();
         if (engine) {
           engine.enter(this.selectedId);
@@ -55,6 +68,7 @@ export class BioInspector {
     });
 
     window.addEventListener('aetheon-lang-changed', () => {
+      this.syncTrackingUI();
       if (this.lastProfile && this.selectedId) {
         this.updateProfile(this.lastProfile);
       }
@@ -62,11 +76,13 @@ export class BioInspector {
   }
 
   select(organismId) {
+    if (this.selectedId !== organismId) this.stopTracking();
     this.selectedId = organismId;
     this.lastProfile = null;
     this.anatomyPanel.textContent='';
     this.client.observatory?.onProfile(null);
     this.panel.classList.remove('hidden');
+    this.syncTrackingUI();
     document.getElementById('bio-species-name').textContent = `#${organismId}`;
     document.getElementById('bio-common-name').textContent = i18n.getLang() === 'ru' ? 'Читаем состояние клетки…' : 'Reading the living cell…';
     for (const id of ['bio-status','bio-energy-text','bio-generation','bio-age','bio-diet','bio-offspring','bio-stage']) document.getElementById(id).textContent = '—';
@@ -98,12 +114,38 @@ export class BioInspector {
 
   close() {
     this.selectedId = null;
-    this.isTracking = false;
+    this.stopTracking();
     this.lastProfile = null;
     this.anatomyPanel.textContent='';
     this.client.observatory?.onProfile(null);
     this.renderer.camera.trackedEntityId = null;
     this.panel.classList.add('hidden');
+  }
+
+  startTracking() {
+    if (!this.selectedId) return;
+    this.isTracking = true;
+    this.renderer.camera.trackedEntityId = this.selectedId;
+    if (window.matchMedia('(max-width: 640px)').matches) this.panel.classList.add('hidden');
+    this.syncTrackingUI();
+  }
+
+  stopTracking() {
+    this.isTracking = false;
+    this.renderer.camera.trackedEntityId = null;
+    this.syncTrackingUI();
+  }
+
+  syncTrackingUI() {
+    const ru = i18n.getLang() === 'ru';
+    this.trackBtn.textContent = this.isTracking ? (ru ? '⏹ Остановить слежение' : '⏹ Stop following') : i18n.t('btn_track');
+    this.trackBtn.setAttribute('aria-pressed', String(this.isTracking));
+    this.trackBtn.style.borderColor = this.isTracking ? 'var(--accent-cyan)' : 'var(--border-subtle)';
+    this.followBar.hidden = !this.isTracking || !this.panel.classList.contains('hidden');
+    this.followLabel.textContent = `${ru ? '🎯 Следим' : '🎯 Following'} · #${this.selectedId}\n${ru ? 'Касание океана — стоп' : 'Tap the ocean to stop'}`;
+    this.followDetails.textContent = ru ? 'Карточка' : 'Details';
+    this.followStop.textContent = ru ? 'Стоп' : 'Stop';
+    this.followBar.title = ru ? 'Коснитесь океана, чтобы остановить слежение' : 'Tap the ocean to stop following';
   }
 
   updateProfile(profile) {
@@ -131,7 +173,7 @@ export class BioInspector {
       badgeDot.style.boxShadow = `0 0 10px hsl(${hDeg}, 90%, 60%)`;
     }
 
-    if (speciesName) speciesName.textContent = profile.speciesName || 'Aetheobiont';
+    if (speciesName) speciesName.textContent = profile.familyName || profile.speciesName || 'Aetheobiont';
 
     const common = isRu 
       ? (profile.speciesNameRu || profile.speciesNameEn || profile.speciesName)

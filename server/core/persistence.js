@@ -91,7 +91,7 @@ export class PersistenceManager {
         nutrientBlooms: engine.nutrientBlooms ?? [], nextBloomId: engine.nextBloomId, lastVisitorFeed: engine.lastVisitorFeed,
         colonyData: engine.colonies?.getSerializableData() ?? [], climate: engine.climate?.toJSON(),
         atlasEntries: engine.atlas?.toJSON() ?? [], cataclysmData: engine.cataclysms?.toJSON(), algaeData: engine.algae?.toJSON(),
-        familyHistory: engine.history?.toJSON(), ecologyEpoch: engine.ecologyEpoch,
+        familyHistory: engine.history?.toJSON(), ecologyEpoch: engine.ecologyEpoch, nurseryState:engine.nursery?.toJSON(),
         recentWindow: engine.recentWindow, migrationState: engine.migrationState, legacyColonyArchive: engine.legacyColonyArchive
       };
       data.checksum = checksum(data);
@@ -169,6 +169,7 @@ export class PersistenceManager {
     if (data.recentWindow) engine.recentWindow = data.recentWindow;
     engine.ecologyEpoch = data.ecologyEpoch ?? { version:1, startedAtTick:data.ticks, startedAt:Date.now(), initializedAnatomy:true };
     engine.history?.fromJSON(data.familyHistory);
+    engine.nursery?.fromJSON(data.nurseryState);
     engine.restoreDynasties?.(data.dynasties ?? []);
     engine.colonies?.restoreFromData(identityRecovery?.identitiesReassigned ? [] : (data.colonyData ?? []), new Map(engine.organisms.map(o => [o.id, o])));
     if (data.climate) engine.climate?.fromJSON(data.climate);

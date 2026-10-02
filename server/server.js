@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { CONFIG } from './config.js';
 import { SimulationEngine } from './core/engine.js';
 import { NetworkManager } from './network/socket.js';
+import { visitorCookie,newVisitorToken } from './core/nursery.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,8 +46,8 @@ const server = http.createServer((req, res) => {
     const measuredHz = (engine.ticks - lastHealthTick) / Math.max(0.001, (now-lastHealthTime)/1000);
     lastHealthTick = engine.ticks; lastHealthTime = now;
     res.writeHead(200, { 'Content-Type':'application/json', 'Cache-Control':'no-store' });
-    res.end(JSON.stringify({ status:'ok', version:'2.3-ecology', pid:process.pid, ticks:engine.ticks, worldCreatedAt:engine.genesisTime,
-      organisms:engine.organisms.length, plants:engine.algae.isles.length, floraBirths:engine.algae.totals.births, floraDeaths:engine.algae.totals.deaths, ecologyEpoch:engine.ecologyEpoch, registeredMorphs:engine.lineage.getCatalogSpecies().length, archivedLabels:engine.lineage.speciesMap.size, visitors:network.clients.size,
+    res.end(JSON.stringify({ status:'ok', version:'2.4-nursery', pid:process.pid, ticks:engine.ticks, worldCreatedAt:engine.genesisTime,
+      organisms:engine.organisms.length, plants:engine.algae.isles.length, floraBirths:engine.algae.totals.births, floraDeaths:engine.algae.totals.deaths, ecologyEpoch:engine.ecologyEpoch, nurseryIntroduced:engine.nursery.introduced, nurseryQueued:engine.nursery.records.filter(r=>r.status==='queued').length, registeredMorphs:engine.lineage.getCatalogSpecies().length, archivedLabels:engine.lineage.speciesMap.size, visitors:network.clients.size,
       measuredHz:Math.round(measuredHz*100)/100, stepP95Ms:Math.round((times[Math.floor(times.length*.95)]??0)*100)/100,
       snapshotBytes:engine.persistence.lastSnapshotBytes, snapshotSaveMs:Math.round(engine.persistence.lastSaveMs??0) }));
     return;
@@ -74,6 +75,10 @@ const server = http.createServer((req, res) => {
 
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+    if(reqPath==='/index.html'&&!visitorCookie(req.headers.cookie)) {
+      const secure=req.headers['x-forwarded-proto']==='https';
+      res.setHeader('Set-Cookie',`aetheon_visitor=${newVisitorToken()}; Path=${secure?'/aetheon/':'/'}; HttpOnly; SameSite=Strict; Max-Age=31536000${secure?'; Secure':''}`);
+    }
 
     // Disable caching so clients always get fresh code without stale cache mismatch
     res.writeHead(200, {

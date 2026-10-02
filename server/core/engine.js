@@ -12,6 +12,7 @@ import { PersistenceManager } from './persistence.js';
 import { CataclysmManager } from './cataclysmManager.js';
 import { AlgaeManager } from './algaeManager.js';
 import { FamilyHistory } from './familyHistory.js';
+import { Nursery } from './nursery.js';
 
 export class SimulationEngine {
   constructor() {
@@ -27,6 +28,7 @@ export class SimulationEngine {
     this.naturalist = new AINaturalist(this.lineage);
     this.persistence = new PersistenceManager();
     this.history = new FamilyHistory();
+    this.nursery = new Nursery();
     this.colonies = new ColonyManager();
     this.atlas = new AtlasManager(this);
     this.cataclysms = new CataclysmManager(this);
@@ -194,7 +196,8 @@ export class SimulationEngine {
       const j=Math.floor(random()*(i+1));[parents[i],parents[j]]=[parents[j],parents[i]];
     }
     const slots = Math.max(0,this.maxOrganisms-(this.organisms.length-deadSet.size));
-    for(const org of parents.slice(0,slots)) {
+    const nurserySlot=slots>0&&this.nursery.ready(this)?1:0;
+    for(const org of parents.slice(0,slots-nurserySlot)) {
           const specThresholdMult = this.cataclysms ? this.cataclysms.getSpeciationThresholdMultiplier() : 1.0;
           const mutMult = this.cataclysms ? this.cataclysms.getMutationMultiplier() : 1.0;
           const child = org.reproduce(org.speciesId, mutMult);
@@ -255,7 +258,7 @@ export class SimulationEngine {
     // 6. Spontaneous Biogenesis (if population dips too low, vents nucleate fresh life)
     const blockBiogenesis = this.cataclysms && this.cataclysms.isBiogenesisBlocked();
     if (!blockBiogenesis && this.organisms.length < CONFIG.MIN_ORGANISMS) {
-      const needed = CONFIG.MIN_ORGANISMS - this.organisms.length;
+      const needed = Math.min(CONFIG.MIN_ORGANISMS-this.organisms.length,Math.max(0,this.maxOrganisms-this.organisms.length-nurserySlot));
       const vents = this.grid.vents;
       const speciesList = this.lineage.getAllSpecies();
       for (let k = 0; k < needed; k++) {
@@ -277,7 +280,7 @@ export class SimulationEngine {
     }
 
     if (!blockBiogenesis && activeHunters < 4) {
-      const neededHunters = Math.min(2, 4 - activeHunters, Math.max(0, this.maxOrganisms - this.organisms.length));
+      const neededHunters = Math.min(2, 4 - activeHunters, Math.max(0, this.maxOrganisms - this.organisms.length-nurserySlot));
       let hunterSpecies = this.lineage.getSpecies(3); // Vibrionox vorax
       if (!hunterSpecies) {
         hunterSpecies = this.lineage.getAllSpecies().find(s => s.carnivory > 0.45) || this.lineage.getAllSpecies()[2];
@@ -325,6 +328,9 @@ export class SimulationEngine {
     if (this.ticks % 200 === 0 && this.atlas) {
       this.atlas.checkDailyCycle();
     }
+
+    // Introductions use a real vacant slot after ordinary life and reproduction.
+    this.nursery.process(this);
 
     // 9. Periodic persistence autosave (every 10 mins)
     if (this.ticks % (CONFIG.TICK_RATE_HZ * 60 * 10) === 0) {
@@ -516,6 +522,7 @@ export class SimulationEngine {
     const species = this.lineage.getSpecies(org.speciesId);
     const profile = org.getDetailedProfile(species);
     profile.familyId = org.familyId;
+    profile.familyName = this.history.families.get(org.familyId)?.displayName??null;
     if (org.dynastyName && this.activeDynasties.has(org.dynastyName)) {
       const dyn = this.activeDynasties.get(org.dynastyName);
       profile.dynastyLivingCount = dyn.currentCount;

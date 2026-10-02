@@ -79,7 +79,7 @@ export class InputController {
 
         if (Math.hypot(dx, dy) > threshold) {
           this.hasMovedSignificantly = true;
-          this.renderer.camera.trackedEntityId = null;
+          this.inspector.stopTracking();
 
           const zoom = this.renderer.camera.zoom || 1.0;
           const targetX = this.camStartX - dx / zoom;
@@ -90,7 +90,7 @@ export class InputController {
       } else if (this.activePointers.size >= 2) {
         // --- TWO FINGER PINCH-TO-ZOOM & PAN ---
         this.hasMovedSignificantly = true;
-        this.renderer.camera.trackedEntityId = null;
+        this.inspector.stopTracking();
 
         const pointers = Array.from(this.activePointers.values()).slice(0, 2);
         const p1 = pointers[0];
@@ -208,6 +208,7 @@ export class InputController {
 
     // 6. Keyboard shortcuts
     window.addEventListener('keydown', (e) => {
+      if (e.target.closest?.('dialog[open]')) return;
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       // Do not trigger 2D modals when piloting in 3D Dive mode (prevents 'A' key conflict)
       if (this.client.diveEngine && this.client.diveEngine.isActive) return;
@@ -273,6 +274,11 @@ export class InputController {
   }
 
   handleTap(screenX, screenY) {
+    // A stopping tap is consumed: it must not feed or immediately select another cell.
+    if (this.renderer.camera.trackedEntityId) {
+      this.inspector.close();
+      return;
+    }
     // 1. Check if user tapped directly on an organism (touch target radius 38px for easier mobile selection)
     const hit = this.renderer.findOrganismAtScreenPoint(screenX, screenY, 38);
     if (hit) {

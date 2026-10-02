@@ -744,7 +744,7 @@ body.mode-lab .interactive-hint {
   position: absolute;
   top: 70px;
   right: var(--safe-right);
-  width: 290px;
+  width: min(350px, calc(100vw - 32px));
   padding: 16px;
   z-index: 15;
   display: flex;
@@ -3784,8 +3784,23 @@ body.mode-lab .ocean-welcome { top:154px; }
 .ecology-traits p,.ecology-habitats p {margin:5px 0 0;font-size:13px;color:#b8ccc7;}
 .ecology-habitats {display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:24px 0;}
 .habitat-0 {border-top:2px solid #798bda!important;}.habitat-1 {border-top:2px solid #63d5a1!important;}.habitat-2 {border-top:2px solid #cba769!important;}
-.anatomy-card {margin:4px 16px 14px;padding:12px;background:rgba(93,200,160,.06);border:1px solid rgba(93,200,160,.17);border-radius:12px;font-size:12px;color:#badbcf;}
-.anatomy-card>div {display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:9px 0;}.anatomy-card span {display:flex;justify-content:space-between;gap:6px;}.anatomy-card small {color:#93b2a9;}
+.anatomy-card {margin:4px 0 8px;padding:12px;background:rgba(93,200,160,.06);border:1px solid rgba(93,200,160,.17);border-radius:12px;font-size:12px;color:#badbcf;}
+.anatomy-card>div {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;margin:9px 0;}
+.anatomy-card span {display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:6px;min-width:0;overflow-wrap:anywhere;}
+.anatomy-card b {white-space:nowrap;}
+.anatomy-card small {color:#93b2a9;}
+.bio-inspector .inspector-title-wrap {min-width:0;flex:1;}
+.bio-inspector .species-badge-dot,.bio-inspector .close-btn {flex-shrink:0;}
+.bio-inspector .species-name,.bio-inspector .inspector-common-name {overflow-wrap:anywhere;min-width:0;}
+.bio-inspector .vital-row {display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:8px;align-items:center;}
+.bio-inspector .vital-val {min-width:0;overflow-wrap:anywhere;text-align:right;}
+.bio-inspector .energy-bar-wrap {justify-self:end;max-width:100%;}
+.bio-inspector .inspector-actions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
+.bio-inspector .action-btn {min-width:0;min-height:44px;overflow-wrap:anywhere;text-align:center;}
+.cell-follow-bar {position:absolute;z-index:16;bottom:calc(var(--safe-bottom) + 72px);left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:14px;width:min(360px,calc(100vw - 24px));font-size:11px;}
+.cell-follow-bar[hidden] {display:none;}
+.cell-follow-bar span {flex:1;min-width:0;white-space:pre-line;line-height:1.5;color:#b9f5d5;}
+.cell-follow-bar button {min-height:40px;border:1px solid #3c6965;border-radius:8px;padding:6px 10px;background:#12362b;color:#d2f1e7;cursor:pointer;}
 @media(max-width:600px) {.ecology-button{top:142px;left:12px;font-size:11px;}.ecology-habitats{grid-template-columns:1fr;}.ecology-traits{gap:8px;}.ecology-traits>div{padding:10px;}}
 
 .ecology-button {top:112px;}
@@ -3795,3 +3810,37 @@ body.mode-lab .ocean-welcome {top:192px;}
 @media(max-width:640px) {.ecology-button{top:96px;}.ocean-welcome{top:136px;}.ecology-dialog .family-metrics{grid-template-columns:repeat(3,1fr);}}
 
 .grove-records {display:grid;gap:9px;}.grove-record {display:grid;gap:6px;cursor:pointer;text-align:left;padding:14px;border:1px solid hsla(var(--plant-hue),65%,65%,.25);border-radius:12px;background:hsla(var(--plant-hue),55%,25%,.15);color:#d3ede2;font:inherit;}.grove-record strong {color:hsl(var(--plant-hue),75%,75%);}.grove-record span,.grove-record small{font-size:11px;color:#adcbc1;line-height:1.6;}
+
+/* A small, local laboratory opens onto the one shared ocean. */
+.nursery-button {position:absolute;top:112px;left:205px;z-index:35;border:1px solid #a6dcca66;border-radius:16px;padding:8px 12px;background:#16463edb;color:#dffff0;font:12px var(--font-sans);cursor:pointer;}
+body.mode-lab .nursery-button {top:150px;}
+.nursery-dialog {width:min(960px,calc(100vw - 24px));border:1px solid #426767;border-radius:22px;line-height:1.65;}
+.nursery-dialog>p,.nursery-release>p {font-size:13px;color:#acc6ce;}
+.nursery-layout {display:grid;grid-template-columns:1fr 1.1fr;gap:28px;margin-top:24px;align-items:start;}
+.nursery-editor h3,.nursery-release h3 {margin:22px 0 10px;font-size:15px;color:#ceeee0;}
+.nursery-presets {display:flex;gap:6px;flex-wrap:wrap;}
+.nursery-name {display:grid;gap:6px;font-size:12px;color:#bad3d6;margin-top:20px;}
+.nursery-name input,.nursery-name select {width:100%;font:inherit;font-size:14px;border:1px solid #31565b;border-radius:10px;color:#ecfff5;background:#0b252e;padding:11px;}
+.nursery-slider {display:grid;gap:7px;padding:9px 0;color:#b9d4d6;font-size:12px;}
+.nursery-slider>span {display:flex;justify-content:space-between;gap:12px;}.nursery-slider output {color:#a9f1ce;font:11px var(--font-mono);}
+.nursery-slider input {width:100%;accent-color:#8ee5bb;min-height:24px;cursor:pointer;}
+.nursery-experiment {position:sticky;top:0;display:grid;gap:13px;}
+.nursery-canvas {width:100%;height:auto;aspect-ratio:2;border:1px solid #395861;border-radius:18px;}
+.nursery-budget {display:grid;grid-template-columns:1fr auto;gap:8px;padding:16px;background:#112d32;border:1px solid #32534e;border-radius:14px;font-size:12px;}
+.nursery-budget strong {color:#b4f3d0;font-family:var(--font-mono);}.nursery-budget small,.nursery-budget meter {grid-column:1/-1;width:100%;}.nursery-budget small {color:#a3bfc1;line-height:1.6;}
+.nursery-budget .over-budget+small {color:#efc08f;}.nursery-progress {width:100%;accent-color:#91e9ca;}
+.nursery-dialog button:disabled {opacity:.45;cursor:default;}.nursery-dialog input:focus-visible,.nursery-dialog select:focus-visible {outline:2px solid #8de6c0;outline-offset:3px;}
+.nursery-outcome {font-size:13px;color:#c0e7d7;min-height:2em;}.nursery-trial-metrics {grid-template-columns:1fr 1fr;margin:0;}
+.nursery-release {margin-top:24px;border-top:1px solid #294650;padding-top:6px;}.nursery-world-status .family-metrics {grid-template-columns:repeat(3,1fr);}
+.nursery-world-status>p,.nursery-feedback {font-size:12px;color:#b7d9d8;margin:10px 0;}.nursery-receipts {display:grid;gap:10px;}
+.nursery-receipt {display:grid;gap:5px;padding:15px;background:#102b32;border:1px solid #2a4d52;border-radius:12px;}.nursery-receipt>span,.nursery-receipt>small {font-size:11px;color:#a5c0c8;}.nursery-receipt button {justify-self:start;margin-top:7px;}
+@media(max-width:640px) {
+ .nursery-button {top:96px;left:auto;right:10px;font-size:11px;padding:8px 10px;}
+ .nursery-layout {grid-template-columns:1fr;gap:16px;}.nursery-experiment {display:contents;}
+ .nursery-canvas {grid-row:1;position:sticky;top:0;z-index:2;box-shadow:0 8px 20px #06151f;}
+ .nursery-budget {grid-row:2;}.nursery-editor {grid-row:3;}
+ .nursery-experiment>[data-nursery="trial"] {grid-row:4;}.nursery-progress {grid-row:5;}
+ .nursery-outcome {grid-row:6;}.nursery-trial-metrics {grid-row:7;}.nursery-experiment>.family-note {grid-row:8;}
+ .nursery-dialog {padding:18px;scroll-padding-top:185px;}.nursery-dialog .family-header h2 {font-size:23px;}
+ .nursery-slider {padding:10px 0;}.nursery-trial-metrics {grid-template-columns:repeat(2,1fr);}
+}

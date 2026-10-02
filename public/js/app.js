@@ -8,6 +8,7 @@ import { JournalDrawer } from './ui/journalDrawer.js';
 import { InputController } from './ui/controls.js';
 import { EcologyPanel } from './ui/ecologyPanel.js';
 import { Observatory } from './ui/observatory.js';
+import { NurseryPanel } from './ui/nurseryPanel.js';
 
 class AetheonApp {
   constructor() {
@@ -33,6 +34,7 @@ class AetheonApp {
 
     this.observatory = new Observatory(this);
     this.ecologyPanel = new EcologyPanel(this);
+    this.nurseryPanel = new NurseryPanel(this);
     this.init();
   }
 
@@ -201,6 +203,7 @@ class AetheonApp {
   }
 
   handleMessage(msg) {
+    if(msg.type==='nursery_status'||msg.type==='nursery_result') {this.nurseryPanel.onMessage(msg);return;}
     if(msg.ecology) this.ecologyPanel.update(msg.ecology);
     if (msg.type === 'init') {
       this.observatory.init(msg.worldCreatedAt);
@@ -251,6 +254,10 @@ class AetheonApp {
         }
       }
       this.renderer.onServerTick(msg);
+      if (this.inspector.isTracking && !this.diveEngine?.isActive && !this.renderer.currEntities.has(this.inspector.selectedId)) {
+        this.inspector.close();
+        this.observatory.toast(this.observatory.t('cellGone'));
+      }
       if (msg.visitors !== undefined) this.updateVisitors(msg.visitors);
       if (msg.stats) this.updateStats(msg.stats);
       if (msg.cataclysm) {
@@ -301,7 +308,7 @@ class AetheonApp {
           this.renderer.camera.targetX = org.x;
           this.renderer.camera.targetY = org.y;
           this.renderer.camera.targetZoom = Math.max(1.4, this.renderer.camera.zoom);
-          this.renderer.camera.trackedEntityId = msg.id;
+          this.inspector.startTracking();
         }
       }
     } else if (msg.type === 'journal_entry') {
@@ -476,9 +483,8 @@ class AetheonApp {
     this.renderer.camera.targetX = org.x;
     this.renderer.camera.targetY = org.y;
     this.renderer.camera.targetZoom = Math.max(2.6, this.renderer.camera.zoom);
-    this.renderer.camera.trackedEntityId = id;
     this.inspector.select(id);
-    this.inspector.isTracking = true;
+    this.inspector.startTracking();
     this.renderer.addRipple(org.x, org.y, 'rgba(0, 240, 255, 0.8)', 70);
     return true;
   }
@@ -499,7 +505,6 @@ class AetheonApp {
     this.renderer.camera.targetX = target.x;
     this.renderer.camera.targetY = target.y;
     this.renderer.camera.targetZoom = Math.max(1.4, this.renderer.camera.zoom);
-    this.renderer.camera.trackedEntityId = target.id;
 
     // Highlight with targeting ripple pulses
     this.renderer.addRipple(target.x, target.y, 'rgba(0, 240, 255, 0.95)', 110);
@@ -507,10 +512,7 @@ class AetheonApp {
 
     // Open inspector bio-card and set tracking state
     this.inspector.select(target.id);
-    this.inspector.isTracking = true;
-    if (this.inspector.trackBtn) {
-      this.inspector.trackBtn.style.borderColor = 'var(--accent-cyan)';
-    }
+    this.inspector.startTracking();
 
     sound.playDroplet(1500);
     return true;

@@ -153,7 +153,7 @@ export class Observatory {
       const f=msg.family;
       if(!this.bookmarks.some(b=>b.id===f.id)) {
         if(this.bookmarks.length===3) {this.bookmarks.shift();this.toast(this.t('oldest'));}
-        this.bookmarks.push({id:f.id,name:f.nameLa,lastBirths:f.births,lastLiving:f.living,savedAt:Date.now(),baselineTraits:f.meanTraits});
+        this.bookmarks.push({id:f.id,name:f.displayName??f.nameLa,lastBirths:f.births,lastLiving:f.living,savedAt:Date.now(),baselineTraits:f.meanTraits});
         this.persist();
       }
       this.pendingSave=null;
@@ -188,7 +188,7 @@ export class Observatory {
       }).join('');
       const members=f.nodes.slice(-8).reverse().map(n=>`<li><strong>#${n.id}</strong><span>${this.t('gen')} ${n.generation} · ${this.t('parent')} ${n.parentKnown?'#'+n.parentId:this.t('unknown')}</span><small>${this.t(n.diedTick===null?'alive':'dead')}${n.baseline?' · '+this.t('baseline'):''}</small></li>`).join('');
       const beyond=Math.max(0,f.maxGeneration-f.founderGeneration);
-      detail=`<div class="family-heading"><span class="family-status ${f.living?'':'family-extinct'}">${this.t(f.living?'active':'extinct')}</span><h3>${escapeHtml(f.nameLa??'Aetheobiont')} <small>#${f.id}</small></h3><p>${this.t('founder')} #${f.founderId} · ${this.t('started')}: ${new Date(f.startedAt).toLocaleDateString(i18n.getLang()==='ru'?'ru':'en')}</p></div>
+      detail=`<div class="family-heading"><span class="family-status ${f.living?'':'family-extinct'}">${this.t(f.living?'active':'extinct')}</span><h3>${escapeHtml(f.displayName??f.nameLa??'Aetheobiont')} <small>#${f.id}</small></h3><p>${this.t('founder')} #${f.founderId} · ${this.t('started')}: ${new Date(f.startedAt).toLocaleDateString(i18n.getLang()==='ru'?'ru':'en')}</p></div>
       <div class="family-metrics">${[[f.living,'living'],[f.births,'births'],[Math.max(0,f.births-(bookmark?.lastBirths??f.births)),'since'],[beyond,'generations']].map(([v,k])=>`<div><strong>${v}</strong><span>${this.t(k)}</span></div>`).join('')}</div>
       <div class="family-actions"><button data-action="focus" class="observer-primary" ${f.focusId?'':'disabled'}>${this.t('focus')} →</button>${bookmark?`<button data-action="forget" data-id="${f.id}">${this.t('forget')}</button>`:''}</div>
       <h4>${this.t('genetic')}</h4><p class="family-note">${this.t('geneNote')}</p><div class="family-table-wrap"><table><thead><tr><th></th><th>${this.t(bookmark?.baselineTraits?'first':'founderTraits')}</th><th>${this.t('now')}</th></tr></thead><tbody>${rows}</tbody></table></div><p class="family-note">${this.t('change')}</p>
