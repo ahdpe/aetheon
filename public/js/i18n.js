@@ -159,7 +159,7 @@ export const DICTIONARY = {
     nav_journal: 'Журнал',
     open_journal_feed: '▲ Читать журнал',
     journal_drawer_title: 'Журнал натуралиста • Хроника эволюции',
-    journal_drawer_subtitle: 'Живые наблюдения и хроника от Venice AI (LLaMA 3.3 70B)',
+    journal_drawer_subtitle: 'Наблюдения и открытия в общем живом океане',
     btn_species_catalog: '🧬 Кодекс видов',
     drawer_collapse: '▼ Свернуть',
     live_tooltip: 'Хроника эволюции и журнал',
@@ -219,7 +219,8 @@ export const DICTIONARY = {
 
 class I18nManager {
   constructor() {
-    this.lang = localStorage.getItem('aetheon_lang') || 'en';
+    try { this.lang = localStorage.getItem('aetheon_lang') || 'en'; } catch { this.lang = 'en'; }
+    if (!DICTIONARY[this.lang]) this.lang = 'en';
   }
 
   getLang() {
@@ -229,7 +230,7 @@ class I18nManager {
   setLang(lang) {
     if (DICTIONARY[lang]) {
       this.lang = lang;
-      localStorage.setItem('aetheon_lang', lang);
+      try { localStorage.setItem('aetheon_lang', lang); } catch {}
       this.applyTranslations();
       window.dispatchEvent(new CustomEvent('aetheon-lang-changed', { detail: { lang } }));
     }

@@ -11,6 +11,7 @@ import { AINaturalist } from '../ai/naturalist.js';
 import { PersistenceManager } from './persistence.js';
 import { CataclysmManager } from './cataclysmManager.js';
 import { AlgaeManager } from './algaeManager.js';
+import { FamilyHistory } from './familyHistory.js';
 
 export class SimulationEngine {
   constructor() {
@@ -25,6 +26,7 @@ export class SimulationEngine {
     this.climate = new ClimateEngine();
     this.naturalist = new AINaturalist(this.lineage);
     this.persistence = new PersistenceManager();
+    this.history = new FamilyHistory();
     this.colonies = new ColonyManager();
     this.atlas = new AtlasManager(this);
     this.cataclysms = new CataclysmManager(this);
@@ -62,6 +64,7 @@ export class SimulationEngine {
     if (!restored) {
       this.seedPrimordialFauna();
     }
+    this.history.synchronize(this.organisms, this.ticks, { initial: true });
     if (this.atlas) {
       this.atlas.init();
     }
@@ -196,6 +199,7 @@ export class SimulationEngine {
           const nextSpeciesBefore = this.lineage.nextSpeciesId;
           const childSpeciesId = this.lineage.evaluateSpeciation(child.genome, org.speciesId, specThresholdMult);
           child.speciesId = childSpeciesId;
+          this.history.recordBirth(org, child, this.ticks);
           this.lineage.recordBirth(childSpeciesId);
           if (this.lineage.nextSpeciesId > nextSpeciesBefore) {
             this.recentWindow.speciations++;
@@ -206,6 +210,8 @@ export class SimulationEngine {
           newChildren.push(child);
           this.eventsBuffer.push({
             type: 'birth',
+            id: child.id,
+            parentId: org.id,
             x: child.x,
             y: child.y,
             speciesId: child.speciesId
@@ -264,7 +270,9 @@ export class SimulationEngine {
         const wy = vent.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (random() - 0.5) * 40;
         const isHunter = random() < 0.15;
         const sp = isHunter ? (speciesList[2] || speciesList[0]) : speciesList[Math.floor(random() * 2)];
-        this.organisms.push(new Organism(wx, wy, Organism.createRandomGenome(sp.hue, isHunter), 1, 0, sp.id));
+        const newborn = new Organism(wx, wy, Organism.createRandomGenome(sp.hue, isHunter), 1, 0, sp.id);
+        this.history.addRoot(newborn, this.ticks, 'biogenesis');
+        this.organisms.push(newborn);
       }
     }
 
@@ -293,6 +301,7 @@ export class SimulationEngine {
         org.maturity = 0.55;
         org.size = org.adultSize * (0.38 + 0.62 * org.maturity);
         org.energy = 75.0; // Moderate energy; must hunt actively to grow & reproduce
+        this.history.addRoot(org, this.ticks, 'biogenesis');
         this.organisms.push(org);
       }
     }
@@ -300,6 +309,7 @@ export class SimulationEngine {
     // 7. Update lineage and dynasty statistics
     if (this.ticks % 20 === 0) {
       this.updateDynasties();
+      this.history.synchronize(this.organisms, this.ticks);
     }
     if (this.ticks % 50 === 0) {
       this.lineage.updatePopulations(this.organisms);
@@ -511,6 +521,7 @@ export class SimulationEngine {
     if (!org) return null;
     const species = this.lineage.getSpecies(org.speciesId);
     const profile = org.getDetailedProfile(species);
+    profile.familyId = org.familyId;
     if (org.dynastyName && this.activeDynasties.has(org.dynastyName)) {
       const dyn = this.activeDynasties.get(org.dynastyName);
       profile.dynastyLivingCount = dyn.currentCount;
@@ -564,6 +575,7 @@ export class SimulationEngine {
 
   // Handle organism demise: release chemical nutrients, deposit bio-calcite reef substrate, and form organic detritus
   handleOrganismDeath(org, isPredation = false, forceDetritus = false) {
+    this.history.recordDeath(org, this.ticks, isPredation ? 'predation' : 'energy_or_age');
     // 1. Dissolve organism mass into nutrients
     this.grid.injectDrop(org.x, org.y, org.size * 0.25, org.size * 1.5);
 

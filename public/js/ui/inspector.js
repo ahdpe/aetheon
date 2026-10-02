@@ -61,7 +61,14 @@ export class BioInspector {
 
   select(organismId) {
     this.selectedId = organismId;
+    this.lastProfile = null;
+    this.client.observatory?.onProfile(null);
     this.panel.classList.remove('hidden');
+    document.getElementById('bio-species-name').textContent = `#${organismId}`;
+    document.getElementById('bio-common-name').textContent = i18n.getLang() === 'ru' ? 'Читаем состояние клетки…' : 'Reading the living cell…';
+    for (const id of ['bio-status','bio-energy-text','bio-generation','bio-age','bio-diet','bio-offspring','bio-stage']) document.getElementById(id).textContent = '—';
+    document.getElementById('bio-energy-fill').style.width = '0%';
+    document.getElementById('bio-founder-row').classList.add('hidden');
 
     // Immediately reflect pilot lock state
     if (this.diveBtn) {
@@ -90,6 +97,7 @@ export class BioInspector {
     this.selectedId = null;
     this.isTracking = false;
     this.lastProfile = null;
+    this.client.observatory?.onProfile(null);
     this.renderer.camera.trackedEntityId = null;
     this.panel.classList.add('hidden');
   }

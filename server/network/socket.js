@@ -51,6 +51,7 @@ export class NetworkManager {
       // Send initial hand-shake state
       const initialPayload = {
         type: 'init',
+        worldCreatedAt: this.engine.genesisTime,
         worldSize: CONFIG.WORLD_SIZE,
         chamber: {
           cx: CONFIG.CHAMBER_CENTER_X,
@@ -95,7 +96,7 @@ export class NetworkManager {
 
   handleClientMessage(ws, msg) {
     const now = Date.now();
-    const cooldowns = { interact: 10000, get_codex: 150, get_atlas: 2000, inspect: 500, found_dynasty: 60000, name_lineage: 60000, dive_start: 500 };
+    const cooldowns = { interact: 10000, get_codex: 150, get_atlas: 2000, inspect: 500, get_family: 1000, get_tour: 2000, found_dynasty: 60000, name_lineage: 60000, dive_start: 500 };
     const cooldown = cooldowns[msg.type];
     if (cooldown) {
       if (now - (ws.lastActions?.get(msg.type) ?? 0) < cooldown) return;
@@ -116,8 +117,26 @@ export class NetworkManager {
       const profile = this.engine.getOrganismProfile(msg.id);
       ws.send(JSON.stringify({
         type: 'inspect_result',
+        id: msg.id,
         profile
       }));
+    } else if (msg.type === 'get_tour') {
+      const living = this.engine.organisms;
+      const ids = new Set(living.map(o => o.id));
+      const recentBirth = [...this.engine.history.nodes.values()].reverse().find(n => n.parentId > 0 && n.bornTick !== null && n.bornTick >= this.engine.ticks - 150 && n.bornTick <= this.engine.ticks - 4 && ids.has(n.id) && living.find(o => o.id === n.id)?.energy > 35);
+      const hunter = living.find(o => o.carnivory > 0.35 && o.energy > 30);
+      const descendant = living.find(o => o.generation > (this.engine.history.families.get(o.familyId)?.founderGeneration ?? Infinity));
+      const choices = [{id:recentBirth?.id,reason:'birth'},{id:hunter?.id,reason:'hunter'},{id:descendant?.id,reason:'family'}];
+      const choice = choices[(ws.tourStep ?? 0) % choices.length];
+      ws.tourStep = (ws.tourStep ?? 0) + 1;
+      const target = choice.id ? choice : choices.find(c => c.id) ?? {id:living[0]?.id,reason:'cell'};
+      const org = living.find(o => o.id === target.id);
+      ws.send(JSON.stringify({type:'tour_target',...target,position:org ? {x:org.x,y:org.y} : null}));
+    } else if (msg.type === 'get_family') {
+      if (!Number.isSafeInteger(msg.id) || msg.id < 1) return;
+      const family = this.engine.history.describe(msg.id, this.engine.organisms, this.engine.ticks);
+      const species = family && this.engine.lineage.getSpecies(family.speciesId);
+      ws.send(JSON.stringify({ type: 'family_data', id: msg.id, family: family && { ...family, nameLa: species?.nameLa, nameEn: species?.nameEn, nameRu: species?.nameRu } }));
     } else if (msg.type === 'get_codex') {
       ws.send(JSON.stringify(this.codexPage(msg)));
     } else if (msg.type === 'get_atlas') {

@@ -6,6 +6,7 @@ import { CodexModal } from './ui/codexModal.js';
 import { AboutModal } from './ui/aboutModal.js';
 import { JournalDrawer } from './ui/journalDrawer.js';
 import { InputController } from './ui/controls.js';
+import { Observatory } from './ui/observatory.js';
 
 class AetheonApp {
   constructor() {
@@ -29,6 +30,7 @@ class AetheonApp {
     this.journalDrawer = new JournalDrawer(this);
     this.controls = new InputController(this.canvas, this.renderer, this.inspector, this.codexModal, this, this.aboutModal);
 
+    this.observatory = new Observatory(this);
     this.init();
   }
 
@@ -58,6 +60,9 @@ class AetheonApp {
       requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
+    setInterval(() => {
+      if (!document.hidden && this.inspector.selectedId && !this.inspector.panel.classList.contains('hidden')) this.sendInspect(this.inspector.selectedId);
+    }, 2000);
 
     // 5. Auto-fade onboarding hint
     setTimeout(() => {
@@ -183,6 +188,7 @@ class AetheonApp {
 
     this.socket.onclose = () => {
       this.isConnected = false;
+      this.observatory.toast(this.observatory.t('offline'));
       console.warn('[Aetheon] Disconnected. Reconnecting in 2s...');
       setTimeout(() => this.connectWebSocket(), 2000);
     };
@@ -194,6 +200,7 @@ class AetheonApp {
 
   handleMessage(msg) {
     if (msg.type === 'init') {
+      this.observatory.init(msg.worldCreatedAt);
       if (msg.worldSize) {
         this.renderer.worldSize = msg.worldSize;
         if (this.renderer.particles) this.renderer.particles.worldSize = msg.worldSize;
@@ -264,8 +271,15 @@ class AetheonApp {
     } else if (msg.type === 'visitor_ripple') {
       // Another user tapped the water!
       this.renderer.spawnFoodBloom(msg.x, msg.y);
+    } else if (msg.type === 'family_data') {
+      this.observatory.onFamily(msg);
+    } else if (msg.type === 'tour_target') {
+      this.observatory.onTour(msg);
     } else if (msg.type === 'inspect_result') {
+      if (msg.id !== undefined && msg.id !== this.inspector.selectedId) return;
       this.inspector.updateProfile(msg.profile);
+      if (msg.profile?.id === this.inspector.selectedId) this.observatory.onProfile(msg.profile);
+      if (!msg.profile) { this.inspector.close(); this.observatory.toast(this.observatory.t('cellGone')); }
     } else if (msg.type === 'codex_data') {
       this.codexModal.renderData(msg.species, msg.journal, msg.dynasties, msg.meta);
       if (msg.journal && msg.journal.length > 0) {
@@ -451,6 +465,19 @@ class AetheonApp {
         name: String(dynastyName).trim()
       }));
     }
+  }
+
+  focusOrganism(id, position = null) {
+    const org = this.renderer.currEntities.get(id) ?? position;
+    if (!org || ![org.x, org.y].every(Number.isFinite)) return false;
+    this.renderer.camera.targetX = org.x;
+    this.renderer.camera.targetY = org.y;
+    this.renderer.camera.targetZoom = Math.max(2.6, this.renderer.camera.zoom);
+    this.renderer.camera.trackedEntityId = id;
+    this.inspector.select(id);
+    this.inspector.isTracking = true;
+    this.renderer.addRipple(org.x, org.y, 'rgba(0, 240, 255, 0.8)', 70);
+    return true;
   }
 
   // Focus and track an active organism of the selected species in the ocean

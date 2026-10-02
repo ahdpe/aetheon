@@ -71,6 +71,7 @@ export class PersistenceManager {
   saveSnapshot(engine) {
     const started = performance.now();
     try {
+      engine.history?.synchronize(engine.organisms, engine.ticks);
       const morphologyArchive = this.archiveFor(engine);
       const data = {
         formatVersion: 3, savedAt: Date.now(), genesisTime: engine.genesisTime, ticks: engine.ticks,
@@ -89,6 +90,7 @@ export class PersistenceManager {
         nutrientBlooms: engine.nutrientBlooms ?? [], nextBloomId: engine.nextBloomId, lastVisitorFeed: engine.lastVisitorFeed,
         colonyData: engine.colonies?.getSerializableData() ?? [], climate: engine.climate?.toJSON(),
         atlasEntries: engine.atlas?.toJSON() ?? [], cataclysmData: engine.cataclysms?.toJSON(), algaeData: engine.algae?.toJSON(),
+        familyHistory: engine.history?.toJSON(),
         recentWindow: engine.recentWindow, migrationState: engine.migrationState, legacyColonyArchive: engine.legacyColonyArchive
       };
       data.checksum = checksum(data);
@@ -162,6 +164,7 @@ export class PersistenceManager {
     engine.nextBloomId = data.nextBloomId ?? 1;
     engine.lastVisitorFeed = data.lastVisitorFeed;
     if (data.recentWindow) engine.recentWindow = data.recentWindow;
+    engine.history?.fromJSON(data.familyHistory);
     engine.restoreDynasties?.(data.dynasties ?? []);
     engine.colonies?.restoreFromData(identityRecovery?.identitiesReassigned ? [] : (data.colonyData ?? []), new Map(engine.organisms.map(o => [o.id, o])));
     if (data.climate) engine.climate?.fromJSON(data.climate);
