@@ -31,6 +31,12 @@ export class NetworkManager {
 
   setupListeners() {
     this.wss.on('connection', (ws, req) => {
+      // Rejected connections can still emit errors while their close frame is pending.
+      ws.on('error', (err) => {
+        console.warn('[Network] Client socket error:', err.message);
+        this.engine.releasePilot(ws.clientId);
+        this.clients.delete(ws);
+      });
       if (this.clients.size >= 64) { ws.close(1013, 'Ocean spectator capacity reached'); return; }
       if (req.headers.origin) {
         try { if (new URL(req.headers.origin).host !== req.headers.host) { ws.close(1008, 'Origin rejected'); return; } }
@@ -84,11 +90,6 @@ export class NetworkManager {
         this.broadcastVisitorCount();
       });
 
-      ws.on('error', (err) => {
-        console.warn('[Network] Client socket error:', err.message);
-        this.engine.releasePilot(ws.clientId);
-        this.clients.delete(ws);
-      });
     });
   }
 

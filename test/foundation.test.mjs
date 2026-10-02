@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aetheon-test-'));
 process.env.SNAPSHOT_FILE = path.join(dir, 'world.json');
 process.env.VENICE_API_KEY = '';
@@ -144,6 +145,29 @@ test('codex queries search all history but deliver a bounded page', () => {
   for(let i=0;i<150;i++) e.lineage.createSpecies({nameEn:`Historical ${i}`,size:4,hue:.5,carnivory:.1,speedMax:1});
   const first = n.codexPage({}); assert.equal(first.species.length,48); assert.ok(first.meta.total>150);
   const result = n.codexPage({query:'Historical 149'}); assert.equal(result.species.length,1);
+});
+
+test('socket errors during policy rejection do not escape and crash the world', () => {
+  const e=new SimulationEngine();
+  for(const capacity of [false,true]) {
+    const n=Object.create(NetworkManager.prototype); n.engine=e; n.wss=new EventEmitter(); n.clients=new Set(capacity?Array.from({length:64},()=>({})):[]);
+    n.setupListeners();
+    const ws=new EventEmitter(); let closed;
+    ws.close=code=>{closed=code;};
+    n.wss.emit('connection',ws,{headers:{origin:'https://outside.invalid',host:'ocean.invalid'}});
+    assert.equal(closed,capacity?1013:1008);
+    assert.doesNotThrow(()=>ws.emit('error',new Error('Rejected oversized frame')));
+    assert.equal(n.clients.size,capacity?64:0);
+  }
+});
+
+test('events occurring during a delayed observation remain in the next measurement window', () => {
+  const e=new SimulationEngine();
+  e.recentWindow={kills:5,births:10,speciations:1,windowStartTime:Date.now()-1000};
+  const captured=e.getStats();
+  e.recentWindow.kills+=2; e.recentWindow.births+=7; e.recentWindow.speciations++;
+  e.resetRecentWindow(captured);
+  assert.deepEqual(e.recentWindow,{kills:2,births:7,speciations:1,windowStartTime:captured.observedAt});
 });
 
 function fakeVenice({fail=false}={}) {

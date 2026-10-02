@@ -307,9 +307,10 @@ export class SimulationEngine {
 
     // 8. Trigger AI observations check
     if (this.ticks % 100 === 0) {
-      this.naturalist.checkObservation(this.getStats()).then(observed => {
+      const capturedStats = this.getStats();
+      this.naturalist.checkObservation(capturedStats).then(observed => {
         if (observed) {
-          this.resetRecentWindow();
+          this.resetRecentWindow(capturedStats);
         }
       }).catch(err => {
         console.error('[Engine] Observation check error:', err);
@@ -481,6 +482,7 @@ export class SimulationEngine {
       epochNameEn: this.naturalist.epochNameEn,
       epochNameRu: this.naturalist.epochNameRu,
       ticks: this.ticks,
+      observedAt: Date.now(),
       recentKills: this.recentWindow.kills,
       recentBirths: this.recentWindow.births,
       recentSpeciations: this.recentWindow.speciations,
@@ -495,11 +497,12 @@ export class SimulationEngine {
     };
   }
 
-  resetRecentWindow() {
-    this.recentWindow.kills = 0;
-    this.recentWindow.births = 0;
-    this.recentWindow.speciations = 0;
-    this.recentWindow.windowStartTime = Date.now();
+  resetRecentWindow(observed = null) {
+    // Events occurring while the asynchronous narrator is working belong to the next window.
+    this.recentWindow.kills = observed ? Math.max(0, this.recentWindow.kills - observed.recentKills) : 0;
+    this.recentWindow.births = observed ? Math.max(0, this.recentWindow.births - observed.recentBirths) : 0;
+    this.recentWindow.speciations = observed ? Math.max(0, this.recentWindow.speciations - observed.recentSpeciations) : 0;
+    this.recentWindow.windowStartTime = observed?.observedAt ?? Date.now();
   }
 
   // Find an organism by ID for detailed profile inspection
