@@ -209,7 +209,9 @@ export class OceanRenderer {
           size: raw[ptr + 6],
           hue: raw[ptr + 7],
           speciesId: stride >= 9 ? raw[ptr + 8] : 1,
-          carnivory: stride >= 10 ? raw[ptr + 9] : 0.1
+          carnivory: stride >= 10 ? raw[ptr + 9] : 0.1,
+          anatomy:stride>=15?{elongation:raw[ptr+10],shell:raw[ptr+11],flagella:raw[ptr+12],sensing:raw[ptr+13]}:null,
+          phase:stride>=15?raw[ptr+14]:0
         });
       }
     }
@@ -311,6 +313,7 @@ export class OceanRenderer {
     }
 
     // 3.25. Living Benthic Algae Isles & Sanctuaries (Emerald phytobenthic thickets)
+    ctx.globalAlpha = 1;
     this.drawAlgaeIsles(ctx, toScreenX, toScreenY, camZoom, time);
 
     // 3.3. Initial synchronization indicator if live entities have not yet streamed
@@ -491,7 +494,7 @@ export class OceanRenderer {
         ctx.beginPath();
         for (let f = 0; f < frondCount; f++) {
           const angle = (f / frondCount) * Math.PI * 2 + (isle.id * 0.4);
-          const frondLen = sr * (0.65 + 0.35 * Math.sin(f * 1.7 + isle.id));
+          const frondLen = sr * (0.35 + 0.65 * (isle.height??0.65)) * (0.8 + 0.2 * Math.sin(f * 1.7 + isle.id));
           const wave = Math.sin(time * 0.003 + f * 0.8 + isle.id) * (sr * 0.22);
 
           const cx1 = sx + Math.cos(angle) * (sr * 0.22);
@@ -505,11 +508,21 @@ export class OceanRenderer {
 
           ctx.moveTo(cx1, cy1);
           ctx.quadraticCurveTo(midX, midY, tipX, tipY);
+          const branching=isle.branching??0.5;
+          if(branching>0.28) for(let b=1;b<=2+Math.round(branching*2);b++) {
+            const t=b/6,bx=cx1+(tipX-cx1)*t,by=cy1+(tipY-cy1)*t;
+            const leaf=frondLen*0.2*branching;
+            for(const side of [-1,1]) {
+              ctx.moveTo(bx,by);
+              ctx.quadraticCurveTo(bx+Math.cos(angle+side*1.2)*leaf,by+Math.sin(angle+side*1.2)*leaf,
+                bx+Math.cos(angle+side*0.65)*leaf*1.4,by+Math.sin(angle+side*0.65)*leaf*1.4);
+            }
+          }
         }
         ctx.stroke();
 
         // 3. Bioluminescent oxygen / spore nodes
-        ctx.fillStyle = '#6ee7b7';
+        ctx.fillStyle = `hsla(${hDeg+35},95%,75%,${density})`;
         for (let s = 0; s < 4; s++) {
           const sporeAngle = s * 1.57 + (time * 0.0006 + isle.id);
           const sporeDist = sr * (0.35 + 0.45 * Math.sin(time * 0.002 + s));
@@ -526,11 +539,11 @@ export class OceanRenderer {
   // Render organic soft-body Aetheobiont with translucent membrane, species-specific morphotype, markings, and cilia
   drawOrganism(ctx, x, y, r, org, heading, isSelected, time, forceDetail = false) {
     const isPiloted = this.pilotedIds && (this.pilotedIds.has(org.id) || this.pilotedIds.has(Number(org.id)));
-    const pulse = Math.sin(time * 0.008 + org.id) * 0.12;
+    const pulse = Math.sin(org.phase ?? (time*0.008+org.id)) * 0.08;
     const bodyR = Math.max(1.8, r * (1.0 + pulse));
     const hue = Math.round(org.hue * 360);
     const speed = Math.sqrt((org.vx || 0) * (org.vx || 0) + (org.vy || 0) * (org.vy || 0));
-    const morph = getSpeciesMorphology(org.speciesId || 1, org.hue, org.carnivory || 0.1, org.size || 7, speed);
+    const morph = getSpeciesMorphology(org.speciesId || 1, org.hue, org.carnivory || 0.1, org.size || 7, speed, org.anatomy);
     const isHunter = morph.isHunter;
 
     ctx.save();
@@ -594,7 +607,7 @@ export class OceanRenderer {
 
     // D. Beating Cilia (whipping hairs along perimeter) - Only at high detail
     if (isHighDetail && bodyR > 4.5) {
-      const ciliaCount = isHunter ? 12 : Math.min(10, Math.max(6, Math.floor(bodyR * 1.1)));
+      const ciliaCount = 4 + Math.round(morph.flagella*10);
       ctx.strokeStyle = `hsla(${hue}, 85%, 75%, 0.45)`;
       ctx.lineWidth = isHunter ? 1.3 : 1.0;
       ctx.beginPath();
@@ -617,7 +630,7 @@ export class OceanRenderer {
     // E. Translucent Viscoelastic Membrane
     ctx.fillStyle = isHunter ? `hsla(${hue}, 85%, 35%, 0.72)` : `hsla(${hue}, 75%, 35%, 0.65)`;
     ctx.strokeStyle = `hsla(${hue}, 95%, 72%, 0.90)`;
-    ctx.lineWidth = isHunter ? 1.8 : 1.3;
+    ctx.lineWidth = 1 + morph.shell * 2.4;
 
     drawCellMembranePath(ctx, morph.shape, rx, ry, time, org.id);
     ctx.fill();

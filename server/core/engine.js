@@ -64,6 +64,7 @@ export class SimulationEngine {
     if (!restored) {
       this.seedPrimordialFauna();
     }
+    this.ecologyEpoch ??= { version:1, startedAtTick:this.ticks, startedAt:Date.now(), initializedAnatomy:false };
     this.history.synchronize(this.organisms, this.ticks, { initial: true });
     if (this.atlas) {
       this.atlas.init();
@@ -132,6 +133,7 @@ export class SimulationEngine {
     }
 
     const newChildren = [];
+    const eligibleParents = [];
     const deadSet = new Set();
     this.eventsBuffer.length = 0;
 
@@ -144,10 +146,13 @@ export class SimulationEngine {
       const queryRadius = org.carnivory > 0.35 
         ? Math.max(55.0, org.size * 8.0) 
         : Math.max(38.0, org.size * 5.0);
-      this.spatialHash.query(org.x, org.y, queryRadius, this.neighborScratch);
+      const senseRadius = queryRadius * org.body.senseRadius;
+      this.spatialHash.query(org.x, org.y, senseRadius, this.neighborScratch);
       
       // Step organism physics, metabolism, and food sensing (with climate constraints)
       org.step(this.grid, this.neighborScratch, this.nutrientBlooms, effRadius, tempFactor);
+
+      if (org.isDead()) { deadSet.add(org.id); this.handleOrganismDeath(org,false); continue; }
 
       // Predation checks (carnivores attack smaller neighbors)
       if (org.carnivory > 0.35) {
@@ -174,25 +179,22 @@ export class SimulationEngine {
         }
       }
 
-      // Check for cell division (Mitosis)
-      if (org.canReproduce()) {
-        let allowMitosis = false;
-        if ((this.organisms.length + newChildren.length) < this.maxOrganisms) {
-          allowMitosis = true;
-        } else if (this.organisms.length >= this.maxOrganisms && random() < 0.25) {
-          // Turnover: cull an old or depleted organism to maintain generational turnover
-          for (let k = 0; k < this.organisms.length; k++) {
-            const cand = this.organisms[k];
-            if (!deadSet.has(cand.id) && cand !== org && (cand.age > 4000 || cand.energy < 30)) {
-              deadSet.add(cand.id);
-              this.handleOrganismDeath(cand, false);
-              allowMitosis = true;
-              break;
-            }
-          }
-        }
+      if (org.canReproduce()) eligibleParents.push(org);
 
-        if (allowMitosis) {
+      // Natural death check
+      if (org.isDead()) {
+        deadSet.add(org.id);
+        this.handleOrganismDeath(org, false);
+      }
+    }
+
+    // Allocate only real vacant slots, fairly among surviving parents. No forced turnover cull.
+    const parents = eligibleParents.filter(o => !deadSet.has(o.id) && !o.isDead() && o.canReproduce());
+    for(let i=parents.length-1;i>0;i--) {
+      const j=Math.floor(random()*(i+1));[parents[i],parents[j]]=[parents[j],parents[i]];
+    }
+    const slots = Math.max(0,this.maxOrganisms-(this.organisms.length-deadSet.size));
+    for(const org of parents.slice(0,slots)) {
           const specThresholdMult = this.cataclysms ? this.cataclysms.getSpeciationThresholdMultiplier() : 1.0;
           const mutMult = this.cataclysms ? this.cataclysms.getMutationMultiplier() : 1.0;
           const child = org.reproduce(org.speciesId, mutMult);
@@ -223,14 +225,6 @@ export class SimulationEngine {
           if (bondingAffinity > 0.65 && org.carnivory < 0.40) {
             this.colonies.formBond(org, child);
           }
-        }
-      }
-
-      // Natural death check
-      if (org.isDead()) {
-        deadSet.add(org.id);
-        this.handleOrganismDeath(org, false);
-      }
     }
 
     // 3.5. Colony Bond Physics: spring forces, alignment, shared metabolism
@@ -533,7 +527,7 @@ export class SimulationEngine {
 
   // Pack low-latency 10 Hz broadcast packet for clients
   getBroadcastPacket() {
-    const orgData = new Array(this.organisms.length * 10);
+    const orgData = new Array(this.organisms.length * 15);
     let ptr = 0;
     for (let i = 0; i < this.organisms.length; i++) {
       const o = this.organisms[i];
@@ -547,6 +541,8 @@ export class SimulationEngine {
       orgData[ptr++] = Math.round(o.hue * 100) / 100;
       orgData[ptr++] = o.speciesId;
       orgData[ptr++] = Math.round(o.carnivory * 100) / 100;
+      for (const key of ['elongation','shell','flagella','sensing']) orgData[ptr++] = Math.round(o.body[key]*100)/100;
+      orgData[ptr++] = Math.round(o.phase*100)/100;
     }
 
     return {
@@ -567,6 +563,7 @@ export class SimulationEngine {
       climate: this.climate.getBroadcastState(),
       pilots: this.getPilotedIds(),
       vents: (this.ticks % 20 === 0 && this.grid.getVentsState) ? this.grid.getVentsState() : undefined,
+      ecology: this.ticks%20===0 ? {epoch:this.ecologyEpoch,plants:this.algae.isles.length,floraBirths:this.algae.totals.births,floraDeaths:this.algae.totals.deaths,biomass:Math.round(this.algae.isles.reduce((sum,p)=>sum+p.biomass,0))}:undefined,
       algae: (this.ticks % 20 === 0 && this.algae) ? this.algae.getBroadcastState() : undefined,
       cataclysm: this.cataclysms ? this.cataclysms.getBroadcastState() : undefined,
       lazarus: this.cataclysms ? this.cataclysms.getLazarusIds() : undefined

@@ -41,6 +41,8 @@ export class DiveCreatureManager {
       }
 
       group.visible = true;
+      const growth=(org.size||6.5)/group.userData.initialSize;
+      group.scale.set(growth,growth,growth);
 
       // Anti-clipping lens fade: prevent organisms right next to the lens from blocking the viewport
       const bodyMat = group.userData.bodyMat;
@@ -110,7 +112,7 @@ export class DiveCreatureManager {
     const group = new THREE.Group();
     const hue = Math.round(org.hue * 360);
     const isHunter = org.carnivory > 0.35;
-    const morph = getSpeciesMorphology(org.speciesId || 1, org.hue, org.carnivory || 0.1, org.size || 7);
+    const morph = getSpeciesMorphology(org.speciesId || 1, org.hue, org.carnivory || 0.1, org.size || 7, 1.8, org.anatomy);
     const accentHue = morph.accentHue !== undefined ? morph.accentHue : ((hue + 140) % 360);
 
     const bodyR = Math.max(2.2, (org.size || 6.5) * 0.65);
@@ -199,6 +201,7 @@ export class DiveCreatureManager {
       metalness: 0.08
     });
 
+    bodyGeo.scale(morph.aspectX/1.25,1,morph.aspectY/0.85);
     const body = new THREE.Mesh(bodyGeo, bodyMat);
     group.add(body);
     group.userData.bodyMat = bodyMat;
@@ -388,7 +391,7 @@ export class DiveCreatureManager {
     }
 
     // 4.5. Forward Sensory Antennule Whiskers (in XZ horizontal plane matching 2D!)
-    if (morph.hasAntennae && !isHunter) {
+    if (morph.hasAntennae) {
       const antMat = new THREE.LineBasicMaterial({
         color: new THREE.Color(`hsl(${accentHue}, 95%, 75%)`),
         transparent: true,
@@ -428,7 +431,7 @@ export class DiveCreatureManager {
     }
 
     // 5. Trailing Propulsion Flagellum (Whip Line along -X local axis)
-    if (morph.hasFlagellum || isHunter) {
+    if (morph.hasFlagellum) {
       const pointsCount = 14;
       const flagGeo = new THREE.BufferGeometry();
       const positions = new Float32Array(pointsCount * 3);
@@ -489,6 +492,7 @@ export class DiveCreatureManager {
     group.add(crown);
     group.userData.pilotCrown = crown;
 
+    group.userData.initialSize = org.size || 6.5;
     group.userData.bodyR = bodyR;
     group.userData.morph = morph;
 

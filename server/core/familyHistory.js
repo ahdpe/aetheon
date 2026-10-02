@@ -1,5 +1,5 @@
 // Observation metadata only: these records never participate in selection or motion.
-export const FAMILY_TRAITS = ['size', 'speedMax', 'carnivory', 'adhesion', 'metabolismEfficiency', 'chemotaxisNutrient'];
+export const FAMILY_TRAITS = ['size', 'speedMax', 'carnivory', 'adhesion', 'metabolismEfficiency', 'chemotaxisNutrient', 'elongation', 'shell', 'flagella', 'sensing'];
 export const HISTORY_LIMITS = { families: 2048, nodes: 2048, events: 8 };
 export const traitsOf = organism => Object.fromEntries(FAMILY_TRAITS.map(key => [key, Number.isFinite(organism.genome?.[key]) ? organism.genome[key] : 0]));
 

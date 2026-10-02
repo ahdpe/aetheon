@@ -1,5 +1,7 @@
 import { random } from './random.js';
 import { CONFIG } from '../config.js';
+import { completeGenome, developBody } from '../../public/js/shared/anatomy.js';
+import { sampleHabitat } from '../../public/js/shared/habitats.js';
 
 let nextOrganismId = 1;
 
@@ -38,6 +40,9 @@ export class Organism {
       this.genome = Organism.createRandomGenome();
     }
 
+    this.genome = completeGenome(this.genome);
+    this.body = developBody(this.genome);
+
     // Cached phenotype parameters derived from genome
     this.adultSize = Math.max(2.0, Math.min(9.5, this.genome.size));
     // Ontogenesis: 0.0 = newborn juvenile (38% size), 1.0 = fully grown adult (100% size)
@@ -75,7 +80,8 @@ export class Organism {
       splitThreshold: isPredator ? 220.0 + random() * 40 : 80.0 + random() * 30,
       metabolismEfficiency: 0.9 + random() * 0.25,
       mutationRate: 0.05 + random() * 0.05,
-      adhesion: isPredator ? random() * 0.35 : 0.3 + random() * 0.6
+      adhesion: isPredator ? random() * 0.35 : 0.3 + random() * 0.6,
+      elongation: random(), shell: random() * 0.8, flagella: random(), sensing: random()
     };
   }
 
@@ -105,12 +111,15 @@ export class Organism {
     g.mutationRate = mutateVal(g.mutationRate, 0.01, 0.3, 0.04);
     g.adhesion = mutateVal(g.adhesion, 0.0, 1.0, 0.2);
 
+    for (const key of ['elongation', 'shell', 'flagella', 'sensing']) g[key] = mutateVal(g[key], 0, 1, 0.45);
     return g;
   }
 
   // Step 10 Hz physics, chemistry, Kuramoto oscillator, and metabolism
   step(grid, nearbyNeighbors, nutrientBlooms = [], effectiveRadius = null, tempFactor = 1.0) {
     this.age++;
+    if (this.attackCooldown > 0) this.attackCooldown--;
+    const habitat = sampleHabitat(this.x, this.y);
 
     // 1. Advance Kuramoto phase oscillator
     let phaseTorque = 0;
@@ -138,8 +147,8 @@ export class Organism {
       steerY = this.playerSteer.y * 6.5;
     } else {
       const chem = grid.sample(this.x, this.y);
-      steerX = chem.gradNutrientX * this.genome.chemotaxisNutrient + chem.gradWasteX * this.genome.chemotaxisWaste;
-      steerY = chem.gradNutrientY * this.genome.chemotaxisNutrient + chem.gradWasteY * this.genome.chemotaxisWaste;
+      steerX = (chem.gradNutrientX * this.genome.chemotaxisNutrient + chem.gradWasteX * this.genome.chemotaxisWaste) * this.body.senseRadius;
+      steerY = (chem.gradNutrientY * this.genome.chemotaxisNutrient + chem.gradWasteY * this.genome.chemotaxisWaste) * this.body.senseRadius;
 
       // 2.5. Active Visitor Food Scent Luring vs Detritus Scavenging
       var isLuredToFood = false;
@@ -393,8 +402,8 @@ export class Organism {
       this.phase += 0.06; // Faster cilia beat
     }
 
-    const targetVx = Math.cos(this.heading) * this.maxSpeed * speedMultiplier * tempFactor;
-    const targetVy = Math.sin(this.heading) * this.maxSpeed * speedMultiplier * tempFactor;
+    const targetVx = Math.cos(this.heading) * this.maxSpeed * speedMultiplier * tempFactor * this.body.propulsion + habitat.currentX;
+    const targetVy = Math.sin(this.heading) * this.maxSpeed * speedMultiplier * tempFactor * this.body.propulsion + habitat.currentY;
 
     const accelRate = isPiloted ? 0.45 : 0.2;
     this.vx += (targetVx - this.vx) * accelRate;
@@ -429,11 +438,11 @@ export class Organism {
     const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
     const predatorPenalty = this.carnivory > 0.35 ? (1.2 + this.carnivory * 0.3) : 1.0;
     const metabolicCost = ((CONFIG.BASE_METABOLIC_RATE * (this.size * 0.12) + (currentSpeed * currentSpeed) * 0.02) * predatorPenalty) / this.genome.metabolismEfficiency;
-    this.energy -= metabolicCost;
+    this.energy -= metabolicCost + this.body.upkeep * (0.4 + 0.6 * this.maturity);
 
     // Graze nutrients from the chemical substrate (grazers or hungry carnivores)
     if (this.carnivory < 0.72 || this.energy < 40.0) {
-      const intakeLimit = Math.max(0.08, (1.0 - this.carnivory * 0.7)) * (this.size * 0.22);
+      const intakeLimit = Math.max(0.08, (1.0 - this.carnivory * 0.7)) * (this.size * 0.22) * this.body.feeding;
       const consumed = grid.consumeAndExcrete(
         this.x, 
         this.y, 
@@ -441,7 +450,7 @@ export class Organism {
         0.3, // waste ratio
         0.06 * ciliaryPulse // luminescence signal
       );
-      this.energy += consumed * 5.4 * this.genome.metabolismEfficiency;
+      this.energy += consumed * 5.4 * this.genome.metabolismEfficiency * (1-this.carnivory)**3;
 
       // Filter-feeders and grazers continuously precipitate mineral grains
       if (grid.depositSubstrate && this.carnivory < 0.35 && consumed > 0.04) {
@@ -475,11 +484,14 @@ export class Organism {
     const dy = prey.y - this.y;
     const contactDist = (this.size + prey.size) * 0.95;
 
+    if (this.attackCooldown > 0) return false;
+    if (prey.isDead()) return false;
     if (dx * dx + dy * dy <= contactDist * contactDist) {
+      this.attackCooldown = 8;
       // 1. Algae Sanctuary / Kelp Thicket Evasion: 35% evasion chance if inside algae grove
       if (algaeManager && algaeManager.isInsideShelter) {
         const shelter = algaeManager.isInsideShelter(prey.x, prey.y);
-        if (shelter && random() < 0.35) {
+        if (shelter && random() < 0.35 * shelter.density * (0.4 + 0.6 * shelter.genome.branching)) {
           this.vx *= 0.7;
           this.vy *= 0.7;
           return false;
@@ -499,11 +511,12 @@ export class Organism {
       }
 
       // Check if prey can be swallowed whole: if hunter is 25% larger, or prey is wounded (<48 energy), or 40% fatal grab
-      const canSwallowWhole = (this.size > prey.size * 1.25) || (prey.energy < 48.0) || (random() < 0.40);
+      const armor = prey.body?.shell ?? 0;
+      const canSwallowWhole = this.size > prey.size * (1.25 + armor * 0.8) || prey.energy < 18 * (1 - armor * 0.5);
 
       if (canSwallowWhole) {
         // Full ingestion / kill!
-        const gainedEnergy = Math.max(35.0, prey.energy * 0.75);
+        const gainedEnergy = Math.max(0, prey.energy) * 0.75;
         this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + gainedEnergy);
         this.kills++;
         grid.consumeAndExcrete(this.x, this.y, 0, 0.8, 0.4);
@@ -516,7 +529,7 @@ export class Organism {
         return { killed: true, preyId: prey.id };
       } else {
         // Predatory strike & substantial bite
-        const bite = Math.min(prey.energy * 0.60, 55.0);
+        const bite = Math.min(Math.max(0, prey.energy), (12 + this.size * 1.5) * (prey.body?.damageTaken ?? 1));
         prey.energy -= bite;
         this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 0.85);
 
@@ -686,6 +699,8 @@ export class Organism {
       hue: this.hue,
       carnivory: Math.round(this.carnivory * 100),
       mutationRate: Math.round(this.genome.mutationRate * 100),
+      anatomy: { elongation:this.body.elongation, shell:this.body.shell, flagella:this.body.flagella, sensing:this.body.sensing },
+      habitat: sampleHabitat(this.x,this.y).id,
       ciliaryFrequency: Math.round(this.genome.ciliaryFrequency * 100) / 100
     };
   }

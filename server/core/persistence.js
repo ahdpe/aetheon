@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { CONFIG } from '../config.js';
+import { completeGenome, developBody } from '../../public/js/shared/anatomy.js';
 import { Organism } from './organism.js';
 import { getRandomState, setRandomState } from './random.js';
 const checksum = data => createHash('sha256').update(JSON.stringify(data)).digest('hex');
@@ -90,7 +91,7 @@ export class PersistenceManager {
         nutrientBlooms: engine.nutrientBlooms ?? [], nextBloomId: engine.nextBloomId, lastVisitorFeed: engine.lastVisitorFeed,
         colonyData: engine.colonies?.getSerializableData() ?? [], climate: engine.climate?.toJSON(),
         atlasEntries: engine.atlas?.toJSON() ?? [], cataclysmData: engine.cataclysms?.toJSON(), algaeData: engine.algae?.toJSON(),
-        familyHistory: engine.history?.toJSON(),
+        familyHistory: engine.history?.toJSON(), ecologyEpoch: engine.ecologyEpoch,
         recentWindow: engine.recentWindow, migrationState: engine.migrationState, legacyColonyArchive: engine.legacyColonyArchive
       };
       data.checksum = checksum(data);
@@ -144,6 +145,8 @@ export class PersistenceManager {
       }
       const org = new Organism(saved.x, saved.y, saved.genome, saved.generation, saved.parentId, saved.speciesId);
       Object.assign(org, saved, { playerSteer: { x: 0, y: 0, ticks: 0 }, isPiloted: false });
+      org.genome = completeGenome(org.genome);
+      org.body = developBody(org.genome);
       org.birthTime = saved.birthTime ?? data.savedAt - saved.age * CONFIG.TICK_INTERVAL_MS;
       return org;
     });
@@ -164,6 +167,7 @@ export class PersistenceManager {
     engine.nextBloomId = data.nextBloomId ?? 1;
     engine.lastVisitorFeed = data.lastVisitorFeed;
     if (data.recentWindow) engine.recentWindow = data.recentWindow;
+    engine.ecologyEpoch = data.ecologyEpoch ?? { version:1, startedAtTick:data.ticks, startedAt:Date.now(), initializedAnatomy:true };
     engine.history?.fromJSON(data.familyHistory);
     engine.restoreDynasties?.(data.dynasties ?? []);
     engine.colonies?.restoreFromData(identityRecovery?.identitiesReassigned ? [] : (data.colonyData ?? []), new Map(engine.organisms.map(o => [o.id, o])));

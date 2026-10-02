@@ -122,14 +122,15 @@ export class NetworkManager {
       }));
     } else if (msg.type === 'get_tour') {
       const living = this.engine.organisms;
-      const ids = new Set(living.map(o => o.id));
-      const recentBirth = [...this.engine.history.nodes.values()].reverse().find(n => n.parentId > 0 && n.bornTick !== null && n.bornTick >= this.engine.ticks - 150 && n.bornTick <= this.engine.ticks - 4 && ids.has(n.id) && living.find(o => o.id === n.id)?.energy > 35);
-      const hunter = living.find(o => o.carnivory > 0.35 && o.energy > 30);
-      const descendant = living.find(o => o.generation > (this.engine.history.families.get(o.familyId)?.founderGeneration ?? Infinity));
+      const healthy=living.filter(o=>!o.isDead() && o.energy>50 && o.age<10000);
+      const byId=new Map(healthy.map(o=>[o.id,o]));
+      const recentBirth = [...this.engine.history.nodes.values()].reverse().find(n => n.parentId > 0 && n.bornTick !== null && n.bornTick >= this.engine.ticks - 300 && n.bornTick <= this.engine.ticks - 50 && byId.has(n.id));
+      const hunter = healthy.find(o => o.carnivory > 0.35 && o.maturity>0.7);
+      const descendant = healthy.find(o => o.generation > (this.engine.history.families.get(o.familyId)?.founderGeneration ?? Infinity));
       const choices = [{id:recentBirth?.id,reason:'birth'},{id:hunter?.id,reason:'hunter'},{id:descendant?.id,reason:'family'}];
       const choice = choices[(ws.tourStep ?? 0) % choices.length];
       ws.tourStep = (ws.tourStep ?? 0) + 1;
-      const target = choice.id ? choice : choices.find(c => c.id) ?? {id:living[0]?.id,reason:'cell'};
+      const target = choice.id ? choice : choices.find(c => c.id) ?? {id:healthy[0]?.id??living.find(o=>!o.isDead())?.id,reason:'cell'};
       const org = living.find(o => o.id === target.id);
       ws.send(JSON.stringify({type:'tour_target',...target,position:org ? {x:org.x,y:org.y} : null}));
     } else if (msg.type === 'get_family') {

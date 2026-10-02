@@ -6,6 +6,7 @@ import { CodexModal } from './ui/codexModal.js';
 import { AboutModal } from './ui/aboutModal.js';
 import { JournalDrawer } from './ui/journalDrawer.js';
 import { InputController } from './ui/controls.js';
+import { EcologyPanel } from './ui/ecologyPanel.js';
 import { Observatory } from './ui/observatory.js';
 
 class AetheonApp {
@@ -31,6 +32,7 @@ class AetheonApp {
     this.controls = new InputController(this.canvas, this.renderer, this.inspector, this.codexModal, this, this.aboutModal);
 
     this.observatory = new Observatory(this);
+    this.ecologyPanel = new EcologyPanel(this);
     this.init();
   }
 
@@ -199,6 +201,7 @@ class AetheonApp {
   }
 
   handleMessage(msg) {
+    if(msg.ecology) this.ecologyPanel.update(msg.ecology);
     if (msg.type === 'init') {
       this.observatory.init(msg.worldCreatedAt);
       if (msg.worldSize) {
@@ -378,7 +381,7 @@ class AetheonApp {
 
     for (let i = 0; i < list.length; i++) {
       const o = list[i];
-      if (o.carnivory > 0.4) hunters++;
+      if (o.carnivory > 0.35) hunters++;
       else grazers++;
 
       const spId = o.speciesId || 1;

@@ -4,97 +4,20 @@
  * flagella, and sensory appendages from species genome signatures.
  */
 
+import { developBody } from '../shared/anatomy.js';
 const morphCache = new Map();
-
-export function getSpeciesMorphology(speciesId, hue = 0.5, carnivory = 0.1, size = 7.0, speed = 1.8) {
-  const cacheKey = `${speciesId}_${hue.toFixed(2)}_${carnivory > 0.35 ? 1 : 0}`;
-  if (morphCache.has(cacheKey)) {
-    return morphCache.get(cacheKey);
-  }
-
-  // Deterministic seed based on speciesId
-  const seed = (Math.abs(speciesId) * 9301 + 49297) % 233280;
-  const rnd = (offset) => {
-    const s = (seed + offset * 1103515245 + 12345) & 0x7fffffff;
-    return (s % 1000) / 1000;
-  };
-
-  const isHunter = carnivory > 0.35;
-
-  // 1. Cell Body Shape - Lineage genetic signature with predatory specialization
-  let shape;
-  const shapeRoll = rnd(1);
-  if (isHunter && shapeRoll < 0.40) {
-    shape = 'raptor'; // Armored apex hunter with rostrum & lateral mandibles
-  } else if (shapeRoll < 0.22) {
-    shape = 'vibrio'; // Curved comma / crescent
-  } else if (shapeRoll < 0.44) {
-    shape = 'bacillus'; // Elongated cylindrical rod
-  } else if (shapeRoll < 0.64) {
-    shape = 'coccus'; // Spherical plump orb
-  } else if (shapeRoll < 0.82) {
-    shape = 'ovoid'; // Classic streamlined oval
-  } else {
-    shape = 'spirillum'; // S-curved sinusoidal undulating
-  }
-
-  // 2. Marking Pattern (spots / stripes / spine / twin_core / stippled)
-  const patternRoll = rnd(2);
-  let pattern;
-  if (patternRoll < 0.32) pattern = 'spots';       // Leopard bioluminescent photophore spots
-  else if (patternRoll < 0.58) pattern = 'stripes'; // Transverse glowing zebra bands
-  else if (patternRoll < 0.76) pattern = 'spine';   // Dorsal neon spine ridge
-  else if (patternRoll < 0.90) pattern = 'twin_core'; // Dual polar chloroplasts / nuclei
-  else pattern = 'stippled';                        // Micro-granule constellation
-
-  // 3. Number of spots or stripes
-  const spotCount = 3 + Math.floor(rnd(3) * 3);     // 3 to 5 spots
-  const stripeCount = 2 + Math.floor(rnd(4) * 2);   // 2 to 3 stripes
-
-  // 4. Appendages
-  const hasFlagellum = isHunter || speed > 2.2 || rnd(5) < 0.50; // Trailing propulsion whip
-  const hasAntennae = !isHunter && rnd(6) < 0.38;               // Front sensory whiskers
-
-  // 5. Complementary or Split-Triadic Accent Hue for markings
-  const accentOffset = 0.18 + rnd(7) * 0.45;
-  const accentHue = Math.round(((hue + accentOffset) % 1.0) * 360);
-
-  // 6. Geometry ratios
-  let aspectX = 1.25;
-  let aspectY = 0.85;
-  if (shape === 'bacillus') {
-    aspectX = 1.55;
-    aspectY = 0.70;
-  } else if (shape === 'coccus') {
-    aspectX = 1.05;
-    aspectY = 1.00;
-  } else if (shape === 'vibrio') {
-    aspectX = 1.35;
-    aspectY = 0.80;
-  } else if (shape === 'spirillum') {
-    aspectX = 1.45;
-    aspectY = 0.72;
-  } else if (shape === 'raptor') {
-    aspectX = 1.35;
-    aspectY = 0.85;
-  }
-
-  const result = {
-    speciesId,
-    shape,
-    pattern,
-    spotCount,
-    stripeCount,
-    hasFlagellum,
-    hasAntennae,
-    accentHue,
-    isHunter,
-    aspectX,
-    aspectY
-  };
-
-  morphCache.set(cacheKey, result);
-  return result;
+export function getSpeciesMorphology(speciesId, hue=0.5, carnivory=0.1, size=7, speed=1.8, anatomy=null) {
+  const body=developBody({size,hue,carnivory,speedMax:speed,...anatomy});
+  const cacheKey=[hue.toFixed(2),carnivory>0.35,...['elongation','shell','flagella','sensing'].map(k=>body[k].toFixed(2))].join(':');
+  if(morphCache.has(cacheKey)) return morphCache.get(cacheKey);
+  const isHunter=carnivory>0.35,e=body.elongation;
+  const shape=isHunter && body.shell>0.6?'raptor':e<0.23?'coccus':e<0.43?'ovoid':e<0.65?'vibrio':e<0.84?'bacillus':'spirillum';
+  const pattern=body.shell>0.68?'spine':body.flagella>0.65?'stripes':body.sensing>0.65?'stippled':e<0.3?'twin_core':'spots';
+  const result={speciesId,shape,pattern,spotCount:3+Math.round(body.sensing*3),stripeCount:2+Math.round(body.flagella*3),
+    hasFlagellum:body.flagella>0.18,flagellumCount:1+Math.floor(body.flagella*3),hasAntennae:body.sensing>0.4,
+    accentHue:Math.round(((hue+0.16+body.shell*0.25)%1)*360),isHunter,...body};
+  if(morphCache.size>=512) morphCache.delete(morphCache.keys().next().value);
+  morphCache.set(cacheKey,result);return result;
 }
 
 /**
@@ -248,7 +171,7 @@ export function drawCellMarkings(ctx, morph, rx, ry, mainHue, time, seedId) {
 export function drawFlagellum(ctx, rx, ry, morph, speed, time, seedId) {
   if (!morph.hasFlagellum) return;
 
-  const flagLen = rx * (morph.isHunter ? 1.9 : 1.6);
+  const flagLen = rx * (1 + 1.3 * morph.flagella);
   const waveRate = time * 0.018 * Math.max(1.0, speed) + seedId;
   const crestAmp = ry * (morph.isHunter ? 0.42 : 0.35);
 
@@ -257,26 +180,29 @@ export function drawFlagellum(ctx, rx, ry, morph, speed, time, seedId) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
+  for(let f=0;f<(morph.flagellumCount??1);f++) {
+  const offset=(f-((morph.flagellumCount??1)-1)/2)*ry*0.45;
   ctx.beginPath();
-  ctx.moveTo(-rx * 0.95, 0);
+  ctx.moveTo(-rx * 0.95, offset);
 
   const steps = 7;
   for (let i = 1; i <= steps; i++) {
     const t = i / steps;
     const fx = -rx * 0.95 - t * flagLen;
-    const fy = Math.sin(waveRate + t * Math.PI * 2.6) * (crestAmp * t);
+    const fy = offset + Math.sin(waveRate + t * Math.PI * 2.6 + f) * (crestAmp * t);
     ctx.lineTo(fx, fy);
   }
   ctx.stroke();
+  }
 }
 
 /**
  * Draw forward sensory antennules
  */
 export function drawAntennae(ctx, rx, ry, morph, time, seedId) {
-  if (!morph.hasAntennae || morph.isHunter) return;
+  if (!morph.hasAntennae) return;
 
-  const antLen = rx * 0.55;
+  const antLen = rx * (0.25 + 0.6 * morph.sensing);
   const tick = Math.sin(time * 0.008 + seedId) * (ry * 0.15);
 
   ctx.strokeStyle = `hsla(${morph.accentHue}, 95%, 85%, 0.65)`;

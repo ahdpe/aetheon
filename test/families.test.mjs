@@ -83,3 +83,17 @@ test('initial observation joins verified living parents and children without inv
   assert.equal(f.nodes.find(n=>n.id===child.id).parentKnown,true);
   assert.equal(f.nodes.find(n=>n.id===child.id).bornTick,null);
 });
+
+
+test('tour prefers established recent births and hunters with time left to observe',()=>{
+ const e=new SimulationEngine(),parent=e.organisms[0],old=e.organisms[1],young=e.organisms[2];
+ const stable=parent.reproduce(parent.speciesId),fresh=parent.reproduce(parent.speciesId);
+ stable.energy=fresh.energy=80;stable.age=60;fresh.age=1;e.ticks=100;
+ e.history.recordBirth(parent,stable,40);e.history.recordBirth(parent,fresh,99);
+ old.carnivory=young.carnivory=.8;old.energy=young.energy=100;old.age=11990;young.age=200;young.maturity=1;
+ e.organisms=[old,young,parent,stable,fresh];
+ const n=Object.create(NetworkManager.prototype);n.engine=e;let reply;
+ const ws={send:s=>reply=JSON.parse(s),lastActions:new Map()};n.handleClientMessage(ws,{type:'get_tour'});
+ assert.equal(reply.id,stable.id);assert.equal(reply.reason,'birth');
+ ws.lastActions.clear();n.handleClientMessage(ws,{type:'get_tour'});assert.equal(reply.id,young.id);
+});

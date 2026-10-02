@@ -1,7 +1,9 @@
+import { completeGenome, ANATOMY_GENES } from '../../public/js/shared/anatomy.js';
 export class LineageManager {
   constructor() {
     this.speciesMap = new Map();
     this.prototypeIndex = new Map();
+    this.anatomyPrototypes = new WeakMap();
     this.nextSpeciesId = 1;
     this.divergenceThreshold = 0.55; // Normalized genetic distance threshold for speciation
     
@@ -55,6 +57,7 @@ export class LineageManager {
 
   createSpecies(data, parentSpeciesId = 0) {
     const id = this.nextSpeciesId++;
+    const anatomy = completeGenome(data);
     const species = {
       id,
       parentSpeciesId,
@@ -63,6 +66,7 @@ export class LineageManager {
       nameRu: data.nameRu || `Этеобионт #${id}`,
       descriptionEn: data.descriptionEn || 'Newly emerged evolutionary branch.',
       descriptionRu: data.descriptionRu || 'Вновь возникшая эволюционная ветвь.',
+      ...Object.fromEntries(ANATOMY_GENES.map(k=>[k,anatomy[k]])),
       hue: data.hue,
       carnivory: data.carnivory,
       size: data.size,
@@ -90,11 +94,15 @@ export class LineageManager {
     const dSize = Math.abs(genome.size - species.size) / 5.5;
     const dSpeed = Math.abs(genome.speedMax - species.speedMax) / 3.0;
 
+    const a=ANATOMY_GENES.every(k=>Number.isFinite(genome[k]))?genome:completeGenome(genome);
+    let b=this.anatomyPrototypes.get(species);
+    if(!b) {b=completeGenome(species);this.anatomyPrototypes.set(species,b);}
+    const anatomical=ANATOMY_GENES.reduce((sum,k)=>sum+(a[k]-b[k])**2*0.5,0);
     return Math.sqrt(
       cyclicDHue * cyclicDHue * 2.0 +
       dCarnivory * dCarnivory * 1.5 +
       dSize * dSize +
-      dSpeed * dSpeed
+      dSpeed * dSpeed + anatomical
     );
   }
 
@@ -122,6 +130,7 @@ export class LineageManager {
         nameLa: `Forma-${this.nextSpeciesId} ${isCarnivore ? 'carnivora' : 'phyta'}`,
         nameEn: `${isCarnivore ? 'Predatory' : 'Vegetal'} Morph #${this.nextSpeciesId}`,
         nameRu: `${isCarnivore ? 'Хищный' : 'Растительный'} морф #${this.nextSpeciesId}`,
+        ...Object.fromEntries(ANATOMY_GENES.map(k=>[k,childGenome[k]])),
         hue: childGenome.hue,
         carnivory: childGenome.carnivory,
         size: childGenome.size,
@@ -166,7 +175,7 @@ export class LineageManager {
     }
   }
 
-  prototypeKey(s) { return [s.hue,s.carnivory,s.size,s.speedMax].join(':'); }
+  prototypeKey(s) { return [s.hue,s.carnivory,s.size,s.speedMax,...ANATOMY_GENES.map(k=>completeGenome(s)[k])].join(':'); }
   rebuildIndex(legacy = false) {
     this.prototypeIndex.clear();
     for (const sp of this.speciesMap.values()) {

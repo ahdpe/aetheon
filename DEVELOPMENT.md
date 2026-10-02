@@ -4,7 +4,7 @@ Authorized 2 October 2026: implement the audited plan in order, taking time to v
 
 1. Foundation: deployed on 2 October 2026. Stable checkpoint IDs/fields/RNG, recovery, correct morphology registration and counters, colony conservation, safe visitor interactions and HTML, persistent AI cost reservations, bounded codex and lower network traffic. See FOUNDATION-REPORT-RU.md for validation and the first-migration incident.
 2. Personal lineage: deployed on 2 October 2026. Understandable introduction, read-only tours, three browser-local family bookmarks, actual parentage, bounded persistent ancestry and generation/genome comparisons. See OBSERVATORY-REPORT-RU.md.
-3. Functional morphology and flora: inherited development, resource tradeoffs, plant life cycles and a small set of contrasting habitats.
+3. Functional morphology and flora: deployed on 2 October 2026, version 2.3-ecology. Four inherited anatomy genes with resource tradeoffs, finite plant biomass and reproduction, three continuous habitats, EN/RU living plant cards and gene inspection. Tested on a copy for one model hour and across two real production restarts. See ECOLOGY-REPORT-RU.md for validation and remaining limits.
 4. Organism nursery and controlled releases; ecological construction through organisms.
 5. Expand habitats and population only from measured performance/retention; finite detailed canonical simulation.
 

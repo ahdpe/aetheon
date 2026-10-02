@@ -14,6 +14,7 @@ const COPY = {
     extinct:'No living descendants', active:'Family continues', focus:'Visit a living descendant', forget:'Remove from notebook',
     genetic:'Inherited genome traits', geneNote:'Values describe genes in model units, not measured motion.', first:'When you first watched', founderTraits:'Founder’s recorded traits', now:'Living family average',
     size:'Adult size', speedMax:'Maximum speed', carnivory:'Predatory tendency', adhesion:'Cell adhesion', metabolismEfficiency:'Metabolic efficiency', chemotaxisNutrient:'Nutrient sensitivity',
+    elongation:'Elongation', shell:'Shell', flagella:'Flagella', sensing:'Sensing',
     ancestry:'Recent recorded members', founder:'Founder', parent:'parent', gen:'generation', alive:'living', dead:'died', baseline:'already alive when records began',
     note:'Family records begin with observation, not with the birth of the ocean. Recent ancestry and extinct families have a bounded archive. Missing links are left unknown.',
     saved:'Saved in this browser', last:'At your last visit', members:'living members', choose:'Choose a family below to check its current state.', olderNodes:'Older individual records have left the recent ancestry window.', cellGone:'This cell is no longer present in the living ocean.',
@@ -37,6 +38,7 @@ const COPY = {
     extinct:'Живых потомков нет', active:'Семья продолжается', focus:'Найти живого потомка', forget:'Убрать из дневника',
     genetic:'Наследуемые признаки генома', geneNote:'Это значения генов в единицах модели, а не измерения движения.', first:'В начале вашего наблюдения', founderTraits:'Записанные свойства основателя', now:'Среднее живой семьи',
     size:'Взрослый размер', speedMax:'Предельная скорость', carnivory:'Склонность к хищничеству', adhesion:'Сцепление клеток', metabolismEfficiency:'Эффективность метаболизма', chemotaxisNutrient:'Чувствительность к пище',
+    elongation:'Вытянутость', shell:'Оболочка', flagella:'Жгутики', sensing:'Чувствительность',
     ancestry:'Последние записанные особи', founder:'Основатель', parent:'родитель', gen:'поколение', alive:'жива', dead:'погибла', baseline:'жила до начала записи',
     note:'Семейная история начинается с наблюдения, а не с рождения океана. Архив последних предков и вымерших семей ограничен. Недостающие связи остаются неизвестными.',
     saved:'Сохранено в этом браузере', last:'При прошлом визите', members:'живых особей', choose:'Выберите семью ниже, чтобы проверить её состояние сейчас.', olderNodes:'Старые записи об отдельных клетках вышли за пределы окна последних предков.', cellGone:'Этой клетки больше нет в живом океане.',
@@ -180,7 +182,7 @@ export class Observatory {
     if(this.activeId && !f) detail=`<p class="family-empty">${this.t(this.received?'missing':'loading')}</p>${bookmark?`<button data-action="forget" data-id="${bookmark.id}">${this.t('forget')}</button>`:''}`;
     if(f) {
       const initial=bookmark?.baselineTraits??f.founderTraits;
-      const rows=Object.keys(f.founderTraits).map(key=> {
+      const rows=[...new Set([...Object.keys(f.founderTraits),...Object.keys(f.meanTraits??{})])].map(key=> {
         const before=initial?.[key],now=f.meanTraits?.[key];
         return `<tr><th scope="row">${this.t(key)}</th><td>${Number.isFinite(before)?before.toFixed(2):'—'}</td><td>${Number.isFinite(now)?now.toFixed(2):'—'}</td></tr>`;
       }).join('');

@@ -11,6 +11,8 @@ export class BioInspector {
     this.trackBtn = document.getElementById('btn-track-target');
     this.diveBtn = document.getElementById('btn-dive-target');
 
+    this.anatomyPanel=document.createElement('div');this.anatomyPanel.className='anatomy-card';
+    this.panel.querySelector('.inspector-vitals').after(this.anatomyPanel);
     this.selectedId = null;
     this.isTracking = false;
     this.lastProfile = null;
@@ -62,6 +64,7 @@ export class BioInspector {
   select(organismId) {
     this.selectedId = organismId;
     this.lastProfile = null;
+    this.anatomyPanel.textContent='';
     this.client.observatory?.onProfile(null);
     this.panel.classList.remove('hidden');
     document.getElementById('bio-species-name').textContent = `#${organismId}`;
@@ -97,6 +100,7 @@ export class BioInspector {
     this.selectedId = null;
     this.isTracking = false;
     this.lastProfile = null;
+    this.anatomyPanel.textContent='';
     this.client.observatory?.onProfile(null);
     this.renderer.camera.trackedEntityId = null;
     this.panel.classList.add('hidden');
@@ -106,6 +110,9 @@ export class BioInspector {
     if (!profile || profile.id !== this.selectedId) return;
     this.lastProfile = profile;
     const isRu = i18n.getLang() === 'ru';
+    const labels=isRu?{elongation:'Вытянутость',shell:'Оболочка',flagella:'Жгутики',sensing:'Чувствительность'}:{elongation:'Elongation',shell:'Shell',flagella:'Flagella',sensing:'Sensing'};
+    const habitats=isRu?{basin:'Внутренняя котловина',meadow:'Кольцо лугов',shoal:'Мелководный край'}:{basin:'Inner basin',meadow:'Meadow ring',shoal:'Shallow rim'};
+    this.anatomyPanel.innerHTML=profile.anatomy?`<strong>${isRu?'Наследуемое тело':'Inherited body'}</strong><div>${Object.entries(labels).map(([k,label])=>`<span>${label}<b>${Math.round(profile.anatomy[k]*100)}%</b></span>`).join('')}</div><small>${habitats[profile.habitat]??''} · ${isRu?'развитие тела требует энергии':'body development costs energy'}</small>`:'';
 
     const badgeDot = document.getElementById('bio-badge-dot');
     const speciesName = document.getElementById('bio-species-name');

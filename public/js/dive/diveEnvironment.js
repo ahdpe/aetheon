@@ -269,23 +269,36 @@ export class DiveEnvironment {
 
   updateAlgae(rawAlgae) {
     if (!rawAlgae || !Array.isArray(rawAlgae)) return;
+    const changed = this.algaeIsles.map(p=>p.id).join(',') !== rawAlgae.map(p=>p.id).join(',');
     this.algaeIsles = rawAlgae;
     if (!this.algaeFrondsGroup) {
       this.algaeFrondsGroup = new THREE.Group();
       this.scene.add(this.algaeFrondsGroup);
       this.setupAlgaeFronds();
       this.setupAlgaeBubbles();
+    } else if(changed) this.setupAlgaeFronds();
+    if(this.algaeBubbles) {
+      this.algaeBubbles.mesh.visible=rawAlgae.length>0;
+      for(let i=0;i<this.algaeBubbles.velocities.length && rawAlgae.length;i++) {
+        const p=rawAlgae[i%rawAlgae.length],v=this.algaeBubbles.velocities[i];
+        v.centerX=p.x-700;v.centerZ=p.y-700;v.isleRadius=p.r*0.75;
+      }
+    }
+    const byId=new Map(rawAlgae.map(p=>[p.id,p]));
+    for(const f of this.algaeFrondMeshes) {
+      const p=byId.get(f.isleId);
+      if(p) {const scale=p.r/f.initialRadius;f.mesh.scale.set(scale,Math.max(0.15,p.d),scale);f.mesh.material.opacity=0.3+0.55*p.d;}
     }
   }
 
   setupAlgaeFronds() {
-    if (!this.algaeIsles || this.algaeIsles.length === 0) return;
     if (!this.algaeFrondsGroup) return;
 
     while (this.algaeFrondsGroup.children.length > 0) {
       const child = this.algaeFrondsGroup.children[0];
       this.algaeFrondsGroup.remove(child);
       if (child.geometry) child.geometry.dispose();
+      child.material?.dispose();
     }
     this.algaeFrondMeshes = [];
 
@@ -319,20 +332,23 @@ export class DiveEnvironment {
         const fx = centerX + Math.cos(angle) * dist;
         const fz = centerZ + Math.sin(angle) * dist;
 
-        const geo = new THREE.PlaneGeometry(ribbonWidth * (0.8 + Math.random() * 0.4), ribbonHeight * (0.85 + Math.random() * 0.3), 1, segsY);
-        geo.translate(0, ribbonHeight * 0.5, 0);
+        const height=ribbonHeight*(0.4+(isle.height??0.6));
+        const geo = new THREE.PlaneGeometry(ribbonWidth*(0.5+(isle.branching??0.5)),height,1,segsY);
+        geo.translate(0,height*0.5,0);
 
         const pos = geo.attributes.position;
         const basePositions = new Float32Array(pos.array.length);
         basePositions.set(pos.array);
 
-        const mesh = new THREE.Mesh(geo, kelpMat);
+        const mat=kelpMat.clone();mat.color.setHSL(isle.h??0.4,0.7,0.4);
+        const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(fx, -15.5, fz);
         mesh.rotation.y = Math.random() * Math.PI * 2;
         this.algaeFrondsGroup.add(mesh);
 
         this.algaeFrondMeshes.push({
           mesh,
+          isleId:isle.id,initialRadius:rawR,
           geo,
           basePositions,
           phase: Math.random() * Math.PI * 2 + i * 0.8,
@@ -341,6 +357,7 @@ export class DiveEnvironment {
         });
       }
     }
+    kelpMat.dispose();
   }
 
   setupAlgaeBubbles() {

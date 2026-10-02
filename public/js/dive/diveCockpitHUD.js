@@ -101,13 +101,13 @@ export class DiveCockpitHUD {
           <span class="vital-label" data-i18n="ciliary_rhythm">РИТМ РЕСНИЧЕК</span>
           <div class="dive-kuramoto-pulse" id="dive-kuramoto-pulse">
             <span class="pulse-ring"></span>
-            <span class="pulse-bpm" id="dive-kuramoto-bpm">1.8 Hz</span>
+            <span class="pulse-bpm" id="dive-kuramoto-bpm">—</span>
           </div>
         </div>
 
         <div class="dive-vital-item">
           <span class="vital-label" data-i18n="speed">СКОРОСТЬ</span>
-          <span class="vital-val-mono" id="dive-speed-val">1.4 μm/s</span>
+          <span class="vital-val-mono" id="dive-speed-val">—</span>
         </div>
       </div>
 
@@ -570,7 +570,7 @@ export class DiveCockpitHUD {
 
     // 2. Draw live beating cellular cilia
     const currentSpeed = Math.hypot(org.vx || 0, org.vy || 0);
-    this.drawCilia(org.phase || (time * 0.005), currentSpeed);
+    this.drawCilia(org.phase ?? (time * 0.005), currentSpeed);
 
     // 3. Telemetry DOM updates
     const title = document.getElementById('dive-species-title');
@@ -646,11 +646,10 @@ export class DiveCockpitHUD {
     if (energyVal) energyVal.textContent = `${energyPct}%`;
 
     // Speed
-    if (speedVal) speedVal.textContent = `${currentSpeed.toFixed(1)} μm/s`;
+    if (speedVal) speedVal.textContent = `${currentSpeed.toFixed(1)} μm/${i18n.getLang()==='ru'?'шаг':'step'}`;
 
     // Kuramoto Ciliary Frequency
-    const freq = (org.ciliaryFrequency || 0.25) * 4.0;
-    if (bpmVal) bpmVal.textContent = `${freq.toFixed(1)} Hz`;
+    if (bpmVal) bpmVal.textContent = Number.isFinite(org.phase) ? `${Math.round(((org.phase%(Math.PI*2)+Math.PI*2)%(Math.PI*2))/(Math.PI*2)*100)}% ${i18n.getLang()==='ru'?'цикла':'cycle'}` : '—';
 
     // Chemical Compass (scaled correctly to 2D world coordinates!)
     if (nearestVent && compassNeedle && compassDist) {
