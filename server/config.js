@@ -1,0 +1,81 @@
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function resolveVeniceUrl() {
+  if (process.env.VENICE_API_URL && process.env.VENICE_API_URL.trim()) {
+    const url = process.env.VENICE_API_URL.trim();
+    return url.endsWith('/chat/completions') ? url : `${url.replace(/\/+$/, '')}/chat/completions`;
+  }
+  if (process.env.VENICE_BASE_URL && process.env.VENICE_BASE_URL.trim()) {
+    const base = process.env.VENICE_BASE_URL.trim().replace(/\/+$/, '');
+    return `${base}/chat/completions`;
+  }
+  return 'https://api.venice.ai/api/v1/chat/completions';
+}
+
+function resolveVeniceDecisionsUrl() {
+  if (process.env.VENICE_DECISIONS_URL && process.env.VENICE_DECISIONS_URL.trim()) {
+    return process.env.VENICE_DECISIONS_URL.trim();
+  }
+  if (process.env.VENICE_BASE_URL && process.env.VENICE_BASE_URL.trim()) {
+    const base = process.env.VENICE_BASE_URL.trim().replace(/\/+$/, '');
+    return `${base}/decisions`;
+  }
+  return 'https://api.venice.ai/api/v1/decisions';
+}
+
+export const CONFIG = {
+  PORT: parseInt(process.env.PORT || '3000', 10),
+  HOST: process.env.HOST || '0.0.0.0',
+  
+  // AI Observer & Storyteller
+  VENICE_API_KEY: process.env.VENICE_API_KEY || '',
+  VENICE_API_URL: resolveVeniceUrl(),
+  VENICE_DECISIONS_URL: resolveVeniceDecisionsUrl(),
+  VENICE_MODEL: process.env.VENICE_MODEL || 'openai-gpt-4o-mini-2024-07-18',
+  JEV_MODEL: process.env.JEV_MODEL || 'jev-latest',
+  JEV_SCREENING_INTERVAL_MS: (parseInt(process.env.JEV_SCREENING_INTERVAL_SEC || '60', 10)) * 1000,
+  AI_OBSERVER_INTERVAL_MS: (parseInt(process.env.AI_OBSERVER_INTERVAL_MIN || '15', 10)) * 60 * 1000,
+  
+  // Simulation Constants
+  TICK_RATE_HZ: parseInt(process.env.TICK_RATE_HZ || '10', 10),
+  TICK_INTERVAL_MS: 1000 / parseInt(process.env.TICK_RATE_HZ || '10', 10),
+  GRID_SIZE: parseInt(process.env.GRID_SIZE || '128', 10), // 128x128 chemical grid
+  WORLD_SIZE: 1400.0, // Continuous virtual coordinates [0, WORLD_SIZE)
+  
+  // Physical Chamber (Petri dish / droplet with soft surface tension)
+  CHAMBER_RADIUS: 620.0,
+  CHAMBER_CENTER_X: 700.0,
+  CHAMBER_CENTER_Y: 700.0,
+  SURFACE_TENSION_MARGIN: 120.0,
+  
+  MAX_ORGANISMS: parseInt(process.env.MAX_ORGANISMS || '300', 10),
+  MIN_ORGANISMS: 140, // Spontaneous biogenesis triggers if population drops below this
+  
+  // Persistence
+  PERSIST_INTERVAL_MS: (parseInt(process.env.PERSIST_INTERVAL_MIN || '10', 10)) * 60 * 1000,
+  SNAPSHOT_FILE: path.resolve(__dirname, '..', process.env.SNAPSHOT_FILE || 'data/aetheon_world.json'),
+  
+  // Thermodynamic & Chemical Rates
+  DIFFUSION_RATE_NUTRIENT: 0.08,
+  DIFFUSION_RATE_WASTE: 0.04,
+  DIFFUSION_RATE_SIGNAL: 0.12,
+  DECAY_RATE_NUTRIENT: 0.0005,
+  DECAY_RATE_WASTE: 0.003,
+  DECAY_RATE_SIGNAL: 0.02,
+  
+  VENT_COUNT: 5, // Hydrothermal mineral vents generating steady food
+  VENT_POWER: 0.45,
+  
+  // Energy dissipation & metabolism
+  BASE_METABOLIC_RATE: 0.08,
+  DIVISION_ENERGY_THRESHOLD: 120.0,
+  INITIAL_ORGANISM_ENERGY: 60.0,
+  MAX_ORGANISM_ENERGY: 250.0
+};

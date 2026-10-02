@@ -1,0 +1,136 @@
+export class ParticleSystem {
+  constructor(count = 450, worldSize = 1400.0, chamber = { cx: 700.0, cy: 700.0, r: 620.0 }) {
+    this.count = count;
+    this.worldSize = worldSize;
+    this.chamber = chamber;
+    
+    // Float arrays for particle properties
+    this.x = new Float32Array(count);
+    this.y = new Float32Array(count);
+    this.vx = new Float32Array(count);
+    this.vy = new Float32Array(count);
+    this.size = new Float32Array(count);
+    this.alpha = new Float32Array(count);
+    this.depth = new Float32Array(count); // 0.2 (background blur) to 1.0 (foreground)
+    this.hue = new Float32Array(count);
+
+    this.init();
+  }
+
+  setChamber(chamber) {
+    this.chamber = chamber;
+  }
+
+  init() {
+    const cx = this.chamber.cx;
+    const cy = this.chamber.cy;
+    const r = this.chamber.r;
+
+    for (let i = 0; i < this.count; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = Math.sqrt(Math.random()) * (r - 12);
+      this.x[i] = cx + Math.cos(ang) * dist;
+      this.y[i] = cy + Math.sin(ang) * dist;
+      this.vx[i] = (Math.random() - 0.5) * 0.4;
+      this.vy[i] = (Math.random() - 0.5) * 0.4;
+      this.depth[i] = 0.2 + Math.random() * 0.8;
+      this.size[i] = 1.0 + this.depth[i] * 2.2;
+      this.alpha[i] = 0.15 + this.depth[i] * 0.45;
+      this.hue[i] = 0.5 + (Math.random() - 0.5) * 0.2; // Cyan/blue
+    }
+  }
+
+  // Update particles with gentle fluid drift and organism wakes
+  step(organisms) {
+    const cx = this.chamber.cx;
+    const cy = this.chamber.cy;
+    const r = this.chamber.r;
+
+    for (let i = 0; i < this.count; i++) {
+      // Fluid movement
+      this.x[i] += this.vx[i];
+      this.y[i] += this.vy[i];
+
+      // Soft reflection at circular chamber boundary
+      const dx = this.x[i] - cx;
+      const dy = this.y[i] - cy;
+      const dist = Math.hypot(dx, dy) || 0.001;
+      if (dist > r - 4) {
+        this.x[i] = cx + (dx / dist) * (r - 5);
+        this.y[i] = cy + (dy / dist) * (r - 5);
+        this.vx[i] *= -0.5;
+        this.vy[i] *= -0.5;
+      }
+
+      // Gentle damping + brownian motion
+      this.vx[i] = this.vx[i] * 0.98 + (Math.random() - 0.5) * 0.04;
+      this.vy[i] = this.vy[i] * 0.98 + (Math.random() - 0.5) * 0.04;
+    }
+
+    // Organisms stir nearby particles (sub-sampled for high performance)
+    if (organisms && organisms.length > 0) {
+      const stepCheck = Math.max(1, Math.floor(organisms.length / 30));
+      for (let o = 0; o < organisms.length; o += stepCheck) {
+        const org = organisms[o];
+        const ox = org.x;
+        const oy = org.y;
+        const r2 = (org.size * 2.2) * (org.size * 2.2);
+
+        // Push nearby particles
+        for (let p = 0; p < this.count; p += 6) {
+          const dx = this.x[p] - ox;
+          const dy = this.y[p] - oy;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < r2 && d2 > 0.1) {
+            const force = (1.0 - Math.sqrt(d2) / (org.size * 2.2)) * 0.7;
+            this.vx[p] += (org.vx * 0.35 + (dx / Math.sqrt(d2)) * 0.4) * force;
+            this.vy[p] += (org.vy * 0.35 + (dy / Math.sqrt(d2)) * 0.4) * force;
+          }
+        }
+      }
+    }
+  }
+
+  // Draw particles to Canvas context using high-performance batched paths
+  draw(ctx, camera) {
+    const w = camera.viewportW;
+    const h = camera.viewportH;
+    const camX = camera.x;
+    const camY = camera.y;
+    const zoom = camera.zoom;
+    const halfW = w * 0.5;
+    const halfH = h * 0.5;
+
+    ctx.save();
+
+    // Pass 1: Background ambient drift particles (soft cyan)
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.22)';
+    ctx.beginPath();
+    for (let i = 0; i < this.count; i++) {
+      if (this.depth[i] >= 0.6) continue;
+      const sx = (this.x[i] - camX) * zoom + halfW;
+      const sy = (this.y[i] - camY) * zoom + halfH;
+      if (sx < -10 || sx > w + 10 || sy < -10 || sy > h + 10) continue;
+      const r = Math.max(0.6, this.size[i] * zoom);
+      ctx.moveTo(sx + r, sy);
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    }
+    ctx.fill();
+
+    // Pass 2: Foreground luminous micro-spores (bright cyan/white)
+    ctx.fillStyle = 'rgba(125, 211, 252, 0.55)';
+    ctx.beginPath();
+    for (let i = 0; i < this.count; i++) {
+      if (this.depth[i] < 0.6) continue;
+      const sx = (this.x[i] - camX) * zoom + halfW;
+      const sy = (this.y[i] - camY) * zoom + halfH;
+      if (sx < -10 || sx > w + 10 || sy < -10 || sy > h + 10) continue;
+      const r = Math.max(0.8, this.size[i] * zoom);
+      ctx.moveTo(sx + r, sy);
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    }
+    ctx.fill();
+
+    ctx.restore();
+  }
+}
