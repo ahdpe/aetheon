@@ -3834,6 +3834,42 @@ body.mode-lab .nursery-button {top:150px;}
 .nursery-release {margin-top:24px;border-top:1px solid #294650;padding-top:6px;}.nursery-world-status .family-metrics {grid-template-columns:repeat(3,1fr);}
 .nursery-world-status>p,.nursery-feedback {font-size:12px;color:#b7d9d8;margin:10px 0;}.nursery-receipts {display:grid;gap:10px;}
 .nursery-receipt {display:grid;gap:5px;padding:15px;background:#102b32;border:1px solid #2a4d52;border-radius:12px;}.nursery-receipt>span,.nursery-receipt>small {font-size:11px;color:#a5c0c8;}.nursery-receipt button {justify-self:start;margin-top:7px;}
+
+/* The map describes the actual shared water, including naturally empty places. */
+.hud-btn-map {border-color:#78d6c066;color:#beefdf;background:#16433e55;}
+.geography-dialog {width:min(1080px,calc(100vw - 28px));max-height:calc(100dvh - 28px);border:1px solid #496d65;line-height:1.6;}
+.geography-dialog>p {font-size:14px;color:#b4cdd0;}
+.geography-layout {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:26px;margin-top:24px;align-items:start;}
+.geography-overview {position:sticky;top:0;min-width:0;}
+.geography-map {display:block;width:100%;height:auto;aspect-ratio:1;border:1px solid #365753;border-radius:50%;cursor:crosshair;}
+.geography-visited {display:flex;justify-content:space-between;gap:12px;margin-top:16px;font-size:12px;color:#98bab7;}
+.geography-visited strong {color:#cff5dc;white-space:nowrap;}
+.geography-places {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;}
+.geography-places button {display:grid;gap:5px;min-width:0;text-align:left;font-size:12px!important;border-left:3px solid var(--habitat-color)!important;}
+.geography-places small {color:#91b1b1;font:10px var(--font-mono);}
+.geography-places [aria-pressed="true"] {background:#173b3d!important;border-color:var(--habitat-color)!important;}
+.geography-detail {min-width:0;}
+.geography-detail h3 {font:24px var(--font-serif);margin:22px 0 8px;}
+.geography-description,.geography-status {font-size:13px;color:#aacac7;}
+.geography-counts {grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:18px 0;}
+.geography-counts div {padding:11px;}
+.geography-conditions {display:grid;gap:7px;font-size:12px;}
+.geography-conditions>div {display:flex;justify-content:space-between;gap:15px;}
+.geography-conditions dt {color:#9bb7b6;}.geography-conditions dd {color:#d4ede7;font-family:var(--font-mono);}
+.geography-chart {width:100%;height:auto;aspect-ratio:800/220;border:1px solid #244443;border-radius:10px;}
+.geography-detail h4 {font-size:13px;margin-top:20px;}
+.geography-actions {display:flex;flex-wrap:wrap;gap:8px;margin-top:15px;}
+@media(max-width:640px){
+ .geography-dialog {padding:18px;}
+ .geography-dialog .family-header h2 {font-size:24px;}
+ .geography-layout {grid-template-columns:minmax(0,1fr);gap:18px;}
+ .geography-overview {position:static;}
+ .geography-map {width:min(100%,270px);margin:auto;}
+ .geography-places {grid-template-columns:repeat(2,minmax(0,1fr));}
+ .geography-counts strong {font-size:23px;}
+ .geography-actions button {width:100%;min-height:44px;}
+}
+@media(max-width:360px){.hud-header .hud-btn{padding:4px;min-width:25px;}.hud-header .hud-right{gap:3px;}.hud-header .brand-title{font-size:11px;}.hud-header .live-text{font-size:8px;}}
 @media(max-width:640px) {
  .nursery-button {top:96px;left:auto;right:10px;font-size:11px;padding:8px 10px;}
  .nursery-layout {grid-template-columns:1fr;gap:16px;}.nursery-experiment {display:contents;}

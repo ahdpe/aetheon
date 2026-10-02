@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { OCEAN_GEOMETRY } from '../public/js/shared/habitats.js';
 
 dotenv.config();
 
@@ -50,7 +51,7 @@ export const CONFIG = {
   WORLD_SIZE: 1400.0, // Continuous virtual coordinates [0, WORLD_SIZE)
   
   // Physical Chamber (Petri dish / droplet with soft surface tension)
-  CHAMBER_RADIUS: 620.0,
+  CHAMBER_RADIUS: OCEAN_GEOMETRY.radius,
   CHAMBER_CENTER_X: 700.0,
   CHAMBER_CENTER_Y: 700.0,
   SURFACE_TENSION_MARGIN: 120.0,

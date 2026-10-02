@@ -2,14 +2,15 @@ import {createOrganismClass} from './organismCore.js';
 import {createChemicalGridClass} from './chemicalCore.js';
 import {createColonyClass} from './colonyCore.js';
 import {SpatialHash} from './spatialHash.js';
-import {designGenome,NURSERY_PRESETS,TRIAL_PHYSICS,HABITAT_RADII} from './nurseryDesign.js';
+import {designGenome,NURSERY_PRESETS,TRIAL_PHYSICS} from './nurseryDesign.js';
+import {habitatReleasePoint} from './habitats.js';
 
 export function createTrial(design,habitat='meadow',sample=[],seed=0xae7e00) {
  let state=seed>>>0;
  const random=()=>{state=(state+0x6D2B79F5)>>>0;let t=state;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296;};
  const O=createOrganismClass(TRIAL_PHYSICS,random),Grid=createChemicalGridClass(TRIAL_PHYSICS,random),Colony=createColonyClass(TRIAL_PHYSICS);
  const grid=new Grid(),hash=new SpatialHash(1400,35),colonies=new Colony();
- const x=700,y=700-(HABITAT_RADII[habitat]??350),founder=new O(x,y,designGenome(design));
+ const {x,y}=habitatReleasePoint(habitat,-Math.PI/2),founder=new O(x,y,designGenome(design));
  founder.trialFamily=true;let orgs=[founder],ticks=0,births=0,peak=1,maxGeneration=1;
  const samples=sample.length?sample:Array.from({length:12},(_,i)=>designGenome(i<9?NURSERY_PRESETS.grazer:i<11?NURSERY_PRESETS.weaver:NURSERY_PRESETS.hunter));
  for(let i=0;i<24;i++){
@@ -25,7 +26,7 @@ export function createTrial(design,habitat='meadow',sample=[],seed=0xae7e00) {
    for(const o of orgs){
     if(dead.has(o.id))continue;
     const radius=(o.carnivory>.35?Math.max(55,o.size*8):Math.max(38,o.size*5))*o.body.senseRadius;
-    hash.query(o.x,o.y,radius,neighbors);o.step(grid,neighbors,[],620,1);
+    hash.query(o.x,o.y,radius,neighbors);o.step(grid,neighbors,[],TRIAL_PHYSICS.CHAMBER_RADIUS,1);
     if(o.isDead()){dead.add(o.id);continue;}
     if(o.carnivory>.35)for(const p of neighbors){if(dead.has(p.id))continue;const strike=o.attemptPredation(p,grid,null);if(strike){if(strike.killed)dead.add(p.id);break;}}
     if(o.canReproduce())parents.push(o);

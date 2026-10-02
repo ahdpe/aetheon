@@ -1,7 +1,8 @@
 import * as THREE from '../lib/three.module.js';
+import { OCEAN_GEOMETRY } from '../shared/habitats.js';
 
 export class DiveEnvironment {
-  constructor(scene, worldSize = 1400, chamberRadius = 620) {
+  constructor(scene, worldSize = 1400, chamberRadius = OCEAN_GEOMETRY.radius) {
     this.scene = scene;
     this.worldSize = worldSize;
     this.chamberRadius = chamberRadius;

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 process.env.SNAPSHOT_FILE=path.join(fs.mkdtempSync(path.join(os.tmpdir(),'aetheon-nursery-')),'world.json');
 process.env.VENICE_API_KEY='';
+// These admission fixtures deliberately start with twenty vacant slots.
+process.env.MAX_ORGANISMS='300';
 const {CONFIG}=await import('../server/config.js');
 const {SimulationEngine}=await import('../server/core/engine.js');
 const {Organism}=await import('../server/core/organism.js');

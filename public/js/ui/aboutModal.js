@@ -535,7 +535,7 @@ export class AboutModal {
             <h3 class="sec-title">Капиллярный мениск и гидростатика капли (Surface Tension Boundary)</h3>
           </div>
           <p>
-            Биокамера представляет собой круговой микрообъем радиусом R<sub>chamber</sub> = 620 мкм с центром в (700, 700) мкм. 
+            Биокамера представляет собой круговой микрообъем радиусом R<sub>chamber</sub> = 680 мкм с центром в (700, 700) мкм.
             Край капли формирует мягкое капиллярное поверхностное натяжение мениска с шириной переходного слоя δ<sub>m</sub> = 120 мкм.
           </p>
           <div class="formula-box">
@@ -910,7 +910,7 @@ export class AboutModal {
             <h3 class="sec-title">Capillary Surface Tension Meniscus</h3>
           </div>
           <p>
-            The chamber is an organic circular droplet of radius R = 620 μm centered at (700, 700) μm. 
+            The chamber is an organic circular droplet of radius R = 680 μm centered at (700, 700) μm.
             The edge simulates viscoelastic surface tension with boundary margin δ<sub>m</sub> = 120 μm:
           </p>
           <div class="formula-box">

@@ -13,6 +13,7 @@ import { CataclysmManager } from './cataclysmManager.js';
 import { AlgaeManager } from './algaeManager.js';
 import { FamilyHistory } from './familyHistory.js';
 import { Nursery } from './nursery.js';
+import { Geography } from './geography.js';
 
 export class SimulationEngine {
   constructor() {
@@ -33,6 +34,7 @@ export class SimulationEngine {
     this.atlas = new AtlasManager(this);
     this.cataclysms = new CataclysmManager(this);
     this.algae = new AlgaeManager();
+    this.geography = new Geography(this.grid);
     
     // Active visitor-created nutrient blooms
     this.nutrientBlooms = [];
@@ -68,6 +70,7 @@ export class SimulationEngine {
     }
     this.ecologyEpoch ??= { version:1, startedAtTick:this.ticks, startedAt:Date.now(), initializedAnatomy:false };
     this.history.synchronize(this.organisms, this.ticks, { initial: true });
+    this.geography.init(this);
     if (this.atlas) {
       this.atlas.init();
     }
@@ -331,6 +334,7 @@ export class SimulationEngine {
 
     // Introductions use a real vacant slot after ordinary life and reproduction.
     this.nursery.process(this);
+    this.geography.step(this);
 
     // 9. Periodic persistence autosave (every 10 mins)
     if (this.ticks % (CONFIG.TICK_RATE_HZ * 60 * 10) === 0) {
@@ -571,6 +575,7 @@ export class SimulationEngine {
       pilots: this.getPilotedIds(),
       vents: (this.ticks % 20 === 0 && this.grid.getVentsState) ? this.grid.getVentsState() : undefined,
       ecology: this.ticks%20===0 ? {epoch:this.ecologyEpoch,plants:this.algae.isles.length,floraBirths:this.algae.totals.births,floraDeaths:this.algae.totals.deaths,biomass:Math.round(this.algae.isles.reduce((sum,p)=>sum+p.biomass,0))}:undefined,
+      geography: this.ticks%20===0 ? this.geography.broadcast():undefined,
       algae: (this.ticks % 20 === 0 && this.algae) ? this.algae.getBroadcastState() : undefined,
       cataclysm: this.cataclysms ? this.cataclysms.getBroadcastState() : undefined,
       lazarus: this.cataclysms ? this.cataclysms.getLazarusIds() : undefined

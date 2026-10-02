@@ -1,11 +1,11 @@
 import {i18n} from '../i18n.js';
 import {escapeHtml} from './safeHtml.js';
 import {developBody} from '../shared/anatomy.js';
-import {NURSERY_PRESETS,DESIGN_WEIGHTS,DESIGN_BUDGET,designCost,designGenome,validateDesign} from '../shared/nurseryDesign.js';
+import {NURSERY_PRESETS,DESIGN_WEIGHTS,DESIGN_BUDGET,designCost,designGenome,validateDesign,HABITAT_RADII} from '../shared/nurseryDesign.js';
 const COPY={
  en:{button:'Create life',title:'Give a new body a chance',intro:'Build a cell, try it in a small ocean, then introduce one founder into the shared world. Its descendants will inherit mutations and compete for food.',
   grazer:'Grazer',weaver:'Weaver',hunter:'Hunter',name:'Family name',body:'Shape & senses',strategy:'Way of life',size:'Size',speed:'Speed',elongation:'Elongation',shell:'Shell',flagella:'Flagella',sensing:'Sensing',adhesion:'Bonding',diet:'Hunting',hue:'Colour',
-  budget:'Body budget',price:'Large, fast, armoured and sensitive bodies cannot all be maximised. Their actual energy costs continue after release.',basin:'Inner basin',meadow:'Meadow ring',shoal:'Shallow rim',habitat:'Starting habitat',
+  budget:'Body budget',price:'Large, fast, armoured and sensitive bodies cannot all be maximised. Their actual energy costs continue after release.',basin:'Inner basin',meadow:'Meadow ring',shoal:'Shallow rim',shadow:'Twilight backwater',frontier:'Outer frontier',habitat:'Starting habitat',
   trial:'Try this body',running:'Testing',ready:'Preview',minutes:'model seconds',living:'Living family members',births:'Births',generation:'Latest generation',energy:'Average energy',trialNote:'A three minute browser trial: the real cell, chemical, bite, division and colony rules, with 24 neighbours (genes from the living ocean while connected, reference bodies otherwise), and up to 64 cells. Fresh chemistry; no plants, detritus, visitor feeding or climate crises. This is a comparison, not a survival forecast.',
   notTried:'Try this design before deciding to release it.',changed:'Body changed. Run a new trial.',trialFailed:'This browser could not run the trial. Try again.',survived:'This family remains alive at the end of the trial.',extinctTrial:'This family died out during the trial. Try another combination, or release it knowing the risk.',
   release:'Release one founder',sending:'Submitting your founder…',policy:'Release changes the same ocean everyone visits. The family name becomes public. The founder gets the usual 60 energy, no protection and no guaranteed offspring. Descendants can form living colonies when their bonding traits permit it.',
@@ -14,7 +14,7 @@ const COPY={
   errors:{invalid:'Use a valid name and a body within the budget.',cookie:'Allow this site to store its visitor identifier, then reload to release a founder.',daily:'Today’s world allowance has been used.',visitor:'Your daily allowance has been used.',address:'This network’s daily allowance has been used.',pending:'You already have a founder waiting.',queue:'The queue is full. Try again later.',save:'The ocean could not safely save the request. Nothing was admitted.'}},
  ru:{button:'Создать жизнь',title:'Дайте новому телу шанс',intro:'Соберите клетку, испытайте её в маленьком океане и выпустите одного основателя в общий мир. Его потомки будут наследовать мутации и конкурировать за пищу.',
   grazer:'Пастбищник',weaver:'Ткач',hunter:'Охотник',name:'Имя семьи',body:'Форма и восприятие',strategy:'Образ жизни',size:'Размер',speed:'Скорость',elongation:'Вытянутость',shell:'Оболочка',flagella:'Жгутики',sensing:'Чувствительность',adhesion:'Связи',diet:'Охота',hue:'Цвет',
-  budget:'Бюджет тела',price:'Размер, скорость, защиту и чувствительность нельзя одновременно довести до максимума. После выпуска их содержание продолжает требовать энергии.',basin:'Внутренняя котловина',meadow:'Кольцо лугов',shoal:'Мелководный край',habitat:'Место выпуска',
+  budget:'Бюджет тела',price:'Размер, скорость, защиту и чувствительность нельзя одновременно довести до максимума. После выпуска их содержание продолжает требовать энергии.',basin:'Внутренняя котловина',meadow:'Кольцо лугов',shoal:'Мелководный край',shadow:'Сумеречная заводь',frontier:'Внешняя отмель',habitat:'Место выпуска',
   trial:'Испытать тело',running:'Испытание',ready:'Предпросмотр',minutes:'секунд модели',living:'Живых в семье',births:'Рождений',generation:'Последнее поколение',energy:'Средняя энергия',trialNote:'Три минуты модели в браузере: настоящие правила клеток, химии, укусов, деления и колоний, с 24 соседями (гены из живого океана при подключении, учебные тела без него), до 64 клеток. Химия начинается заново; растений, детрита, подкормки и климатических кризисов нет. Это сравнение, а не прогноз выживания.',
   notTried:'Испытайте это тело перед решением о выпуске.',changed:'Тело изменилось. Нужно новое испытание.',trialFailed:'Браузер не смог выполнить испытание. Попробуйте ещё раз.',survived:'К концу испытания семья продолжает жить.',extinctTrial:'Семья вымерла в испытании. Попробуйте другое сочетание или выпустите её, понимая риск.',
   release:'Выпустить основателя',sending:'Отправляем основателя…',policy:'Выпуск меняет общий океан для всех посетителей. Имя семьи станет публичным. Основатель получает обычные 60 энергии, без защиты и гарантированного потомства. Потомки могут образовывать живые колонии, если позволяют признаки связей.',
@@ -26,7 +26,7 @@ const validName=s=>/^[\p{L}\p{N}\p{M} ._'’-]{1,24}$/u.test(s.trim());
 export class NurseryPanel {
  constructor(app){
   this.app=app;this.design={...NURSERY_PRESETS.grazer};this.name='Lumen';this.habitat='meadow';this.status=null;this.result=null;this.trialKey=null;this.pending=null;
-  try{const d=JSON.parse(localStorage.getItem('aetheon_nursery_design'));if(d&&validateDesign(d.design)){this.design=d.design;this.name=typeof d.name==='string'?d.name.slice(0,24):'Lumen';this.habitat=['basin','meadow','shoal'].includes(d.habitat)?d.habitat:'meadow';}
+  try{const d=JSON.parse(localStorage.getItem('aetheon_nursery_design'));if(d&&validateDesign(d.design)){this.design=d.design;this.name=typeof d.name==='string'?d.name.slice(0,24):'Lumen';this.habitat=Object.hasOwn(HABITAT_RADII,d.habitat)?d.habitat:'meadow';}
    this.pending=JSON.parse(localStorage.getItem('aetheon_nursery_request'));}catch{}
   this.button=document.createElement('button');this.button.className='nursery-button';app.ecologyPanel.button.after(this.button);
   this.dialog=document.createElement('dialog');this.dialog.className='family-dialog nursery-dialog';this.dialog.setAttribute('aria-labelledby','nursery-title');document.body.append(this.dialog);
@@ -61,7 +61,7 @@ export class NurseryPanel {
    <div class="nursery-layout"><div class="nursery-editor"><div class="nursery-presets">${Object.keys(NURSERY_PRESETS).map(k=>`<button data-nursery="preset" data-preset="${k}">${t[k]}</button>`).join('')}</div>
    <label class="nursery-name">${t.name}<input name="familyName" maxlength="24" value="${escapeHtml(this.name)}" autocomplete="off"></label>
    <h3>${t.body}</h3>${sliders(['elongation','shell','flagella','sensing'])}<h3>${t.strategy}</h3>${sliders(['size','speed','diet','adhesion','hue'])}
-   <label class="nursery-name">${t.habitat}<select name="habitat">${['basin','meadow','shoal'].map(k=>`<option value="${k}" ${this.habitat===k?'selected':''}>${t[k]}</option>`).join('')}</select></label></div>
+   <label class="nursery-name">${t.habitat}<select name="habitat">${Object.keys(HABITAT_RADII).map(k=>`<option value="${k}" ${this.habitat===k?'selected':''}>${t[k]}</option>`).join('')}</select></label></div>
    <div class="nursery-experiment"><canvas class="nursery-canvas" width="800" height="400" aria-label="${t.ready}"></canvas><div class="nursery-budget"><span>${t.budget}</span><strong data-budget></strong><meter min="0" max="${DESIGN_BUDGET}" value="0"></meter><small>${t.price}</small></div>
    <button class="observer-primary" data-nursery="trial">${t.trial}</button><progress class="nursery-progress" max="1800" value="0" hidden></progress><p class="nursery-outcome" role="status" aria-live="polite"></p><div class="nursery-trial-metrics family-metrics"></div><p class="family-note">${t.trialNote}</p></div></div>
    <section class="nursery-release"><h3>${t.release}</h3><p>${t.policy}</p><div class="nursery-world-status"></div><button class="observer-primary" data-nursery="release">${t.release} →</button><p class="nursery-feedback" role="status"></p><p class="family-note">${t.limits}</p><h3>${t.receipt}</h3><div class="nursery-receipts"></div></section>`;
@@ -138,8 +138,8 @@ export class NurseryPanel {
   ctx.clearRect(0,0,w,h);const bg=ctx.createRadialGradient(w/2,h/2,5,w/2,h/2,430);bg.addColorStop(0,'#103c46');bg.addColorStop(1,'#020f1a');ctx.fillStyle=bg;ctx.fillRect(0,0,w,h);
   if(this.result?.cells){
    ctx.strokeStyle='#557b88';ctx.beginPath();ctx.arc(400,200,177,0,Math.PI*2);ctx.stroke();
-   for(const v of this.result.vents){ctx.fillStyle='#f3cf8455';ctx.beginPath();ctx.arc(400+(v.x-700)*.28,200+(v.y-700)*.28,7,0,Math.PI*2);ctx.fill();}
-   for(const c of this.result.cells){const x=400+(c.x-700)*.28,y=200+(c.y-700)*.28;
+   for(const v of this.result.vents){ctx.fillStyle='#f3cf8455';ctx.beginPath();ctx.arc(400+(v.x-700)*.26,200+(v.y-700)*.26,7,0,Math.PI*2);ctx.fill();}
+   for(const c of this.result.cells){const x=400+(c.x-700)*.26,y=200+(c.y-700)*.26;
     this.app.renderer.drawOrganism(ctx,x,y,Math.max(c.own?6:3,c.size*.7),c,c.heading,c.own,time,c.own);
    }
   }else{

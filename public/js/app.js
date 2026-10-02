@@ -9,6 +9,7 @@ import { InputController } from './ui/controls.js';
 import { EcologyPanel } from './ui/ecologyPanel.js';
 import { Observatory } from './ui/observatory.js';
 import { NurseryPanel } from './ui/nurseryPanel.js';
+import { GeographyPanel } from './ui/geographyPanel.js';
 
 class AetheonApp {
   constructor() {
@@ -35,6 +36,7 @@ class AetheonApp {
     this.observatory = new Observatory(this);
     this.ecologyPanel = new EcologyPanel(this);
     this.nurseryPanel = new NurseryPanel(this);
+    this.geographyPanel = new GeographyPanel(this);
     this.init();
   }
 
@@ -192,6 +194,7 @@ class AetheonApp {
 
     this.socket.onclose = () => {
       this.isConnected = false;
+      if(this.geographyPanel.dialog.open)this.geographyPanel.render();
       this.observatory.toast(this.observatory.t('offline'));
       console.warn('[Aetheon] Disconnected. Reconnecting in 2s...');
       setTimeout(() => this.connectWebSocket(), 2000);
@@ -205,6 +208,7 @@ class AetheonApp {
   handleMessage(msg) {
     if(msg.type==='nursery_status'||msg.type==='nursery_result') {this.nurseryPanel.onMessage(msg);return;}
     if(msg.ecology) this.ecologyPanel.update(msg.ecology);
+    if(msg.geography) this.geographyPanel.update(msg.geography);
     if (msg.type === 'init') {
       this.observatory.init(msg.worldCreatedAt);
       if (msg.worldSize) {

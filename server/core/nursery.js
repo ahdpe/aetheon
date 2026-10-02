@@ -1,8 +1,8 @@
 import {randomBytes,createHash} from 'node:crypto';
-import {CONFIG} from '../config.js';
 import {Organism} from './organism.js';
 import {random,getRandomState,setRandomState} from './random.js';
 import {validateDesign,designGenome,HABITAT_RADII,DESIGN_BUDGET} from '../../public/js/shared/nurseryDesign.js';
+import {habitatReleasePoint} from '../../public/js/shared/habitats.js';
 
 export const NURSERY_LIMITS={daily:12,visitorDaily:2,addressDaily:6,pending:4,intervalMs:15*60*1000,expiryMs:6*60*60*1000};
 const day=now=>new Date(now).toISOString().slice(0,10);
@@ -70,8 +70,8 @@ export class Nursery {
   if(!engine.persistence.saveSnapshot(engine)){this.retryAfter=now+30000;return;}
   const state=this.toJSON(),rng=getRandomState(),nextId=Organism.getNextId(),nextSpeciesId=engine.lineage.nextSpeciesId;
   const history=structuredClone(engine.history.toJSON()),catalog=structuredClone(engine.lineage.getCatalogSpecies());
-  const angle=random()*Math.PI*2,radius=HABITAT_RADII[record.habitat];
-  const org=new Organism(CONFIG.CHAMBER_CENTER_X+Math.cos(angle)*radius,CONFIG.CHAMBER_CENTER_Y+Math.sin(angle)*radius,record.genome);
+  const point=habitatReleasePoint(record.habitat,random()*Math.PI*2);
+  const org=new Organism(point.x,point.y,record.genome);
   org.speciesId=engine.lineage.evaluateSpeciation(org.genome,1);org.nurseryName=record.name;
   org.introducedAtTick=engine.ticks;engine.organisms.push(org);
   engine.history.addRoot(org,engine.ticks,'nursery');

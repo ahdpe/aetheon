@@ -1,5 +1,7 @@
 import { ParticleSystem } from './particles.js';
 import { getSpeciesMorphology, drawCellMembranePath, drawCellMarkings, drawFlagellum, drawAntennae } from './morphology.js';
+import { OCEAN_GEOMETRY } from '../shared/habitats.js';
+import { makeHabitatCanvas } from '../ui/geographyPanel.js';
 
 export class OceanRenderer {
   constructor(canvas) {
@@ -8,7 +10,8 @@ export class OceanRenderer {
     
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.worldSize = 1400.0;
-    this.chamber = { cx: 700.0, cy: 700.0, r: 620.0 };
+    this.chamber = { cx: 700.0, cy: 700.0, r: OCEAN_GEOMETRY.radius };
+    this.habitatCanvas=makeHabitatCanvas();
     
     // Camera centered on chamber
     this.camera = {
@@ -292,6 +295,9 @@ export class OceanRenderer {
     fluidGrad.addColorStop(1.0, '#010c18');
     ctx.fillStyle = fluidGrad;
     ctx.fillRect(chScreenX - chScreenR, chScreenY - chScreenR, chScreenR * 2, chScreenR * 2);
+    ctx.globalAlpha=0.15;
+    ctx.drawImage(this.habitatCanvas,toScreenX(0),toScreenY(0),this.worldSize*camZoom,this.worldSize*camZoom);
+    ctx.globalAlpha=1;
 
     // 3.2. Continuous living chemical substrate & reef matrix
     ctx.imageSmoothingEnabled = true;
@@ -1537,6 +1543,9 @@ export class OceanRenderer {
       fluidGrad.addColorStop(1.0, '#010c18');
       sCtx.fillStyle = fluidGrad;
       sCtx.fillRect(center - destR, center - destR, destR * 2, destR * 2);
+      sCtx.globalAlpha=0.15;
+      sCtx.drawImage(this.habitatCanvas,toSnapX(0),toSnapY(0),this.worldSize*scale,this.worldSize*scale);
+      sCtx.globalAlpha=1;
 
       // 2.2. Living chemical substrate & reef matrix
       if (this.thumbCanvas) {

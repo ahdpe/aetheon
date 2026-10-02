@@ -89,7 +89,7 @@ export class AlgaeManager {
       p.lastSpore=ticks;
       const a=random()*Math.PI*2, dist=75+random()*100*(0.5+p.genome.height);
       const env=sampleHabitat(p.x,p.y),x=p.x+Math.cos(a)*dist+env.currentX*150,y=p.y+Math.sin(a)*dist+env.currentY*150;
-      if(Math.hypot(x-700,y-700)>570 || this.isles.some(o=>Math.hypot(x-o.x,y-o.y)<(p.baseRadius+o.baseRadius)*0.7)) continue;
+      if(Math.hypot(x-CONFIG.CHAMBER_CENTER_X,y-CONFIG.CHAMBER_CENTER_Y)>CONFIG.CHAMBER_RADIUS-50 || this.isles.some(o=>Math.hypot(x-o.x,y-o.y)<(p.baseRadius+o.baseRadius)*0.7)) continue;
       const genome=Object.fromEntries(Object.entries(p.genome).map(([k,v])=>[k,clamp(v+(random()-0.5)*0.16)]));
       const biomass=p.biomass*0.18;p.biomass-=biomass;
       const child=this.makePlant({id:this.nextId++,x,y,genome,baseRadius:Math.max(25,Math.min(65,p.baseRadius+(random()-0.5)*4)),

@@ -5,6 +5,7 @@ import { DiveFoodManager } from './diveFoodManager.js';
 import { DiveCockpitHUD } from './diveCockpitHUD.js';
 import { DiveAudio } from './diveAudio.js';
 import { sound } from '../audio/sound.js';
+import { OCEAN_GEOMETRY } from '../shared/habitats.js';
 
 export class DiveEngine {
   constructor(app) {
@@ -67,7 +68,7 @@ export class DiveEngine {
 
     // Initialize subsystems
     const vents = this.app.renderer ? this.app.renderer.vents : [];
-    this.environment = new DiveEnvironment(this.scene, 1400, 620);
+    this.environment = new DiveEnvironment(this.scene, this.app.renderer.worldSize, OCEAN_GEOMETRY.radius);
     this.environment.build(vents);
 
     this.creatures = new DiveCreatureManager(this.scene);

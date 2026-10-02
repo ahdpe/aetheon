@@ -153,7 +153,7 @@ export class BioInspector {
     this.lastProfile = profile;
     const isRu = i18n.getLang() === 'ru';
     const labels=isRu?{elongation:'Вытянутость',shell:'Оболочка',flagella:'Жгутики',sensing:'Чувствительность'}:{elongation:'Elongation',shell:'Shell',flagella:'Flagella',sensing:'Sensing'};
-    const habitats=isRu?{basin:'Внутренняя котловина',meadow:'Кольцо лугов',shoal:'Мелководный край'}:{basin:'Inner basin',meadow:'Meadow ring',shoal:'Shallow rim'};
+    const habitats=isRu?{basin:'Внутренняя котловина',meadow:'Кольцо лугов',shoal:'Мелководный край',shadow:'Сумеречная заводь',frontier:'Внешняя отмель'}:{basin:'Inner basin',meadow:'Meadow ring',shoal:'Shallow rim',shadow:'Twilight backwater',frontier:'Outer frontier'};
     this.anatomyPanel.innerHTML=profile.anatomy?`<strong>${isRu?'Наследуемое тело':'Inherited body'}</strong><div>${Object.entries(labels).map(([k,label])=>`<span>${label}<b>${Math.round(profile.anatomy[k]*100)}%</b></span>`).join('')}</div><small>${habitats[profile.habitat]??''} · ${isRu?'развитие тела требует энергии':'body development costs energy'}</small>`:'';
 
     const badgeDot = document.getElementById('bio-badge-dot');
