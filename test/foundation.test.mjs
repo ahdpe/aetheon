@@ -270,3 +270,33 @@ test('decision calls retain conservative reservations even when per-question usa
   await b.request('decision','https://venice.invalid/decisions',{model:'writer',questions:{one:{},two:{}}});
   assert.equal(b.load().spent,15360);
 });
+
+test('historical aliases are retained in an immutable archive instead of each live checkpoint', () => {
+  const e=new SimulationEngine(),p=new PersistenceManager(path.join(dir,'compact.json'));
+  const original=e.lineage.getSpecies(1);
+  for(let i=0;i<5000;i++) {
+    const sp=e.lineage.createSpecies({...original,nameEn:`Archived ${i}`});sp.canonicalId=original.id;
+  }
+  e.lineage.rebuildIndex();
+  const allCount=e.lineage.getAllSpecies().length,fullSpecies=e.lineage.getAllSpecies();
+  assert.equal(p.saveSnapshot(e),true);
+  const saved=JSON.parse(fs.readFileSync(p.filePath)),archive=path.join(dir,saved.morphologyArchive.name);
+  assert.equal(saved.formatVersion,3);assert.equal(saved.morphologyArchive.count,5000);
+  const fullBytes=Buffer.byteLength(JSON.stringify({...saved,speciesList:fullSpecies}));
+  assert.ok(fs.statSync(p.filePath).size<fullBytes*.65);
+  const originalArchive=fs.readFileSync(archive),mtime=fs.statSync(archive).mtimeMs;
+  assert.equal(p.saveSnapshot(e),true);assert.equal(fs.statSync(archive).mtimeMs,mtime);
+  assert.deepEqual(fs.readFileSync(archive),originalArchive);
+  const ids=e.organisms.map(o=>o.id),rng=getRandomState();
+  assert.equal(p.loadSnapshot(e),true);
+  assert.equal(e.lineage.getAllSpecies().length,allCount);assert.equal(e.lineage.getCatalogSpecies().length,saved.speciesList.length);
+  assert.deepEqual(e.organisms.map(o=>o.id),ids);assert.equal(getRandomState(),rng);
+  e.lineage.updatePopulations(e.organisms);assert.equal(p.saveSnapshot(e),true);
+});
+
+test('corruption of a referenced archive refuses replacement of the historical world', () => {
+  const p=new PersistenceManager(path.join(dir,'compact.json')),e=new SimulationEngine();
+  const saved=JSON.parse(fs.readFileSync(p.filePath)),archive=path.join(dir,saved.morphologyArchive.name);
+  fs.writeFileSync(archive,'{corrupt');
+  assert.throws(()=>p.loadSnapshot(e),/No valid world snapshot/);
+});

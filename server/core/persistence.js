@@ -13,16 +13,51 @@ export class PersistenceManager {
     this.filePath = filePath;
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
   }
+  readArchive(ref) {
+    if (!ref || !/^legacy-morphology-[a-f0-9]{64}\.json$/.test(ref.name) || ref.name !== `legacy-morphology-${ref.sha256}.json` || !Number.isSafeInteger(ref.count) || ref.count < 1) throw new Error('Invalid morphology archive reference');
+    const file = path.join(path.dirname(this.filePath), ref.name), stat = fs.statSync(file);
+    const signature = [stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(':');
+    if (this.archiveCache?.name === ref.name && this.archiveCache.signature === signature) {
+      if (this.archiveCache.records.length !== ref.count) throw new Error('Invalid morphology archive count');
+      return this.archiveCache.records;
+    }
+    const raw = fs.readFileSync(file);
+    if (createHash('sha256').update(raw).digest('hex') !== ref.sha256) throw new Error('Morphology archive checksum mismatch');
+    const records = JSON.parse(raw);
+    if (!Array.isArray(records) || records.length !== ref.count || records.some(s => !Number.isSafeInteger(s.id) || !Number.isSafeInteger(s.canonicalId) || s.id === s.canonicalId)) throw new Error('Invalid morphology archive records');
+    for (const sp of records) Object.freeze(sp);
+    this.archiveCache = { name: ref.name, signature, records };
+    return records;
+  }
+  archiveFor(engine) {
+    if (this.archiveReference) { this.readArchive(this.archiveReference); return this.archiveReference; }
+    const records = engine.lineage.getAllSpecies().filter(s => s.canonicalId && s.canonicalId !== s.id);
+    if (!records.length) return undefined;
+    const raw = JSON.stringify(records), sha256 = createHash('sha256').update(raw).digest('hex');
+    const ref = { name: `legacy-morphology-${sha256}.json`, sha256, count: records.length };
+    const file = path.join(path.dirname(this.filePath), ref.name);
+    if (!fs.existsSync(file)) {
+      const fd = fs.openSync(`${file}.tmp`, 'w', 0o600);
+      try { fs.writeFileSync(fd, raw); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+      fs.renameSync(`${file}.tmp`, file);
+    }
+    this.readArchive(ref); this.archiveReference = ref;
+    return ref;
+  }
   read(file) {
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-    if (data.formatVersion !== undefined && data.formatVersion !== 2) throw new Error('Unsupported snapshot version');
-    if (data.formatVersion === 2 && typeof data.checksum !== 'string') throw new Error('Missing snapshot checksum');
+    if (data.formatVersion !== undefined && ![2,3].includes(data.formatVersion)) throw new Error('Unsupported snapshot version');
+    if (data.formatVersion >= 2 && typeof data.checksum !== 'string') throw new Error('Missing snapshot checksum');
     if (data.checksum) {
       const { checksum: expected, ...payload } = data;
       if (checksum(payload) !== expected) throw new Error('Snapshot checksum mismatch');
     }
     if (!Array.isArray(data.organisms) || !Array.isArray(data.speciesList) || !Number.isSafeInteger(data.ticks) || data.ticks < 0 || !Number.isFinite(data.genesisTime)) throw new Error('Invalid snapshot');
-    if (data.formatVersion === 2 && (!Number.isSafeInteger(data.rngState) || data.rngState < 0 || data.rngState > 0xffffffff)) throw new Error('Invalid random state');
+    if (data.formatVersion >= 2 && (!Number.isSafeInteger(data.rngState) || data.rngState < 0 || data.rngState > 0xffffffff)) throw new Error('Invalid random state');
+    if (data.morphologyArchive) {
+      if (data.formatVersion !== 3) throw new Error('Unsupported morphology archive format');
+      this.readArchive(data.morphologyArchive);
+    }
     const ids = new Set();
     for (const o of data.organisms) {
       if (![o.x, o.y, o.energy, o.age, o.genome?.size, o.genome?.carnivory].every(Number.isFinite)) throw new Error('Invalid organism');
@@ -34,15 +69,17 @@ export class PersistenceManager {
     return data;
   }
   saveSnapshot(engine) {
+    const started = performance.now();
     try {
+      const morphologyArchive = this.archiveFor(engine);
       const data = {
-        formatVersion: 2, savedAt: Date.now(), genesisTime: engine.genesisTime, ticks: engine.ticks,
+        formatVersion: 3, savedAt: Date.now(), genesisTime: engine.genesisTime, ticks: engine.ticks,
         rngState: getRandomState(), nextOrganismId: Organism.getNextId(),
         organisms: engine.organisms.map(o => {
           const { playerSteer, isPiloted, ...state } = o;
           return state;
         }),
-        speciesList: engine.lineage.getAllSpecies(), nextSpeciesId: engine.lineage.nextSpeciesId,
+        speciesList: engine.lineage.getCatalogSpecies(), morphologyArchive, nextSpeciesId: engine.lineage.nextSpeciesId,
         dynasties: engine.getSerializableDynasties?.() ?? [],
         currentEpoch: engine.naturalist.currentEpoch, epochNameEn: engine.naturalist.epochNameEn, epochNameRu: engine.naturalist.epochNameRu,
         journalEntries: engine.naturalist.journalEntries,
@@ -64,6 +101,8 @@ export class PersistenceManager {
       fs.renameSync(temp, this.filePath);
       const dir = fs.openSync(path.dirname(this.filePath), 'r');
       try { fs.fsyncSync(dir); } finally { fs.closeSync(dir); }
+      this.lastSaveMs = performance.now() - started;
+      this.lastSnapshotBytes = fs.statSync(this.filePath).size;
       return true;
     } catch (err) { console.error('[Persistence] Save failed:', err.message); return false; }
   }
@@ -76,6 +115,8 @@ export class PersistenceManager {
       catch (err) { data = null; console.error('[Persistence] Rejected snapshot:', file, err.message); }
     }
     if (!data) throw new Error('No valid world snapshot; refusing to replace the existing world with Genesis');
+    this.archiveReference = data.morphologyArchive;
+    const speciesList = [...data.speciesList, ...(data.morphologyArchive ? this.readArchive(data.morphologyArchive) : [])];
     const identityRecovery = !data.formatVersion ? this.recoverLegacyIds(data) : null;
     engine.migrationState = data.migrationState ?? identityRecovery;
     engine.legacyColonyArchive = data.legacyColonyArchive ?? (identityRecovery?.identitiesReassigned ? data.colonyData : undefined);
@@ -88,12 +129,12 @@ export class PersistenceManager {
     if (!data.formatVersion) for (const entry of engine.naturalist.journalEntries) entry.legacyUnverified = true;
     Object.assign(engine.naturalist, data.observationState ?? {});
     engine.lineage.speciesMap.clear();
-    for (const sp of data.speciesList) {
+    for (const sp of speciesList) {
       if (!data.formatVersion) { sp.legacyCensusCount = sp.totalCount; sp.totalCount = 0; sp.countingSince = Date.now(); }
       engine.lineage.speciesMap.set(sp.id, sp);
     }
     engine.lineage.rebuildIndex(!data.formatVersion);
-    engine.lineage.nextSpeciesId = data.speciesList.reduce((max, s) => Math.max(max, s.id + 1), data.nextSpeciesId ?? 1);
+    engine.lineage.nextSpeciesId = speciesList.reduce((max, s) => Math.max(max, s.id + 1), data.nextSpeciesId ?? 1);
     engine.organisms = data.organisms.map(saved => {
       const canonical = engine.lineage.getSpecies(saved.speciesId)?.canonicalId;
       if (!data.formatVersion && canonical && canonical !== saved.speciesId) {

@@ -136,15 +136,16 @@ export class LineageManager {
   }
 
   updatePopulations(organisms) {
+    const catalog = this.getCatalogSpecies();
     // Reset live population counts
-    for (const species of this.speciesMap.values()) {
+    for (const species of catalog) {
       species.population = 0;
     }
 
     // Count live organisms per species
     for (let i = 0; i < organisms.length; i++) {
       const sp = this.speciesMap.get(organisms[i].speciesId);
-      if (sp) {
+      if (sp && (!sp.canonicalId || sp.canonicalId === sp.id)) {
         sp.population++;
 
         if (sp.population > sp.peakPopulation) {
@@ -153,12 +154,12 @@ export class LineageManager {
       }
     }
 
-    for (const sp of this.speciesMap.values()) {
+    for (const sp of catalog) {
       if (sp.population > 0) sp.extinctTime = null;
     }
     // Mark extinctions
     const now = Date.now();
-    for (const species of this.speciesMap.values()) {
+    for (const species of catalog) {
       if (species.population === 0 && !species.extinctTime && species.peakPopulation > 0) {
         species.extinctTime = now;
       }
@@ -171,7 +172,7 @@ export class LineageManager {
     for (const sp of this.speciesMap.values()) {
       if (!legacy && sp.canonicalId && sp.canonicalId !== sp.id) continue;
       const key = this.prototypeKey(sp), existing = this.prototypeIndex.get(key);
-      if (legacy && existing) sp.canonicalId = existing.id;
+      if (legacy && existing) { sp.canonicalId = existing.id; sp.legacyLastPopulation = sp.population; sp.population = 0; }
       else this.prototypeIndex.set(key, sp);
     }
   }
@@ -179,7 +180,7 @@ export class LineageManager {
 
   recordBirth(id) {
     const sp = this.speciesMap.get(id);
-    if (sp) sp.totalCount++;
+    if (sp && (!sp.canonicalId || sp.canonicalId === sp.id)) sp.totalCount++;
   }
 
   getSpecies(id) {
@@ -192,7 +193,7 @@ export class LineageManager {
 
   setFounderName(speciesId, founderName) {
     const sp = this.speciesMap.get(Number(speciesId));
-    if (sp) {
+    if (sp && (!sp.canonicalId || sp.canonicalId === sp.id)) {
       sp.founderName = String(founderName).trim().slice(0, 32);
       return sp;
     }
