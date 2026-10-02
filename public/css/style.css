@@ -3801,6 +3801,25 @@ body.mode-lab .ocean-welcome { top:154px; }
 .cell-follow-bar[hidden] {display:none;}
 .cell-follow-bar span {flex:1;min-width:0;white-space:pre-line;line-height:1.5;color:#b9f5d5;}
 .cell-follow-bar button {min-height:40px;border:1px solid #3c6965;border-radius:8px;padding:6px 10px;background:#12362b;color:#d2f1e7;cursor:pointer;}
+.observation-panel {position:absolute;right:16px;top:72px;z-index:15;width:260px;border-radius:16px;padding:12px 14px;background:rgba(4,21,30,.88);}
+.observation-switch {display:flex;align-items:center;gap:5px;}
+.observation-switch>span {flex:1;font:10px var(--font-mono);text-transform:uppercase;letter-spacing:.1em;color:#8bb5b7;}
+.observation-switch button {min-height:38px;padding:7px 10px;border:1px solid #315c61;border-radius:10px;color:#bdced0;background:#0a252e;font:12px var(--font-sans);cursor:pointer;}
+.observation-switch button[aria-pressed="true"] {background:#174a48;border-color:#65b2a8;color:#e1fff4;}
+.observation-switch button:focus-visible {outline:2px solid #a3f4e1;outline-offset:2px;}
+.observation-hint {font-size:10px;line-height:1.6;color:#91acb5;margin:8px 0 3px;}
+.observation-count {font:10px var(--font-mono);color:#a2d2c5;margin:0;}
+body:has(#dive-canvas:not(.hidden)) .observation-panel {display:none;}
+body:has(#bio-inspector:not(.hidden)) .observation-panel {display:none;}
+body.mode-lab .observation-panel {top:110px;}
+@media(max-width:640px) {
+ .observation-panel,body.mode-lab .observation-panel {top:auto;right:10px;bottom:calc(var(--safe-bottom) + 78px);width:220px;padding:8px 10px;border-radius:13px;}
+ .observation-switch>span {font-size:9px;letter-spacing:0;}
+ .observation-switch button {font-size:11px;min-height:40px;padding:6px 8px;}
+ .observation-hint {display:none;}
+ .observation-count {margin-top:4px;font-size:9px;}
+ body:has(.cell-follow-bar:not([hidden])) .observation-panel {bottom:calc(var(--safe-bottom) + 155px);}
+}
 @media(max-width:600px) {.ecology-button{top:142px;left:12px;font-size:11px;}.ecology-habitats{grid-template-columns:1fr;}.ecology-traits{gap:8px;}.ecology-traits>div{padding:10px;}}
 
 .ecology-button {top:112px;}

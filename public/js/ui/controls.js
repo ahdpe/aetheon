@@ -279,6 +279,11 @@ export class InputController {
       this.inspector.close();
       return;
     }
+    // The dark periphery is context, not an invisible interaction target.
+    if(!this.renderer.inObservationArea(screenX,screenY)) {
+      this.client.observatory.toast(i18n.getLang()==='ru'?'Перетащите нужное место в центр линзы или выберите «Весь экран».':'Drag this place into the lens, or choose Wide view.');
+      return;
+    }
     // 1. Check if user tapped directly on an organism (touch target radius 38px for easier mobile selection)
     const hit = this.renderer.findOrganismAtScreenPoint(screenX, screenY, 38);
     if (hit) {

@@ -10,6 +10,7 @@ import { EcologyPanel } from './ui/ecologyPanel.js';
 import { Observatory } from './ui/observatory.js';
 import { NurseryPanel } from './ui/nurseryPanel.js';
 import { GeographyPanel } from './ui/geographyPanel.js';
+import { ObservationPanel } from './ui/observationPanel.js';
 
 class AetheonApp {
   constructor() {
@@ -37,6 +38,7 @@ class AetheonApp {
     this.ecologyPanel = new EcologyPanel(this);
     this.nurseryPanel = new NurseryPanel(this);
     this.geographyPanel = new GeographyPanel(this);
+    this.observationPanel = new ObservationPanel(this);
     this.init();
   }
 
@@ -210,6 +212,7 @@ class AetheonApp {
     if(msg.ecology) this.ecologyPanel.update(msg.ecology);
     if(msg.geography) this.geographyPanel.update(msg.geography);
     if (msg.type === 'init') {
+      this.renderer.resetStream();
       this.observatory.init(msg.worldCreatedAt);
       if (msg.worldSize) {
         this.renderer.worldSize = msg.worldSize;
@@ -270,14 +273,20 @@ class AetheonApp {
       if (this.renderer.isLabMode) this.updateLabTelemetry();
 
       // Play audio events for nearby occurrences
-      if (msg.events && msg.events.length > 0) {
+      if (!document.hidden && !this.diveEngine?.isActive && performance.now()>=(this.nextEventSoundAt??0) && msg.events?.length) {
         for (let i = 0; i < msg.events.length; i++) {
           const ev = msg.events[i];
+          const screen=this.renderer.worldToScreen(ev.x,ev.y),c=this.renderer.camera;
+          if(screen.x<0||screen.y<0||screen.x>c.viewportW||screen.y>c.viewportH||!this.renderer.inObservationArea(screen.x,screen.y))continue;
           if (ev.type === 'birth' && Math.random() < 0.25) {
             sound.playMitosisPing();
           } else if (ev.type === 'predation' && Math.random() < 0.35) {
             sound.playPredationStrike();
+          } else {
+            continue;
           }
+          this.nextEventSoundAt=performance.now()+500;
+          break;
         }
       }
     } else if (msg.type === 'visitor_count') {

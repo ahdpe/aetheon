@@ -2,6 +2,7 @@ import { ParticleSystem } from './particles.js';
 import { getSpeciesMorphology, drawCellMembranePath, drawCellMarkings, drawFlagellum, drawAntennae } from './morphology.js';
 import { OCEAN_GEOMETRY } from '../shared/habitats.js';
 import { makeHabitatCanvas } from '../ui/geographyPanel.js';
+import { ObservationBuffer, followGain, focusGeometry, insideFocus } from './observation.js';
 
 export class OceanRenderer {
   constructor(canvas) {
@@ -17,10 +18,10 @@ export class OceanRenderer {
     this.camera = {
       x: 700.0,
       y: 700.0,
-      zoom: 1.0,
+      zoom: window.innerWidth < 600 ? 1.8 : 1.6,
       targetX: 700.0,
       targetY: 700.0,
-      targetZoom: 1.0,
+      targetZoom: window.innerWidth < 600 ? 1.8 : 1.6,
       viewportW: window.innerWidth,
       viewportH: window.innerHeight,
       trackedEntityId: null
@@ -31,9 +32,13 @@ export class OceanRenderer {
     this.currEntities = new Map();
     this.prevTickTime = performance.now();
     this.currTickTime = performance.now();
+    this.observation = new ObservationBuffer();
+    this.renderedEntities = new Map();
+    this.focusEnabled = true;
+    this.lastFrameTime = null;
     
     // Ambient fluid particles
-    this.particles = new ParticleSystem(1000, this.worldSize, this.chamber);
+    this.particles = new ParticleSystem(600, this.worldSize, this.chamber);
     
     // Interaction ripples & food particles
     this.ripples = [];
@@ -78,10 +83,7 @@ export class OceanRenderer {
     this.camera.viewportW = w;
     this.camera.viewportH = h;
     
-    // Default zoom adjusted for screen size
-    if (w < 600) {
-      this.camera.targetZoom = 0.85;
-    }
+    // A resize must preserve the visitor's chosen magnification.
   }
 
   setLabMode(enabled) {
@@ -218,6 +220,7 @@ export class OceanRenderer {
         });
       }
     }
+    this.observation.push(this.currEntities, this.currTickTime, packet.t);
 
     if (packet.blooms) {
       this.serverBlooms = packet.blooms;
@@ -244,28 +247,46 @@ export class OceanRenderer {
     }
   }
 
+  resetStream() {
+    this.observation.clear();
+    this.currEntities = new Map();
+    this.prevEntities = new Map();
+    this.renderedEntities = new Map();
+    this.lastFrameTime = null;
+  }
+
+  inObservationArea(x, y, margin = 0) {
+    return !this.focusEnabled || insideFocus(x, y, focusGeometry(this.camera.viewportW, this.camera.viewportH), margin);
+  }
+
   // Master render frame (runs at 60–120 FPS in requestAnimationFrame)
   render(time) {
     const ctx = this.ctx;
     const w = this.camera.viewportW;
     const h = this.camera.viewportH;
     const dpr = this.dpr;
+    const elapsedMs = this.lastFrameTime===null ? 1000/60 : Math.max(0, Math.min(100, time-this.lastFrameTime));
+    this.lastFrameTime = time;
+    this.frameUnits = elapsedMs / (1000/60);
+    this.renderedEntities = this.observation.sample(time);
+    const currentList = Array.from(this.renderedEntities.values());
 
     // Reset transform & scale for DPR
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // 1. Camera glide & entity tracking
     if (this.camera.trackedEntityId) {
-      const tracked = this.currEntities.get(this.camera.trackedEntityId);
+      const tracked = this.renderedEntities.get(this.camera.trackedEntityId);
       if (tracked) {
         this.camera.targetX = tracked.x;
         this.camera.targetY = tracked.y;
       }
     }
 
-    this.camera.x += (this.camera.targetX - this.camera.x) * 0.08;
-    this.camera.y += (this.camera.targetY - this.camera.y) * 0.08;
-    this.camera.zoom += (this.camera.targetZoom - this.camera.zoom) * 0.08;
+    const gain = followGain(elapsedMs, this.camera.trackedEntityId ? 120 : 180);
+    this.camera.x += (this.camera.targetX - this.camera.x) * gain;
+    this.camera.y += (this.camera.targetY - this.camera.y) * gain;
+    this.camera.zoom += (this.camera.targetZoom - this.camera.zoom) * gain;
 
     // 2. Clear canvas with deep abyssal gradient
     ctx.fillStyle = '#030712';
@@ -395,26 +416,16 @@ export class OceanRenderer {
     }
 
     // 5. Ambient fluid micro-plankton
-    const currentList = Array.from(this.currEntities.values());
-    this.particles.step(currentList);
-    this.particles.draw(ctx, this.camera);
-
-    // 6. Compute interpolation factor alpha between 10 Hz ticks (clamped to prevent freezing or jumps)
-    const tickDelta = Math.max(10, Math.min(250, this.currTickTime - this.prevTickTime));
-    const elapsed = Math.max(0, time - this.currTickTime);
-    const alpha = Math.min(1.2, elapsed / tickDelta);
+    const detailedList=currentList.filter(o=>this.inObservationArea(toScreenX(o.x),toScreenY(o.y),o.size*camZoom));
+    this.particles.advance(elapsedMs, detailedList);
+    this.particles.draw(ctx, this.camera, this.focusEnabled ? focusGeometry(w,h) : null);
 
     // 7. Render Organisms
+    let detailed=0, peripheral=0;
     for (let i = 0; i < currentList.length; i++) {
       const curr = currentList[i];
-      const prev = this.prevEntities.get(curr.id) || curr;
-
-      // Smooth continuous interpolation without wrapping jumps
-      const ix = prev.x + (curr.x - prev.x) * alpha;
-      const iy = prev.y + (curr.y - prev.y) * alpha;
-
-      const sx = toScreenX(ix);
-      const sy = toScreenY(iy);
+      const sx = toScreenX(curr.x);
+      const sy = toScreenY(curr.y);
 
       // Cull offscreen entities
       const radius = curr.size * camZoom;
@@ -422,11 +433,19 @@ export class OceanRenderer {
         continue;
       }
 
-      const heading = Math.atan2(curr.vy, curr.vx);
+      const heading = curr.heading;
       const isSelected = this.camera.trackedEntityId === curr.id;
-
-      this.drawOrganism(ctx, sx, sy, radius, curr, heading, isSelected, time);
+      if (!isSelected && !this.inObservationArea(sx,sy,radius)) {
+        peripheral++;
+        // Peripheral life is a cheap, muted silhouette. No morphology/glow/cilia work.
+        ctx.fillStyle='rgba(110,151,153,.24)';
+        ctx.beginPath();ctx.arc(sx,sy,Math.max(1,radius*.65),0,Math.PI*2);ctx.fill();
+      } else {
+        detailed++;
+        this.drawOrganism(ctx, sx, sy, radius, curr, heading, isSelected, time);
+      }
     }
+    this.observationStats={detailed,peripheral};
 
     // 7.2. Colony Intercellular Bonds (Multicellular Membrane Filaments)
     if (this.colonyBonds.length > 0) {
@@ -439,8 +458,8 @@ export class OceanRenderer {
     // 8. Render Interaction Ripples
     for (let r = this.ripples.length - 1; r >= 0; r--) {
       const rip = this.ripples[r];
-      rip.r += 1.8;
-      rip.alpha -= 0.025;
+      rip.r += 1.8 * this.frameUnits;
+      rip.alpha -= 0.025 * this.frameUnits;
 
       if (rip.alpha <= 0 || rip.r >= rip.maxR) {
         this.ripples.splice(r, 1);
@@ -460,7 +479,14 @@ export class OceanRenderer {
 
     // 9. Research Lab Overlays (Telemetry tags, velocity vector arrows, sensory radii)
     if (this.isLabMode) {
-      this.drawLabEntityOverlay(ctx, currentList, toScreenX, toScreenY, alpha);
+      this.drawLabEntityOverlay(ctx, detailedList, toScreenX, toScreenY, 1);
+    }
+    if(this.focusEnabled) {
+      const f=focusGeometry(w,h),shade=ctx.createRadialGradient(f.x,f.y,f.radius*.76,f.x,f.y,f.radius*1.22);
+      shade.addColorStop(0,'rgba(2,8,16,0)');shade.addColorStop(.6,'rgba(2,8,16,.40)');shade.addColorStop(1,'rgba(2,8,16,.82)');
+      ctx.fillStyle=shade;ctx.fillRect(0,0,w,h);
+      ctx.strokeStyle='rgba(141,203,209,.13)';ctx.lineWidth=1;
+      ctx.beginPath();ctx.arc(f.x,f.y,f.radius,0,Math.PI*2);ctx.stroke();
     }
   }
 
@@ -474,7 +500,11 @@ export class OceanRenderer {
       const sy = toScreenY(isle.y);
       const sr = isle.r * camZoom;
 
-      if (sr < 2.0) continue; // Screen culling
+      if (sr < 2.0 || sx+sr*1.3<0 || sy+sr*1.3<0 || sx-sr*1.3>this.camera.viewportW || sy-sr*1.3>this.camera.viewportH) continue;
+      const detailed=this.inObservationArea(sx,sy,sr);
+      if(!detailed) {
+        ctx.fillStyle='rgba(70,113,100,.18)';ctx.beginPath();ctx.arc(sx,sy,sr*.7,0,Math.PI*2);ctx.fill();continue;
+      }
 
       const hDeg = Math.round((isle.h !== undefined ? isle.h : 0.40) * 360);
       const density = isle.d !== undefined ? isle.d : 0.85;
@@ -619,7 +649,7 @@ export class OceanRenderer {
       ctx.beginPath();
       for (let c = 0; c < ciliaCount; c++) {
         const angle = (c / ciliaCount) * Math.PI * 2;
-        const wave = Math.sin(time * 0.015 + angle * 3.0 + org.id) * (bodyR * 0.3);
+        const wave = Math.sin(time * 0.007 + angle * 3.0 + org.id) * (bodyR * 0.3);
         const ciliaLen = bodyR * (isHunter ? 0.48 : 0.38) + wave;
 
         const cx1 = Math.cos(angle) * (rx * 0.95);
@@ -817,8 +847,8 @@ export class OceanRenderer {
 
     for (let i = 0; i < bonds.length; i++) {
       const bond = bonds[i];
-      const orgA = this.currEntities.get(bond.a);
-      const orgB = this.currEntities.get(bond.b);
+      const orgA = this.renderedEntities.get(bond.a);
+      const orgB = this.renderedEntities.get(bond.b);
       if (!orgA || !orgB) continue;
 
       const ax = toScreenX(orgA.x);
@@ -830,6 +860,7 @@ export class OceanRenderer {
       const midX = (ax + bx) * 0.5;
       const midY = (ay + by) * 0.5;
       if (midX < -100 || midX > w + 100 || midY < -100 || midY > h + 100) continue;
+      if(!this.inObservationArea(midX,midY,30)) continue;
 
       const distToCenter = Math.hypot(midX - centerSX, midY - centerSY);
       bondData.push({ orgA, orgB, ax, ay, bx, by, midX, midY, distToCenter });
@@ -946,6 +977,7 @@ export class OceanRenderer {
       const bx = toScreenX(bloom.x);
       const by = toScreenY(bloom.y);
       const br = bloom.r * camZoom;
+      if(bx+br<0||by+br<0||bx-br>w||by-br>h||!this.inObservationArea(bx,by,br)) continue;
 
       // Soft ambient nutrient diffusion cloud or organic detritus cloud
       const isDetritus = (bloom.d === 1);
@@ -1003,7 +1035,7 @@ export class OceanRenderer {
       }
 
       // Maintain floating particles around active bloom
-      if (this.foodParticles.length < 24 && Math.random() < 0.12) {
+      if (this.foodParticles.length < 24 && Math.random() < 1-Math.pow(.88,this.frameUnits)) {
         const ang = Math.random() * Math.PI * 2;
         const d = Math.random() * bloom.r * 0.65;
         this.foodParticles.push({
@@ -1023,18 +1055,18 @@ export class OceanRenderer {
     // B. Drifting Nutrient Spores Physics & Drawing
     for (let i = this.foodParticles.length - 1; i >= 0; i--) {
       const p = this.foodParticles[i];
-      p.life++;
+      p.life+=this.frameUnits;
       if (p.life >= p.maxLife || p.alpha <= 0) {
         this.foodParticles.splice(i, 1);
         continue;
       }
 
       // Physics damping & fluid drift
-      p.vx *= 0.96;
-      p.vy *= 0.96;
+      p.vx *= Math.pow(.96,this.frameUnits);
+      p.vy *= Math.pow(.96,this.frameUnits);
       const drift = time * 0.0012 + p.x * 0.01;
-      p.x += p.vx + Math.cos(drift) * 0.22;
-      p.y += p.vy + Math.sin(drift) * 0.22;
+      p.x += (p.vx + Math.cos(drift) * 0.22)*this.frameUnits;
+      p.y += (p.vy + Math.sin(drift) * 0.22)*this.frameUnits;
 
       // Soft bounce on chamber boundary
       const ch = this.chamber;
@@ -1078,6 +1110,7 @@ export class OceanRenderer {
       const sx = toScreenX(p.x);
       const sy = toScreenY(p.y);
       if (sx < -20 || sx > w + 20 || sy < -20 || sy > h + 20) continue;
+      if(!this.inObservationArea(sx,sy))continue;
 
       // Opacity calculation (gentle fade in and fade out)
       const lifeRatio = p.life / p.maxLife;
@@ -1474,9 +1507,11 @@ export class OceanRenderer {
     const toScreenX = (wx) => (wx - this.camera.x) * this.camera.zoom + this.camera.viewportW * 0.5;
     const toScreenY = (wy) => (wy - this.camera.y) * this.camera.zoom + this.camera.viewportH * 0.5;
 
-    for (const org of this.currEntities.values()) {
+    if(!this.inObservationArea(screenX,screenY))return null;
+    for (const org of this.renderedEntities.values()) {
       const sx = toScreenX(org.x);
       const sy = toScreenY(org.y);
+      if(!this.inObservationArea(sx,sy))continue;
       const dx = screenX - sx;
       const dy = screenY - sy;
       const d2 = dx * dx + dy * dy;

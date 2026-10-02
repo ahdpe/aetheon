@@ -1,5 +1,6 @@
 import { completeGenome, developBody } from './anatomy.js';
 import { sampleHabitat } from './habitats.js';
+import { MOTION } from './motion.js';
 
 export function createOrganismClass(CONFIG, random) {
 let nextOrganismId = 1;
@@ -352,8 +353,9 @@ class Organism {
       let angleDiff = targetHeading - this.heading;
       while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
       while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-      const maxTurn = isPiloted ? 0.65 : (isLuredToFood ? 0.55 : ((distCenter > R - margin) ? 0.45 : 0.28));
-      const turnRate = isPiloted ? 0.55 : (isLuredToFood ? 0.48 : 0.25);
+      const urgent = isFleeing || this.panicTicks > 0 || (this.carnivory > .35 && nearestPrey && nearestPrey.d < huntThreshold);
+      const maxTurn = isPiloted ? 0.65 : (isLuredToFood ? 0.55 : ((distCenter > R - margin) ? 0.45 : (urgent ? .28 : MOTION.maxTurn)));
+      const turnRate = isPiloted ? 0.55 : (isLuredToFood ? 0.48 : (urgent ? .25 : MOTION.turnRate));
       this.heading += Math.max(-maxTurn, Math.min(maxTurn, angleDiff * turnRate));
     } else {
       // Gentle forward wander
@@ -374,7 +376,7 @@ class Organism {
         speedMultiplier = 0.45;  // Idle gentle cruise
       }
     } else {
-      speedMultiplier = 0.7 + 0.5 * ciliaryPulse;
+      speedMultiplier = (0.7 + 0.5 * ciliaryPulse) * MOTION.cruise;
     }
 
     // Panic evasive sprint when fleeing or recently bitten
@@ -404,7 +406,7 @@ class Organism {
     const targetVx = Math.cos(this.heading) * this.maxSpeed * speedMultiplier * tempFactor * this.body.propulsion + habitat.currentX;
     const targetVy = Math.sin(this.heading) * this.maxSpeed * speedMultiplier * tempFactor * this.body.propulsion + habitat.currentY;
 
-    const accelRate = isPiloted ? 0.45 : 0.2;
+    const accelRate = isPiloted ? 0.45 : ((isHunting || isFleeing || this.panicTicks > 0 || isLuredToFood) ? .2 : MOTION.acceleration);
     this.vx += (targetVx - this.vx) * accelRate;
     this.vy += (targetVy - this.vy) * accelRate;
 
