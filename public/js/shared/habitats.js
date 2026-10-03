@@ -2,8 +2,11 @@
 export const LEGACY_GEOMETRY = Object.freeze({version:1,worldSize:1400,gridSize:128,cx:700,cy:700,radius:680});
 export const OCEAN_GEOMETRY = Object.freeze({version:2,worldSize:2100,gridSize:192,cx:1050,cy:1050,radius:1020,previousRadius:680});
 export const RESOURCE_OASES = Object.freeze([
- {x:1050,y:250,radius:145}, {x:1810,y:800,radius:130}, {x:1520,y:1690,radius:150},
- {x:560,y:1700,radius:135}, {x:285,y:800,radius:145}
+ {x:1050,y:240,radius:150},
+ {x:1780,y:690,radius:135},
+ {x:1620,y:1560,radius:140},
+ {x:680,y:1780,radius:145},
+ {x:275,y:920,radius:130}
 ]);
 export const HABITATS = Object.freeze([
  {id:'basin',en:'Inner basin',ru:'Внутренняя котловина',color:'#647ba8',x:1050,y:1050},
@@ -21,19 +24,24 @@ export function frontierFertility(x,y) {
 // Inner gradients retain their original physical scale and translated coordinates.
 export function sampleHabitat(x, y) {
   const dx=x-OCEAN_GEOMETRY.cx, dy=y-OCEAN_GEOMETRY.cy, radius=Math.hypot(dx,dy), r=radius/620;
-  const meadow=Math.exp(-(((r-0.56)/0.25)**2));
-  const shadow=Math.exp(-(((x-780)/130)**2)-(((y-1250)/100)**2));
-  const outer=radius>620?frontierFertility(x,y):0;
-  const current=(0.03+0.15*Math.max(0,1-r))*(1-0.72*shadow);
+  const angle = Math.atan2(dy, dx);
+  const shelfR = 0.56 + 0.08 * Math.sin(angle * 2.0 + 0.9) + 0.05 * Math.cos(angle * 3.0 - 0.5);
+  const meadow = Math.exp(-(((r-shelfR)/0.24)**2));
+  const shadow = Math.exp(-(((x-780)/130)**2)-(((y-1250)/100)**2));
+  const outer = radius>620?frontierFertility(x,y):0;
+  const current = (0.03+0.15*Math.max(0,1-r))*(1-0.72*shadow);
   return { id:shadow>0.5?'shadow':radius>620?'frontier':r<0.34?'basin':r<0.76?'meadow':'shoal', light:(0.3+0.7*Math.max(meadow,.85*outer))*(1-0.68*shadow),
     currentX:radius?(-dy/radius)*current:0, currentY:radius?(dx/radius)*current:0 };
 }
 
 // External chemosynthetic recharge has a fixed total budget, even in larger water.
 export function resourceWeight(x,y) {
- const radius=Math.hypot(x-OCEAN_GEOMETRY.cx,y-OCEAN_GEOMETRY.cy);
+ const dx = x - OCEAN_GEOMETRY.cx, dy = y - OCEAN_GEOMETRY.cy;
+ const radius = Math.hypot(dx, dy);
  if(radius>OCEAN_GEOMETRY.radius)return 0;
- const meadow=Math.exp(-(((radius/620-.56)/.25)**2));
+ const angle = Math.atan2(dy, dx);
+ const shelfR = 0.56 + 0.08 * Math.sin(angle * 2.0 + 0.9) + 0.05 * Math.cos(angle * 3.0 - 0.5);
+ const meadow = Math.exp(-(((radius/620-shelfR)/.24)**2));
  return .015+.5*meadow+1.2*frontierFertility(x,y);
 }
 export function makeResourceRecharge(size=OCEAN_GEOMETRY.gridSize,worldSize=OCEAN_GEOMETRY.worldSize) {

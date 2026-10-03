@@ -101,3 +101,36 @@ test('a real restart preserves geology and its future biological and chemical tr
   const restored=new SimulationEngine();for(let i=0;i<100;i++)restored.step();assert.deepEqual(describe(restored),expected);
  }finally{Date.now=clock;}
 });
+
+test('asymmetric rift vents break the 72-degree regular pentagon and circular meadow',()=>{
+ const g=new ChemicalGrid();assert.equal(g.vents.length,5);
+ const angles=[],distances=[];
+ for(const v of g.vents){
+  const dx=v.baseX-g.size*.5,dy=v.baseY-g.size*.5;
+  distances.push(Math.hypot(dx,dy));
+  angles.push((Math.atan2(dy,dx)+Math.PI*2)%(Math.PI*2));
+ }
+ angles.sort((a,b)=>a-b);
+ const steps=angles.map((a,i)=>(i<angles.length-1?angles[i+1]-a:a+Math.PI*2-angles[i])*180/Math.PI);
+ // Every step between vents must differ from the 72-degree pentagon
+ assert.ok(steps.every(s=>Math.abs(s-72)>4));
+ // Distances from center must vary naturally along the rift
+ assert.ok(Math.max(...distances)-Math.min(...distances)>6);
+});
+
+test('biogenic substrate and algae feedback dynamically reshapes terrain relief, permeability, shading and currents',()=>{
+ const g=new ChemicalGrid();const baseElev=g.terrain.elevation[g.size*96+96],baseLight=g.terrain.light[g.size*96+96];
+ g.depositSubstrate(1050,1050,0.85,35);
+ assert.ok(g.substrate[g.size*96+96]>0.3);
+ g.updateTerrainFromLife({isles:[{x:1050,y:1050,radius:40}]});
+ // Reef accretion builds up elevation
+ assert.ok(g.terrain.elevation[g.size*96+96]>baseElev+0.05);
+ // Algae canopy shades seafloor and reef reduces permeability
+ assert.ok(g.terrain.light[g.size*96+96]<baseLight);
+ assert.ok(g.terrain.permeability[g.size*96+96]<g.terrain.basePermeability[g.size*96+96]);
+ // Resetting restores exact base geology
+ g.terrain.resetToBase();
+ assert.equal(g.terrain.elevation[g.size*96+96],baseElev);
+ assert.equal(g.terrain.light[g.size*96+96],baseLight);
+});
+

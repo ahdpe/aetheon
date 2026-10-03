@@ -28,29 +28,35 @@ class ChemicalGrid {
   }
 
   initVents() {
-    // Symmetrically arranged vents in a regular pentagon inside the circular chamber
-    const cx = this.size * 0.5;
-    const cy = this.size * 0.5;
-    const ventDist = 350 * this.size / CONFIG.WORLD_SIZE;
+    // Asymmetric hydrothermal rift fissures distributed along natural tectonic faults
+    const scale = this.size / CONFIG.WORLD_SIZE;
+    const cx = CONFIG.WORLD_SIZE * 0.5;
+    const cy = CONFIG.WORLD_SIZE * 0.5;
 
-    const ventHues = [0.12, 0.52, 0.95, 0.38, 0.78]; // Amber, Cyan, Rose, Phosphor, Violet
+    // Organic distribution along abyssal rift arc with varied distance, intensity, and depth
+    const riftVents = [
+      { id: 'primary_vent_1', wx: cx + 70, wy: cy - 250, radius: 8, power: 0.76, hue: 0.12, driftPhase: 0.42, driftSpeed: 0.00014 }, // Obsidian Spire (NNW abyss)
+      { id: 'primary_vent_2', wx: cx + 300, wy: cy - 50, radius: 7, power: 0.68, hue: 0.52, driftPhase: 1.95, driftSpeed: 0.00019 }, // Azurite Chimney (ENE ridge)
+      { id: 'primary_vent_3', wx: cx + 160, wy: cy + 130, radius: 8, power: 0.72, hue: 0.95, driftPhase: 3.30, driftSpeed: 0.00012 }, // Carnelian Chasm (SE deep)
+      { id: 'primary_vent_4', wx: cx - 210, wy: cy + 180, radius: 6, power: 0.58, hue: 0.38, driftPhase: 4.60, driftSpeed: 0.00024 }, // Emerald Fissure (SW trench)
+      { id: 'primary_vent_5', wx: cx - 130, wy: cy - 130, radius: 7, power: 0.64, hue: 0.78, driftPhase: 5.75, driftSpeed: 0.00016 }  // Amethyst Terrace (WSW shelf)
+    ];
 
     this.vents = [];
-    for (let i = 0; i < 5; i++) {
-      const angle = (i * 2 * Math.PI) / 5 - Math.PI * 0.5; // Top vent at 12 o'clock
-      const vx = Math.round(cx + Math.cos(angle) * ventDist);
-      const vy = Math.round(cy + Math.sin(angle) * ventDist);
+    for (const v of riftVents) {
+      const vx = Math.round(v.wx * scale);
+      const vy = Math.round(v.wy * scale);
       this.vents.push({
-        id: `primary_vent_${i + 1}`,
+        id: v.id,
         x: vx,
         y: vy,
         baseX: vx,
         baseY: vy,
-        driftPhase: i * 1.256,
-        driftSpeed: 0.00012 + i * 0.00004,
-        radius: 7,
-        power: 0.70,
-        hue: ventHues[i]
+        driftPhase: v.driftPhase,
+        driftSpeed: v.driftSpeed,
+        radius: v.radius,
+        power: v.power,
+        hue: v.hue
       });
     }
   }
@@ -438,6 +444,13 @@ class ChemicalGrid {
           this.substrate[idx] = Math.min(1.0, existing + amount * factor * bindAffinity);
         }
       }
+    }
+  }
+
+  // Dynamically update terrain relief, permeability, shading and currents from life activity
+  updateTerrainFromLife(algae = null) {
+    if (this.terrain && this.terrain.updateLifeFeedback) {
+      this.terrain.updateLifeFeedback(this.substrate, algae ? (algae.isles || []) : []);
     }
   }
 

@@ -51,6 +51,86 @@ export class TerrainField {
    if(x<size-1)this.edge(i,i+1,'east');
    if(y<size-1)this.edge(i,i+size,'south');
   }
+  this.baseElevation=new Float32Array(this.elevation);
+  this.baseLight=new Float32Array(this.light);
+  this.basePermeability=new Float32Array(this.permeability);
+  this.baseCurrentX=new Float32Array(this.currentX);
+  this.baseCurrentY=new Float32Array(this.currentY);
+  this.baseGradientX=new Float32Array(this.gradientX);
+  this.baseGradientY=new Float32Array(this.gradientY);
+  this.baseMobility=new Float32Array(this.mobility);
+ }
+ resetToBase(){
+  this.elevation.set(this.baseElevation);
+  this.light.set(this.baseLight);
+  this.permeability.set(this.basePermeability);
+  this.currentX.set(this.baseCurrentX);
+  this.currentY.set(this.baseCurrentY);
+  this.gradientX.set(this.baseGradientX);
+  this.gradientY.set(this.baseGradientY);
+  this.mobility.set(this.baseMobility);
+  const size=this.size;
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+   const i=y*size+x;
+   if(x<size-1)this.edge(i,i+1,'east');
+   if(y<size-1)this.edge(i,i+size,'south');
+  }
+ }
+ updateLifeFeedback(substrate,algaeIsles=[]){
+  if(!substrate)return;
+  const size=this.size;
+  let plantDensity=null;
+  if(algaeIsles&&algaeIsles.length>0){
+   plantDensity=new Float32Array(size*size);
+   for(const isle of algaeIsles){
+    const gx=Math.round((isle.x/this.worldSize)*size);
+    const gy=Math.round((isle.y/this.worldSize)*size);
+    const r=Math.max(2,Math.round(((isle.radius||35)/this.worldSize)*size));
+    const minY=Math.max(0,gy-r),maxY=Math.min(size-1,gy+r);
+    const minX=Math.max(0,gx-r),maxX=Math.min(size-1,gx+r);
+    for(let y=minY;y<=maxY;y++){
+     const dy=y-gy,row=y*size;
+     for(let x=minX;x<=maxX;x++){
+      const dx=x-gx,d2=dx*dx+dy*dy;
+      if(d2<=r*r)plantDensity[row+x]=Math.min(1.0,plantDensity[row+x]+(1-Math.sqrt(d2)/r)*.45);
+     }
+    }
+   }
+  }
+  for(let y=0;y<size;y++){
+   for(let x=0;x<size;x++){
+    const i=y*size+x;if(!this.wet[i])continue;
+    const sub=substrate[i],plant=plantDensity?plantDensity[i]:0;
+    const reefElev=Math.min(.22,sub*.25);
+    const newElev=clamp(this.baseElevation[i]+reefElev,0,1);
+    this.elevation[i]=newElev;
+    this.permeability[i]=clamp(this.basePermeability[i]*(1-sub*.55)+plant*.08,.15,1);
+    this.light[i]=clamp(this.baseLight[i]*(1-plant*.45)*(.64+.62*newElev),.05,1);
+   }
+  }
+  for(let y=1;y<size-1;y++){
+   for(let x=1;x<size-1;x++){
+    const i=y*size+x;if(!this.wet[i])continue;
+    const gx=(this.elevation[i+1]-this.elevation[i-1])*.5;
+    const gy=(this.elevation[i+size]-this.elevation[i-size])*.5;
+    this.gradientX[i]=gx;this.gradientY[i]=gy;
+    const slope=Math.hypot(gx,gy);
+    this.mobility[i]=clamp(1-slope*45,.68,1);
+    if(slope>.005){
+     const nx=gx/slope,ny=gy/slope;
+     const dot=this.baseCurrentX[i]*nx+this.baseCurrentY[i]*ny;
+     this.currentX[i]=this.baseCurrentX[i]-dot*nx*.75;
+     this.currentY[i]=this.baseCurrentY[i]-dot*ny*.75;
+    }else{
+     this.currentX[i]=this.baseCurrentX[i];this.currentY[i]=this.baseCurrentY[i];
+    }
+   }
+  }
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+   const i=y*size+x;
+   if(x<size-1)this.edge(i,i+1,'east');
+   if(y<size-1)this.edge(i,i+size,'south');
+  }
  }
  edge(i,j,direction){
   if(!this.wet[i]||!this.wet[j])return;

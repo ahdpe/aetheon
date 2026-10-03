@@ -167,7 +167,16 @@ export class PersistenceManager {
       if (b.length === engine.grid.substrate.byteLength) new Uint8Array(engine.grid.substrate.buffer).set(b);
       console.warn('[Persistence] Legacy snapshot has no chemical fields; chemistry continuity begins with this migration');
     }
-    if (data.vents) engine.grid.vents = data.vents;
+    if (data.vents) {
+      const isOldPentagon = Array.isArray(data.vents) && data.vents.length === 5 &&
+        data.vents[0].id === 'primary_vent_1' && (data.vents[0].baseX === 96 || data.vents[0].x === 96) && (data.vents[0].baseY === 64 || data.vents[0].y === 64);
+      if (isOldPentagon) {
+        console.log('[Persistence] Migrating legacy symmetric pentagonal vents to organic tectonic rift vents...');
+        engine.grid.initVents();
+      } else {
+        engine.grid.vents = data.vents;
+      }
+    }
     if (data.ephemeralFumaroles) engine.grid.ephemeralFumaroles = data.ephemeralFumaroles;
     engine.nutrientBlooms = data.nutrientBlooms ?? [];
     engine.nextBloomId = data.nextBloomId ?? 1;
@@ -184,6 +193,12 @@ export class PersistenceManager {
     if (data.cataclysmData) engine.cataclysms?.fromJSON(data.cataclysmData);
     if (data.algaeData) engine.algae?.fromJSON(data.algaeData);
     engine.lineage.updatePopulations(engine.organisms);
+    if (engine.grid?.terrain?.resetToBase) {
+      engine.grid.terrain.resetToBase();
+      if (data.ticks >= 50 && engine.grid.updateTerrainFromLife) {
+        engine.grid.updateTerrainFromLife(engine.algae);
+      }
+    }
     if (data.rngState !== undefined) setRandomState(data.rngState);
     console.log(`[Persistence] Restored tick ${data.ticks}, ${engine.organisms.length} stable organism IDs`);
     return true;

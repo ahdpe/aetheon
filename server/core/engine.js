@@ -322,6 +322,9 @@ export class SimulationEngine {
     }
     if (this.ticks % 50 === 0) {
       this.lineage.updatePopulations(this.organisms);
+      if (this.grid.updateTerrainFromLife) {
+        this.grid.updateTerrainFromLife(this.algae);
+      }
     }
 
     // 8. Trigger AI observations check

@@ -26,6 +26,7 @@ class Organism {
     this.phase = random() * Math.PI * 2;
     this.heading = random() * Math.PI * 2;
     this.playerSteer = { x: 0, y: 0, ticks: 0 };
+    this.isPiloted = false;
     this.isLazarus = false;
     this.fatalDamage = false;
     
