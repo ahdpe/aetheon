@@ -72,7 +72,7 @@ export class DiveEngine {
     this.environment.build(vents);
 
     this.creatures = new DiveCreatureManager(this.scene);
-    this.food = new DiveFoodManager(this.scene, OCEAN_GEOMETRY.worldSize);
+    this.food = new DiveFoodManager(this.scene, OCEAN_GEOMETRY.worldSize,(x,z)=>this.environment.getFloorHeight(x,z));
     this.hud = new DiveCockpitHUD(this);
 
     // Dynamic cellular bioluminescent illumination from piloted organism
@@ -388,7 +388,7 @@ export class DiveEngine {
     // 7.1. 3D Volumetric Food Blooms & Floating Phytomanna Crystals
     let grazingState = { isPlayerGrazing: false };
     if (this.food) {
-      grazingState = this.food.update(serverBlooms, time, this.camPos);
+      grazingState = this.food.update(serverBlooms, time, this.camPos, this.app.renderer.serverRemains);
     }
     if (grazingState.isPlayerGrazing && time - this.lastGrazingChimeTime > 550) {
       this.lastGrazingChimeTime = time;

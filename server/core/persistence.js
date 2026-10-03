@@ -91,6 +91,7 @@ export class PersistenceManager {
         fields: Object.fromEntries(fieldNames.map(n => [n, encode(engine.grid[n])])),
         vents: engine.grid.vents, ephemeralFumaroles: engine.grid.ephemeralFumaroles,
         nutrientBlooms: engine.nutrientBlooms ?? [], nextBloomId: engine.nextBloomId, lastVisitorFeed: engine.lastVisitorFeed,
+        remainsState: engine.remains?.toJSON(),
         colonyData: engine.colonies?.getSerializableData() ?? [], climate: engine.climate?.toJSON(),
         atlasEntries: engine.atlas?.toJSON() ?? [], cataclysmData: engine.cataclysms?.toJSON(), algaeData: engine.algae?.toJSON(),
         familyHistory: engine.history?.toJSON(), ecologyEpoch: engine.ecologyEpoch, nurseryState:engine.nursery?.toJSON(), geographyState:engine.geography?.toJSON(),
@@ -116,7 +117,7 @@ export class PersistenceManager {
     if (!candidates.length) return false;
     let data;
     for (const file of candidates) {
-      try { data = this.read(file); if(data.formatVersion)data=expandSnapshot(data); this.validateFields(data, engine.grid); break; }
+      try { data = this.read(file); if(data.formatVersion)data=expandSnapshot(data); this.validateFields(data, engine.grid); engine.remains.fromJSON(data.remainsState,data.ticks); break; }
       catch (err) { data = null; console.error('[Persistence] Rejected snapshot:', file, err.message); }
     }
     if (!data) throw new Error('No valid world snapshot; refusing to replace the existing world with Genesis');

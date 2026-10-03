@@ -3,6 +3,7 @@ import { getSpeciesMorphology, drawCellMembranePath, drawCellMarkings, drawFlage
 import { OCEAN_GEOMETRY } from '../shared/habitats.js';
 import { makeHabitatCanvas } from '../ui/geographyPanel.js';
 import { ObservationBuffer, followGain, focusGeometry, insideFocus } from './observation.js';
+import { drawRemains } from './remainsDrawing.js';
 
 export class OceanRenderer {
   constructor(canvas) {
@@ -45,6 +46,7 @@ export class OceanRenderer {
     this.ripples = [];
     this.foodParticles = [];
     this.serverBlooms = [];
+    this.serverRemains = [];
     this.colonyBonds = [];
     this.pilotedIds = new Set();
     this.climate = null;
@@ -226,6 +228,7 @@ export class OceanRenderer {
     if (packet.blooms) {
       this.serverBlooms = packet.blooms;
     }
+    if (packet.remains) this.serverRemains = packet.remains;
 
     if (packet.colonies) {
       this.colonyBonds = packet.colonies;
@@ -421,6 +424,8 @@ export class OceanRenderer {
     this.particles.advance(elapsedMs, detailedList);
     this.particles.draw(ctx, this.camera, this.focusEnabled ? focusGeometry(w,h) : null);
 
+    // Settled bodies sit under swimming cells and respect the same focus/LOD.
+    this.renderRemains(ctx,toScreenX,toScreenY,camZoom);
     // 7. Render Organisms
     let detailed=0, peripheral=0;
     for (let i = 0; i < currentList.length; i++) {
@@ -574,6 +579,23 @@ export class OceanRenderer {
   }
 
   // Render organic soft-body Aetheobiont with translucent membrane, species-specific morphotype, markings, and cilia
+  renderRemains(ctx,toX,toY,zoom,forceDetail=false) {
+    for(const p of this.serverRemains) {
+      const x=toX(p.x),y=toY(p.y),r=p.size*zoom;
+      if(!forceDetail&&(x<-r*4||y<-r*4||x>this.camera.viewportW+r*4||y>this.camera.viewportH+r*4))continue;
+      drawRemains(ctx,p,x,y,r,forceDetail||this.inObservationArea(x,y,r),p.id===this.selectedRemainsId);
+    }
+  }
+
+  findRemainsAtScreenPoint(x,y) {
+    let closest=null,distance=Infinity;
+    for(const p of this.serverRemains) {
+      const s=this.worldToScreen(p.x,p.y),d=Math.hypot(x-s.x,y-s.y);
+      if(d<Math.max(18,p.size*this.camera.zoom*1.5)&&d<distance){closest=p;distance=d;}
+    }
+    return closest;
+  }
+
   drawOrganism(ctx, x, y, r, org, heading, isSelected, time, forceDetail = false) {
     const isPiloted = this.pilotedIds && (this.pilotedIds.has(org.id) || this.pilotedIds.has(Number(org.id)));
     const pulse = Math.sin(org.phase ?? (time*0.008+org.id)) * 0.08;
@@ -1707,6 +1729,7 @@ export class OceanRenderer {
         sCtx.stroke();
       }
 
+      this.renderRemains(sCtx,toSnapX,toSnapY,scale,true);
       // 7. Living Organisms (Rendered via authentic drawOrganism with full morphology, flagella & halos)
       const entities = Array.from(this.currEntities.values());
       for (let i = 0; i < entities.length; i++) {

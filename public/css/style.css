@@ -3856,6 +3856,15 @@ body.mode-lab .nursery-button {top:150px;}
 
 /* The map describes the actual shared water, including naturally empty places. */
 .hud-btn-map {border-color:#78d6c066;color:#beefdf;background:#16433e55;}
+.remains-card {position:fixed;z-index:50;right:24px;bottom:100px;width:min(350px,calc(100vw - 32px));padding:22px;border:1px solid #817054;border-radius:18px;box-sizing:border-box;color:#dcccb1;}
+.remains-card[hidden] {display:none;}.remains-card .close-btn {position:absolute;top:8px;right:10px;}
+.remains-eyebrow {display:block;font-size:9px;letter-spacing:1.4px;color:#bba780;padding-right:22px;}
+.remains-card>strong {display:block;font:23px var(--font-serif);margin-top:9px;overflow-wrap:anywhere;}
+.remains-card p {font-size:12px;color:#b3b7ac;margin:9px 0 15px;}
+.remains-meters {display:grid;gap:8px;font-size:12px;}.remains-meters>span {display:flex;justify-content:space-between;gap:12px;}.remains-meters b {font-family:var(--font-mono);}
+.remains-card small {display:block;color:#9aaea9;font-size:11px;line-height:1.5;margin-top:15px;}
+.ecology-remains {border-top:1px solid #675b45;margin-top:24px;padding-top:10px;}.ecology-remains .family-metrics {grid-template-columns:repeat(3,minmax(0,1fr));}.ecology-remains .family-metrics strong {font-size:24px;}
+@media(max-width:640px){.remains-card {right:16px;bottom:140px;padding:18px;}.remains-card>strong {font-size:21px;}.ecology-remains .family-metrics div {padding:10px;}}
 .geography-dialog {width:min(1080px,calc(100vw - 28px));max-height:calc(100dvh - 28px);border:1px solid #496d65;line-height:1.6;}
 .geography-dialog>p {font-size:14px;color:#b4cdd0;}
 .geography-layout {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:26px;margin-top:24px;align-items:start;}

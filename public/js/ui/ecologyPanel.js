@@ -22,7 +22,12 @@ export class EcologyPanel {
   document.body.append(this.dialog);
   this.button.addEventListener('click',()=>{this.render();this.dialog.showModal();});
   this.dialog.addEventListener('click',e=>{const action=e.target.closest('button')?.dataset.ecology;
-    if(action==='close') this.dialog.close();if(action==='visit') this.visit(Number(e.target.closest('button')?.dataset.grove));});
+    if(action==='close') this.dialog.close();if(action==='visit') this.visit(Number(e.target.closest('button')?.dataset.grove));
+    if(action==='remains') {
+      const p=[...this.app.renderer.serverRemains].sort((a,b)=>b.remaining-a.remaining)[0];
+      if(p){this.dialog.close();this.app.remainsPanel.select(p.id,true);}
+    }
+  });
   window.addEventListener('aetheon-lang-changed',()=>this.render());this.render();
  }
  update(data) {this.data=data;if(this.dialog.open) this.render();}
@@ -33,7 +38,7 @@ export class EcologyPanel {
   this.app.observatory.toast(`${i18n.getLang()==='ru'?'Заросль':'Grove'} #${p.id} · ${i18n.getLang()==='ru'?'поколение':'generation'} ${p.generation}`);
  }
  render() {
-  const t=COPY[i18n.getLang()]??COPY.en,d=this.data,scroll=this.dialog.scrollTop;
+  const t=COPY[i18n.getLang()]??COPY.en,d=this.data,scroll=this.dialog.scrollTop,ru=i18n.getLang()==='ru',rem=d?.remains;
   const focused=document.activeElement?.closest('button'),action=this.dialog.contains(focused)?focused?.dataset.ecology:null,grove=focused?.dataset.grove;
   const plants=[...this.app.renderer.algaeIsles].sort((a,b)=>b.generation-a.generation||b.d-a.d).slice(0,3);
   this.button.textContent=`❋ ${t.button}`;
@@ -42,6 +47,10 @@ export class EcologyPanel {
     <h3>${t.flora}</h3><p>${t.plantText}</p><div class="family-metrics">${[[d?.plants,t.patches],[d?.floraBirths,t.births],[d?.biomass,t.biomass]].map(([n,label])=>`<div><strong>${n??'—'}</strong><span>${label}</span></div>`).join('')}</div>
     <button class="observer-primary" data-ecology="visit" ${!this.app.renderer.algaeIsles.length?'disabled':''}>${t.go} →</button>${d?.plants===0?`<p>${t.empty}</p>`:''}
     <h3>${t.descendants}</h3><div class="grove-records">${plants.map(p=>`<button class="grove-record" data-ecology="visit" data-grove="${p.id}" style="--plant-hue:${Math.round(p.h*360)}"><strong>❋ #${p.id} · ${t.generation} ${p.generation}</strong><span>${p.biomass} ${t.biomassUnit} · ${t.parent}: ${p.parentId?'#'+p.parentId:'—'}</span><small>${t.height} ${Math.round(p.height*100)}% · ${t.branching} ${Math.round(p.branching*100)}% · ${t.defense} ${Math.round(p.defense*100)}%</small></button>`).join('')}</div>
+    <section class="ecology-remains"><h3>${ru?'След жизни на дне':'Life leaves a trace'}</h3><p>${ru?'Погибшая клетка сохраняет узнаваемую оболочку на 1–5 минут модельного времени: прочные оболочки разлагаются дольше. Её конечный запас органики съедают соседние клетки или разложение возвращает его в воду. Съеденная пустая оболочка тоже постепенно исчезает.':'A dead cell keeps its recognizable membrane for 1–5 model minutes: stronger shells decay more slowly. Nearby cells can eat its finite organic reserve; decay returns the rest to the water. An eaten, empty membrane also gradually disappears.'}</p>
+      <div class="family-metrics">${[[rem?.count,ru?'Останков':'Bodies'],[rem?Math.round(rem.dissolved):null,ru?'Возвращено воде':'Returned to water'],[rem?Math.round(rem.scavenged):null,ru?'Съедено клетками':'Scavenged by cells']].map(([n,label])=>`<div><strong>${n??'—'}</strong><span>${label}</span></div>`).join('')}</div>
+      <button class="observer-primary" data-ecology="remains" ${!this.app.renderer.serverRemains.length?'disabled':''}>${ru?'Найти останки':'Find a body'} →</button>
+      <p class="family-note">${ru?'Счётчики органики ведутся с начала этого этапа. Это условные единицы модели. Одновременно сохраняется до 96 тел; при массовой гибели остаток старейших тел сразу переходит в воду, если в ней есть место.':'Organic counters begin with this stage, in model units. Up to 96 bodies are retained; during mass death, the oldest bodies release their remaining reserve immediately, subject to water capacity.'}</p></section>
     <div class="ecology-habitats">${t.habitats.map(([title,text],i)=>`<div class="habitat-${i}"><strong>${title}</strong><p>${text}</p></div>`).join('')}</div><p class="family-note">${t.limits}</p>`;
   if(action) this.dialog.querySelector(`[data-ecology="${action}"]${grove?`[data-grove="${grove}"]`:grove===undefined?':not([data-grove])':''}`)?.focus({preventScroll:true});
   this.dialog.scrollTop=scroll;

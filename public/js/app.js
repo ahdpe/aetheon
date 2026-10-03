@@ -11,6 +11,7 @@ import { Observatory } from './ui/observatory.js';
 import { NurseryPanel } from './ui/nurseryPanel.js';
 import { GeographyPanel } from './ui/geographyPanel.js';
 import { ObservationPanel } from './ui/observationPanel.js';
+import { RemainsPanel } from './ui/remainsPanel.js';
 
 class AetheonApp {
   constructor() {
@@ -39,6 +40,7 @@ class AetheonApp {
     this.nurseryPanel = new NurseryPanel(this);
     this.geographyPanel = new GeographyPanel(this);
     this.observationPanel = new ObservationPanel(this);
+    this.remainsPanel = new RemainsPanel(this);
     this.init();
   }
 
@@ -213,6 +215,8 @@ class AetheonApp {
     if(msg.geography) this.geographyPanel.update(msg.geography);
     if (msg.type === 'init') {
       this.renderer.resetStream();
+      this.renderer.serverRemains=msg.remains??[];
+      this.remainsPanel.update();
       this.observatory.init(msg.worldCreatedAt);
       if(msg.gridSize)this.renderer.gridSize=msg.gridSize;
       if (msg.worldSize) {
@@ -262,6 +266,7 @@ class AetheonApp {
         }
       }
       this.renderer.onServerTick(msg);
+      if(msg.remains)this.remainsPanel.update();
       if (this.inspector.isTracking && !this.diveEngine?.isActive && !this.renderer.currEntities.has(this.inspector.selectedId)) {
         this.inspector.close();
         this.observatory.toast(this.observatory.t('cellGone'));

@@ -214,6 +214,16 @@ export class DiveEnvironment {
     this.scene.add(this.terrainMesh);
   }
 
+  // Sample the displayed floor, so settled bodies remain above its relief.
+  getFloorHeight(x,z) {
+    const segments=this.planeGeo.parameters.widthSegments,span=this.worldSize;
+    const gx=Math.max(0,Math.min(segments-.00001,(x/span+.5)*segments));
+    const gy=Math.max(0,Math.min(segments-.00001,(z/span+.5)*segments));
+    const ix=Math.floor(gx),iy=Math.floor(gy),fx=gx-ix,fy=gy-iy,w=segments+1,pos=this.planeGeo.attributes.position;
+    const a=pos.getY(iy*w+ix),b=pos.getY(iy*w+ix+1),c=pos.getY((iy+1)*w+ix),d=pos.getY((iy+1)*w+ix+1);
+    return (a*(1-fx)+b*fx)*(1-fy)+(c*(1-fx)+d*fx)*fy;
+  }
+
   // Dynamically carve real 3D coral reef ridges from live substrate field
   updateTerrainMeshHeights(thumbCanvas) {
     if (!thumbCanvas || !this.planeGeo || !this.baseElevations) return;

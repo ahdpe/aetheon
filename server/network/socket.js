@@ -71,7 +71,8 @@ export class NetworkManager {
         visitors: this.clients.size,
         thumbnail: Array.from(this.engine.grid.getThumbnail(48)), // 48x48 initial chemical field
         atlas: this.engine.atlas ? this.engine.atlas.getAllEntries() : [],
-        algae: this.engine.algae ? this.engine.algae.getBroadcastState() : []
+        algae: this.engine.algae ? this.engine.algae.getBroadcastState() : [],
+        remains:this.engine.remains.broadcast(), ecology:this.engine.getEcologyState()
       };
 
       ws.send(JSON.stringify(initialPayload));

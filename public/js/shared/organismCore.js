@@ -116,7 +116,7 @@ class Organism {
   }
 
   // Step 10 Hz physics, chemistry, Kuramoto oscillator, and metabolism
-  step(grid, nearbyNeighbors, nutrientBlooms = [], effectiveRadius = null, tempFactor = 1.0) {
+  step(grid, nearbyNeighbors, nutrientBlooms = [], effectiveRadius = null, tempFactor = 1.0, remains = null) {
     this.age++;
     if (this.attackCooldown > 0) this.attackCooldown--;
     const habitat = sampleHabitat(this.x, this.y);
@@ -184,14 +184,14 @@ class Organism {
             const lureStrength = (1.0 - distNorm) * 1.6;
             const dx = closestBloom.x - this.x;
             const dy = closestBloom.y - this.y;
-            steerX += (dx / closestDist) * lureStrength;
-            steerY += (dy / closestDist) * lureStrength;
+            steerX += (dx / (closestDist || 1)) * lureStrength;
+            steerY += (dy / (closestDist || 1)) * lureStrength;
 
             // Graze detritus
             if (closestDist < closestBloom.radius + this.size * 1.2) {
               const bite = Math.min(closestBloom.energy, 2.0);
               closestBloom.energy -= bite;
-              this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 1.5);
+              this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite);
               if (this.maturity < 1.0) {
                 this.maturity = Math.min(1.0, this.maturity + 0.04);
                 this.size = Math.min(this.adultSize, this.adultSize * (0.38 + 0.62 * this.maturity));
@@ -203,8 +203,8 @@ class Organism {
             const lureStrength = (1.0 - distNorm) * 3.8;
             const dx = closestBloom.x - this.x;
             const dy = closestBloom.y - this.y;
-            steerX += (dx / closestDist) * lureStrength;
-            steerY += (dy / closestDist) * lureStrength;
+            steerX += (dx / (closestDist || 1)) * lureStrength;
+            steerY += (dy / (closestDist || 1)) * lureStrength;
 
             // Graze visitor food
             if (closestDist < closestBloom.radius + this.size * 1.5) {
@@ -218,6 +218,26 @@ class Organism {
             }
           }
         }
+      }
+    }
+
+    // All diets can scavenge locally. Carnivores assimilate organic tissue better;
+    // full cells neither draw down a carcass nor gain a gratuitous growth bonus.
+    if (remains && this.energy < CONFIG.MAX_ORGANISM_ENERGY-1 && !this.isDead()) {
+      const horizon=55*this.body.senseRadius;
+      let target=null,distance=horizon;
+      for(const p of remains.items) {
+        if(p.energy<=0)continue;
+        const d=Math.hypot(p.x-this.x,p.y-this.y);
+        if(d<distance){distance=d;target=p;}
+      }
+      if(target) {
+        if(!isPiloted) {
+          const strength=(1-distance/horizon)*1.1;
+          steerX+=(target.x-this.x)/(distance||1)*strength;
+          steerY+=(target.y-this.y)/(distance||1)*strength;
+        }
+        if(distance<target.size+this.size*1.2) remains.graze(target,this,CONFIG.MAX_ORGANISM_ENERGY);
       }
     }
 
@@ -519,6 +539,9 @@ class Organism {
         // Full ingestion / kill!
         const gainedEnergy = Math.max(0, prey.energy) * 0.75;
         this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + gainedEnergy);
+        prey.energy = Math.max(0, prey.energy) * 0.25;
+        prey.carcassFraction = 0.25;
+        prey.fatalDamage = true;
         this.kills++;
         grid.consumeAndExcrete(this.x, this.y, 0, 0.8, 0.4);
         if (grid.depositSubstrate) {

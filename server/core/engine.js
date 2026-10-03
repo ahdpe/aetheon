@@ -14,6 +14,7 @@ import { AlgaeManager } from './algaeManager.js';
 import { FamilyHistory } from './familyHistory.js';
 import { Nursery } from './nursery.js';
 import { Geography } from './geography.js';
+import { RemainsManager, ORGANIC_TO_NUTRIENT } from '../../public/js/shared/remains.js';
 
 export class SimulationEngine {
   constructor() {
@@ -35,6 +36,7 @@ export class SimulationEngine {
     this.cataclysms = new CataclysmManager(this);
     this.algae = new AlgaeManager();
     this.geography = new Geography(this.grid);
+    this.remains = new RemainsManager();
     
     // Active visitor-created nutrient blooms
     this.nutrientBlooms = [];
@@ -69,6 +71,7 @@ export class SimulationEngine {
       this.seedPrimordialFauna();
     }
     this.ecologyEpoch ??= { version:1, startedAtTick:this.ticks, startedAt:Date.now(), initializedAnatomy:false };
+    if (!restored) this.remains.startedAtTick = this.ticks;
     this.history.synchronize(this.organisms, this.ticks, { initial: true });
     this.geography.init(this);
     if (this.atlas) {
@@ -101,14 +104,18 @@ export class SimulationEngine {
   step() {
     this.ticks++;
 
-    // 0. Advance active visitor nutrient blooms and detritus clouds
+    // 0. Finite carcasses settle in place and return only their remaining reserve.
+    this.remains.step(this.grid);
+    // Legacy nine-second detritus clouds are allowed to finish once. New deaths
+    // create persistent bodies; legacy clouds no longer inject independent food.
     for (let b = this.nutrientBlooms.length - 1; b >= 0; b--) {
       const bloom = this.nutrientBlooms[b];
       bloom.age++;
-      if (bloom.age % 4 === 0) {
-        this.grid.injectDrop(bloom.x, bloom.y, bloom.isDetritus ? 0.2 : 0.4, bloom.radius);
+      if (!bloom.isDetritus && bloom.age % 4 === 0) {
+        this.grid.injectDrop(bloom.x, bloom.y, 0.4, bloom.radius);
       }
       if (bloom.age >= bloom.maxAge || bloom.energy <= 0) {
+        if(bloom.isDetritus && bloom.energy>0) this.grid.depositNutrients(bloom.x,bloom.y,bloom.energy*ORGANIC_TO_NUTRIENT,bloom.radius);
         this.nutrientBlooms.splice(b, 1);
       }
     }
@@ -155,7 +162,7 @@ export class SimulationEngine {
       this.spatialHash.query(org.x, org.y, senseRadius, this.neighborScratch);
       
       // Step organism physics, metabolism, and food sensing (with climate constraints)
-      org.step(this.grid, this.neighborScratch, this.nutrientBlooms, effRadius, tempFactor);
+      org.step(this.grid, this.neighborScratch, this.nutrientBlooms, effRadius, tempFactor, this.remains);
 
       if (org.isDead()) { deadSet.add(org.id); this.handleOrganismDeath(org,false); continue; }
 
@@ -236,7 +243,7 @@ export class SimulationEngine {
     // 3.5. Colony Bond Physics: spring forces, alignment, shared metabolism
     const orgsById = new Map();
     for (let i = 0; i < this.organisms.length; i++) {
-      orgsById.set(this.organisms[i].id, this.organisms[i]);
+      if(!deadSet.has(this.organisms[i].id)) orgsById.set(this.organisms[i].id, this.organisms[i]);
     }
     this.colonies.applyBondPhysics(orgsById);
 
@@ -570,11 +577,12 @@ export class SimulationEngine {
         d: b.isDetritus ? 1 : 0,
         h: b.hue !== undefined ? Math.round(b.hue * 100) / 100 : undefined
       })),
+      remains: this.ticks%20===0 ? this.remains.broadcast():undefined,
       colonies: this.colonies.getBondPairs(),
       climate: this.climate.getBroadcastState(),
       pilots: this.getPilotedIds(),
       vents: (this.ticks % 20 === 0 && this.grid.getVentsState) ? this.grid.getVentsState() : undefined,
-      ecology: this.ticks%20===0 ? {epoch:this.ecologyEpoch,plants:this.algae.isles.length,floraBirths:this.algae.totals.births,floraDeaths:this.algae.totals.deaths,biomass:Math.round(this.algae.isles.reduce((sum,p)=>sum+p.biomass,0))}:undefined,
+      ecology: this.ticks%20===0 ? this.getEcologyState():undefined,
       geography: this.ticks%20===0 ? this.geography.broadcast():undefined,
       algae: (this.ticks % 20 === 0 && this.algae) ? this.algae.getBroadcastState() : undefined,
       cataclysm: this.cataclysms ? this.cataclysms.getBroadcastState() : undefined,
@@ -582,46 +590,22 @@ export class SimulationEngine {
     };
   }
 
-  // Handle organism demise: release chemical nutrients, deposit bio-calcite reef substrate, and form organic detritus
-  handleOrganismDeath(org, isPredation = false, forceDetritus = false) {
-    this.history.recordDeath(org, this.ticks, isPredation ? 'predation' : 'energy_or_age');
-    // 1. Dissolve organism mass into nutrients
-    this.grid.injectDrop(org.x, org.y, org.size * 0.25, org.size * 1.5);
+  getEcologyState() {
+    return {epoch:this.ecologyEpoch,plants:this.algae.isles.length,floraBirths:this.algae.totals.births,floraDeaths:this.algae.totals.deaths,
+      biomass:Math.round(this.algae.isles.reduce((sum,p)=>sum+p.biomass,0)),remains:this.remains.getStats()};
+  }
 
-    // 2. Necro-calcification: deposit structural bio-calcite into substrate (bone reefs)
+  // Every animal death leaves a bounded, finite reserve. No instantaneous organic
+  // injection or probabilistic second food cloud is added on top of that reserve.
+  handleOrganismDeath(org, isPredation = false) {
+    if (org.necromassRecorded) return;
+    this.history.recordDeath(org, this.ticks, isPredation ? 'predation' : 'energy_or_age');
+    this.remains.add(org, this.ticks, this.grid, isPredation ? 'predation':'energy_or_age');
+    // Mineral substrate is a separate structural channel, not edible organic energy.
     if (this.grid.depositSubstrate) {
       this.grid.depositSubstrate(org.x, org.y, 0.12 * (org.size / 8), org.size * 1.5);
     }
 
-    // 3. Detritus cloud: dead cells leave scavengeable necromass for grazers
-    // Throttled: only adult organisms (maturity >= 0.7, size >= 4.0) with bounded probability or predation or forced test
-    const shouldSpawn = forceDetritus || (org.maturity >= 0.7 && org.size >= 4.0 && (isPredation ? random() < 0.45 : random() < 0.25));
-    if (shouldSpawn) {
-      this.spawnDetritusBloom(org.x, org.y, org.size, org.hue, org.energy);
-    }
-  }
-
-  spawnDetritusBloom(x, y, size, hue, energyRemaining) {
-    const detritusBlooms = this.nutrientBlooms.filter(b => b.isDetritus);
-    if (detritusBlooms.length >= 8) {
-      const oldestDetritusIdx = this.nutrientBlooms.findIndex(b => b.isDetritus);
-      if (oldestDetritusIdx >= 0) {
-        this.nutrientBlooms.splice(oldestDetritusIdx, 1);
-      }
-    }
-    const detritusEnergy = Math.max(15.0, Math.min(60.0, (energyRemaining || 20) * 0.4 + size * 4));
-    const bloom = {
-      id: this.nextBloomId++,
-      x,
-      y,
-      energy: detritusEnergy,
-      radius: Math.max(10, Math.min(22, size * 1.6)),
-      maxAge: 90, // ~9 seconds
-      age: 0,
-      isDetritus: true,
-      hue: hue !== undefined ? hue : 0.12
-    };
-    this.nutrientBlooms.push(bloom);
   }
 
   foundDynasty(orgId, founderName) {

@@ -76,6 +76,7 @@ export class BioInspector {
   }
 
   select(organismId) {
+    this.client.remainsPanel?.close();
     if (this.selectedId !== organismId) this.stopTracking();
     this.selectedId = organismId;
     this.lastProfile = null;

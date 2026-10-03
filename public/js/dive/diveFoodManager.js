@@ -1,11 +1,14 @@
 import { OCEAN_GEOMETRY } from '../shared/habitats.js';
 import * as THREE from '../lib/three.module.js';
+import {drawRemains} from '../gl/remainsDrawing.js';
 
 export class DiveFoodManager {
-  constructor(scene, worldSize = OCEAN_GEOMETRY.worldSize) {
+  constructor(scene, worldSize = OCEAN_GEOMETRY.worldSize, floorHeight = () => -16) {
     this.scene = scene;
     this.worldSize = worldSize;
+    this.floorHeight = floorHeight;
     this.bloomGroups = new Map(); // id -> { group, cloud, core, light, crystals, radius, x, z, targetScale, curScale }
+    this.remainsMeshes = new Map();
     this.ambientSpores = null;
     this.particleTexture = null;
     this.lastGrazingSoundTime = 0;
@@ -175,7 +178,35 @@ export class DiveFoodManager {
     };
   }
 
-  update(serverBlooms = [], time = performance.now(), playerPos3D = null) {
+  updateRemains(bodies, playerPos) {
+    // Only nearby bodies need textures/meshes in the submerged view. No lights,
+    // physics or living animation is added for these settled membranes.
+    const nearby=playerPos ? bodies.map(p=>({p,d:Math.hypot(p.x-OCEAN_GEOMETRY.cx-playerPos.x,p.y-OCEAN_GEOMETRY.cy-playerPos.z)}))
+      .filter(v=>v.d<240).sort((a,b)=>a.d-b.d).slice(0,24).map(v=>v.p):[];
+    const active=new Set(nearby.map(p=>p.id));
+    for(const [id,obj] of this.remainsMeshes) if(!active.has(id)) {
+      this.scene.remove(obj.mesh);obj.mesh.geometry.dispose();obj.mesh.material.dispose();obj.texture.dispose();this.remainsMeshes.delete(id);
+    }
+    for(const p of nearby) {
+      let obj=this.remainsMeshes.get(p.id);
+      if(!obj) {
+        const canvas=document.createElement('canvas');canvas.width=canvas.height=128;
+        const texture=new THREE.CanvasTexture(canvas),material=new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,side:THREE.DoubleSide});
+        const width=p.size*5.5,mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,width),material);
+        mesh.rotation.x=-Math.PI/2;mesh.position.set(p.x-OCEAN_GEOMETRY.cx,0,p.y-OCEAN_GEOMETRY.cy);
+        this.scene.add(mesh);obj={mesh,canvas,texture,age:-1};this.remainsMeshes.set(p.id,obj);
+      }
+      const x=p.x-OCEAN_GEOMETRY.cx,z=p.y-OCEAN_GEOMETRY.cy,r=p.size*1.6;
+      obj.mesh.position.y=.6+Math.max(this.floorHeight(x-r,z-r),this.floorHeight(x+r,z-r),this.floorHeight(x-r,z+r),this.floorHeight(x+r,z+r));
+      if(obj.age!==p.age) {
+        const ctx=obj.canvas.getContext('2d');ctx.clearRect(0,0,128,128);
+        drawRemains(ctx,p,64,64,128/5.5,true);obj.texture.needsUpdate=true;obj.age=p.age;
+      }
+    }
+  }
+
+  update(serverBlooms = [], time = performance.now(), playerPos3D = null, bodies = []) {
+    this.updateRemains(bodies,playerPos3D);
     const activeIds = new Set();
     let isPlayerGrazing = false;
 
@@ -284,6 +315,10 @@ export class DiveFoodManager {
       } catch (e) {}
     }
     this.bloomGroups.clear();
+    for(const obj of this.remainsMeshes.values()) {
+      this.scene.remove(obj.mesh);obj.mesh.geometry.dispose();obj.mesh.material.dispose();obj.texture.dispose();
+    }
+    this.remainsMeshes.clear();
 
     if (this.ambientSpores) {
       try {

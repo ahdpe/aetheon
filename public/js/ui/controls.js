@@ -292,11 +292,21 @@ export class InputController {
     }
     // 1. Check if user tapped directly on an organism (touch target radius 38px for easier mobile selection)
     const hit = this.renderer.findOrganismAtScreenPoint(screenX, screenY, 38);
+    const remains=this.renderer.findRemainsAtScreenPoint(screenX,screenY);
+    if(remains) {
+      const dead=this.renderer.worldToScreen(remains.x,remains.y),live=hit&&this.renderer.worldToScreen(hit.x,hit.y);
+      if(!live||Math.hypot(dead.x-screenX,dead.y-screenY)<Math.hypot(live.x-screenX,live.y-screenY)) {
+        this.client.remainsPanel.select(remains.id);return;
+      }
+    }
     if (hit) {
+      this.client.remainsPanel.close();
       this.inspector.select(hit.id);
       sound.playDroplet(1100);
       return;
     }
+
+    if(this.client.remainsPanel.id!==null){this.client.remainsPanel.close();return;}
 
     // 2. Otherwise, drop nutrient into the petri chamber!
     const worldPt = this.renderer.screenToWorld(screenX, screenY);

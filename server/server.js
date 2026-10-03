@@ -46,7 +46,8 @@ const server = http.createServer((req, res) => {
     const measuredHz = (engine.ticks - lastHealthTick) / Math.max(0.001, (now-lastHealthTime)/1000);
     lastHealthTick = engine.ticks; lastHealthTime = now;
     res.writeHead(200, { 'Content-Type':'application/json', 'Cache-Control':'no-store' });
-    res.end(JSON.stringify({ status:'ok', version:'2.7-expansion', pid:process.pid, ticks:engine.ticks, worldCreatedAt:engine.genesisTime,
+    res.end(JSON.stringify({ status:'ok', version:'2.8-remains', pid:process.pid, ticks:engine.ticks, worldCreatedAt:engine.genesisTime,
+      remains:engine.remains.getStats(),
       organisms:engine.organisms.length, plants:engine.algae.isles.length, worldSize:CONFIG.WORLD_SIZE, gridSize:CONFIG.GRID_SIZE, expansionTick:engine.expansionState?.tick, chamberRadius:CONFIG.CHAMBER_RADIUS,geographyStartedAtTick:engine.geography.state.startedAtTick,geographySamples:engine.geography.state.samples.length,floraBirths:engine.algae.totals.births, floraDeaths:engine.algae.totals.deaths, ecologyEpoch:engine.ecologyEpoch, nurseryIntroduced:engine.nursery.introduced, nurseryQueued:engine.nursery.records.filter(r=>r.status==='queued').length, registeredMorphs:engine.lineage.getCatalogSpecies().length, archivedLabels:engine.lineage.speciesMap.size, visitors:network.clients.size,
       measuredHz:Math.round(measuredHz*100)/100, stepP95Ms:Math.round((times[Math.floor(times.length*.95)]??0)*100)/100,
       snapshotBytes:engine.persistence.lastSnapshotBytes, snapshotSaveMs:Math.round(engine.persistence.lastSaveMs??0) }));

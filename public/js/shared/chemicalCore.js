@@ -354,6 +354,25 @@ class ChemicalGrid {
     return consumed;
   }
 
+  // Deposit a TOTAL finite amount, rather than an amplitude for each grid cell.
+  // Return the amount retained; saturation is an explicit sink for the caller.
+  depositNutrients(wx, wy, amount, radius = 15) {
+    if (![wx,wy,amount,radius].every(Number.isFinite) || amount<=0) return 0;
+    const {ix:cx,iy:cy}=this.worldToGrid(wx,wy), N=this.size;
+    const r=Math.max(1,Math.ceil(radius*this.size/CONFIG.WORLD_SIZE));
+    const cells=[];let weight=0,accepted=0;
+    for(let y=Math.max(0,cy-r);y<=Math.min(N-1,cy+r);y++) for(let x=Math.max(0,cx-r);x<=Math.min(N-1,cx+r);x++) {
+      const d=(x-cx)**2+(y-cy)**2;if(d>r*r)continue;
+      const w=Math.exp(-d/(r*r));cells.push([y*N+x,w]);weight+=w;
+    }
+    for(const [i,w] of cells) {
+      const before=this.nutrients[i];
+      this.nutrients[i]=Math.max(before,Math.min(2,this.nutrients[i]+amount*w/weight));
+      accepted+=this.nutrients[i]-before;
+    }
+    return Math.min(amount,accepted);
+  }
+
   // Inject external disturbance (from visitor clicks/touch gestures)
   injectDrop(wx, wy, nutrientAmount = 1.0, radius = 25) {
     const scale = this.size / CONFIG.WORLD_SIZE;
