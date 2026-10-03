@@ -24,7 +24,7 @@ export class GeographyPanel {
   this.app=app;this.data=null;this.selected='meadow';this.visited=new Set();
   this.button=document.createElement('button');this.button.className='hud-btn hud-btn-map';this.button.id='btn-ocean-map';document.getElementById('btn-codex').before(this.button);
   this.dialog=document.createElement('dialog');this.dialog.className='family-dialog geography-dialog';this.dialog.setAttribute('aria-labelledby','geography-title');document.body.append(this.dialog);
-  this.terrain=makeTerrainCanvas(384,this.app.renderer.terrain);
+  this.terrain=makeTerrainCanvas(384,this.app.renderer.terrain,{atlas:true});
   this.button.addEventListener('click',()=>this.open());
   this.dialog.addEventListener('click',e=>{
    const button=e.target.closest('button');if(!button)return;

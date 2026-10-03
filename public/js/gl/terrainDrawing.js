@@ -1,18 +1,32 @@
 import {HABITATS,OCEAN_GEOMETRY} from '../shared/habitats.js';
 import {TerrainField} from '../shared/terrain.js';
 
-export function makeTerrainCanvas(size=320,terrain=new TerrainField()){
+const smooth=(a,b,v)=>{const t=Math.max(0,Math.min(1,(v-a)/(b-a)));return t*t*(3-2*t);};
+const blend=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
+
+// Seabed colour follows continuous local conditions, without the atlas's
+// categorical radial borders. Generated once, shared by 2D, 3D and nursery.
+function seabedColour(s){
+ let rgb=blend([26,57,65],[46,79,69],smooth(.15,.9,s.light)*.5);
+ rgb=blend(rgb,[93,83,57],smooth(.43,.73,s.elevation)*.72);
+ rgb=blend(rgb,[18,43,60],s.channel*.55);
+ return blend(rgb,[22,38,59],s.basin*.45);
+}
+
+export function makeTerrainCanvas(size=320,terrain=new TerrainField(),{atlas=false}={}){
  const canvas=document.createElement('canvas');canvas.width=canvas.height=size;
  const ctx=canvas.getContext('2d'),pixels=ctx.createImageData(size,size),scale=OCEAN_GEOMETRY.worldSize/size;
  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
   const wx=x*scale,wy=y*scale;if(Math.hypot(wx-1050,wy-1050)>OCEAN_GEOMETRY.radius)continue;
-  const s=terrain.sample(wx,wy),h=HABITATS.find(h=>h.id===s.id),hex=h.color.slice(1),i=(y*size+x)*4;
+  const s=terrain.sample(wx,wy),i=(y*size+x)*4;
   const shade=Math.max(.32,Math.min(1.2,.66+(s.gradientX-s.gradientY)*85));
-  const contour=Math.abs(s.elevation*18-Math.round(s.elevation*18))<Math.max(.012,Math.min(.09,Math.hypot(s.gradientX,s.gradientY)*scale*9))?.88:1;
-  const ridge=Math.max(0,(s.elevation-.48)*2),channel=s.channel;
-  pixels.data[i]=(parseInt(hex.slice(0,2),16)*.40+ridge*55-channel*12)*shade*contour;
-  pixels.data[i+1]=(parseInt(hex.slice(2,4),16)*.47+ridge*30+channel*4)*shade*contour;
-  pixels.data[i+2]=(parseInt(hex.slice(4,6),16)*.51+ridge*8+channel*14)*shade*contour;
+  let rgb=seabedColour(s),contour=1;
+  if(atlas){
+   const hex=HABITATS.find(h=>h.id===s.id).color.slice(1),ridge=Math.max(0,(s.elevation-.48)*2),channel=s.channel;
+   rgb=[parseInt(hex.slice(0,2),16)*.40+ridge*55-channel*12,parseInt(hex.slice(2,4),16)*.47+ridge*30+channel*4,parseInt(hex.slice(4,6),16)*.51+ridge*8+channel*14];
+   contour=Math.abs(s.elevation*18-Math.round(s.elevation*18))<Math.max(.012,Math.min(.09,Math.hypot(s.gradientX,s.gradientY)*scale*9))?.88:1;
+  }
+  for(let c=0;c<3;c++)pixels.data[i+c]=rgb[c]*shade*contour;
   pixels.data[i+3]=255;
  }
  ctx.putImageData(pixels,0,0);return canvas;
