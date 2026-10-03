@@ -31,7 +31,7 @@ export class Geography {
    r.nutrients+=grid.nutrients[cell];r.waste+=grid.waste[cell];r.reef+=grid.substrate[cell];
   }
   for(let i=0;i<rows.length;i++){
-   const r=rows[i],h=HABITATS[i],env=sampleHabitat(h.x,h.y);
+   const r=rows[i],h=HABITATS[i],env=grid.terrain.sample(h.x,h.y);
    r.biomass=Math.round(r.biomass);
    for(const key of ['nutrients','waste','reef'])r[key]=Math.round(r[key]/Math.max(1,this.areas[i])*100)/100;
    r.light=Math.round(env.light*100);r.current=Math.round(Math.hypot(env.currentX,env.currentY)*1000)/1000;

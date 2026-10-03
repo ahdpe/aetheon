@@ -119,7 +119,7 @@ class Organism {
   step(grid, nearbyNeighbors, nutrientBlooms = [], effectiveRadius = null, tempFactor = 1.0, remains = null) {
     this.age++;
     if (this.attackCooldown > 0) this.attackCooldown--;
-    const habitat = sampleHabitat(this.x, this.y);
+    const habitat = grid.terrain?.sample(this.x,this.y)??sampleHabitat(this.x,this.y);
 
     // 1. Advance Kuramoto phase oscillator
     let phaseTorque = 0;
@@ -423,8 +423,8 @@ class Organism {
       this.phase += 0.06; // Faster cilia beat
     }
 
-    const targetVx = Math.cos(this.heading) * this.maxSpeed * speedMultiplier * tempFactor * this.body.propulsion + habitat.currentX;
-    const targetVy = Math.sin(this.heading) * this.maxSpeed * speedMultiplier * tempFactor * this.body.propulsion + habitat.currentY;
+    const targetVx = Math.cos(this.heading) * this.maxSpeed * speedMultiplier * tempFactor * this.body.propulsion * (habitat.mobility??1) + habitat.currentX;
+    const targetVy = Math.sin(this.heading) * this.maxSpeed * speedMultiplier * tempFactor * this.body.propulsion * (habitat.mobility??1) + habitat.currentY;
 
     const accelRate = isPiloted ? 0.45 : ((isHunting || isFleeing || this.panicTicks > 0 || isLuredToFood) ? .2 : MOTION.acceleration);
     this.vx += (targetVx - this.vx) * accelRate;

@@ -1,6 +1,5 @@
 import { random } from './random.js';
 import { CONFIG } from '../config.js';
-import { sampleHabitat } from '../../public/js/shared/habitats.js';
 
 export const FLORA_LIMIT = 32;
 const clamp = x => Math.max(0, Math.min(1, x));
@@ -43,7 +42,7 @@ export class AlgaeManager {
     const {grid,ticks}=engine;
     for(const p of this.isles) {
       p.age++;p.phase=(p.phase+0.012)%(Math.PI*2);
-      const env=sampleHabitat(p.x,p.y);
+      const env=grid.terrain.sample(p.x,p.y);
       // Roots remove finite dissolved nutrients or waste minerals; light supplies external energy.
       // Taller branching plants collect more, but maintain more tissue and shade one another.
       let crowd=0;
@@ -88,7 +87,7 @@ export class AlgaeManager {
       if(p.biomass<p.capacity*0.72 || p.age<1200 || ticks-p.lastSpore<1800) continue;
       p.lastSpore=ticks;
       const a=random()*Math.PI*2, dist=75+random()*100*(0.5+p.genome.height);
-      const env=sampleHabitat(p.x,p.y),x=p.x+Math.cos(a)*dist+env.currentX*150,y=p.y+Math.sin(a)*dist+env.currentY*150;
+      const env=grid.terrain.sample(p.x,p.y),x=p.x+Math.cos(a)*dist+env.currentX*150,y=p.y+Math.sin(a)*dist+env.currentY*150;
       if(Math.hypot(x-CONFIG.CHAMBER_CENTER_X,y-CONFIG.CHAMBER_CENTER_Y)>CONFIG.CHAMBER_RADIUS-50 || this.isles.some(o=>Math.hypot(x-o.x,y-o.y)<(p.baseRadius+o.baseRadius)*0.7)) continue;
       const genome=Object.fromEntries(Object.entries(p.genome).map(([k,v])=>[k,clamp(v+(random()-0.5)*0.16)]));
       const biomass=p.biomass*0.18;p.biomass-=biomass;

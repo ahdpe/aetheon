@@ -58,6 +58,7 @@ export class NetworkManager {
         worldCreatedAt: this.engine.genesisTime,
         worldSize: CONFIG.WORLD_SIZE,
         gridSize: CONFIG.GRID_SIZE,
+        terrain:this.engine.terrainState,
         geography:this.engine.geography.broadcast(),
         chamber: {
           cx: CONFIG.CHAMBER_CENTER_X,

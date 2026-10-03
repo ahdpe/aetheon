@@ -63,6 +63,10 @@ export class ParticleSystem {
       // Fluid movement
       this.x[i] += this.vx[i];
       this.y[i] += this.vy[i];
+      if(this.terrain){
+        const t=this.terrain,ix=Math.max(0,Math.min(t.size-1,Math.round(this.x[i]/t.spacing))),iy=Math.max(0,Math.min(t.size-1,Math.round(this.y[i]/t.spacing))),cell=iy*t.size+ix;
+        this.x[i]+=t.currentX[cell]/3;this.y[i]+=t.currentY[cell]/3;
+      }
 
       // Soft reflection at circular chamber boundary
       const dx = this.x[i] - cx;

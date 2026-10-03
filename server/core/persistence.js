@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import {TERRAIN_SEED,validateTerrainState} from '../../public/js/shared/terrain.js';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { CONFIG } from '../config.js';
@@ -91,7 +92,7 @@ export class PersistenceManager {
         fields: Object.fromEntries(fieldNames.map(n => [n, encode(engine.grid[n])])),
         vents: engine.grid.vents, ephemeralFumaroles: engine.grid.ephemeralFumaroles,
         nutrientBlooms: engine.nutrientBlooms ?? [], nextBloomId: engine.nextBloomId, lastVisitorFeed: engine.lastVisitorFeed,
-        remainsState: engine.remains?.toJSON(),
+        remainsState: engine.remains?.toJSON(), terrainState:engine.terrainState,
         colonyData: engine.colonies?.getSerializableData() ?? [], climate: engine.climate?.toJSON(),
         atlasEntries: engine.atlas?.toJSON() ?? [], cataclysmData: engine.cataclysms?.toJSON(), algaeData: engine.algae?.toJSON(),
         familyHistory: engine.history?.toJSON(), ecologyEpoch: engine.ecologyEpoch, nurseryState:engine.nursery?.toJSON(), geographyState:engine.geography?.toJSON(),
@@ -117,7 +118,7 @@ export class PersistenceManager {
     if (!candidates.length) return false;
     let data;
     for (const file of candidates) {
-      try { data = this.read(file); if(data.formatVersion)data=expandSnapshot(data); this.validateFields(data, engine.grid); engine.remains.fromJSON(data.remainsState,data.ticks); break; }
+      try { data = this.read(file); if(data.formatVersion)data=expandSnapshot(data); this.validateFields(data, engine.grid); engine.remains.fromJSON(data.remainsState,data.ticks); engine.terrainState=validateTerrainState(data.terrainState??{version:1,seed:TERRAIN_SEED,startedAtTick:data.ticks},data.ticks); break; }
       catch (err) { data = null; console.error('[Persistence] Rejected snapshot:', file, err.message); }
     }
     if (!data) throw new Error('No valid world snapshot; refusing to replace the existing world with Genesis');

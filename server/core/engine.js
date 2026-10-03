@@ -1,3 +1,4 @@
+import {TERRAIN_SEED} from '../../public/js/shared/terrain.js';
 import { random } from './random.js';
 import { CONFIG } from '../config.js';
 import { ChemicalGrid } from './chemicalGrid.js';
@@ -73,6 +74,7 @@ export class SimulationEngine {
     this.ecologyEpoch ??= { version:1, startedAtTick:this.ticks, startedAt:Date.now(), initializedAnatomy:false };
     if (!restored) this.remains.startedAtTick = this.ticks;
     this.history.synchronize(this.organisms, this.ticks, { initial: true });
+    this.terrainState??={version:1,seed:TERRAIN_SEED,startedAtTick:this.ticks};
     this.geography.init(this);
     if (this.atlas) {
       this.atlas.init();

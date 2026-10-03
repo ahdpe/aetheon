@@ -396,7 +396,7 @@ export class DiveEngine {
       this.hud.flashFeeding();
     }
 
-    this.environment.update(time, orgX3D, orgZ3D, this.app.renderer.thumbCanvas, serverBlooms, org.color);
+    this.environment.update(time, orgX3D, orgZ3D, this.app.renderer.thumbCanvas, serverBlooms, org.color, this.app.renderer.substrateCanvas);
     this.creatures.update(orgs, this.trackedId, this.app.renderer.colonyBonds, time, this.app.renderer.pilotedIds);
     this.hud.update(org, this.currentHeading, nearestVent, nearestPredatorDist, time);
     this.audio.update(org, speed, minVentDist, org.ciliaryFrequency);

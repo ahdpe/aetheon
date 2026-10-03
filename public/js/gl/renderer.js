@@ -1,7 +1,8 @@
 import { ParticleSystem } from './particles.js';
 import { getSpeciesMorphology, drawCellMembranePath, drawCellMarkings, drawFlagellum, drawAntennae } from './morphology.js';
 import { OCEAN_GEOMETRY } from '../shared/habitats.js';
-import { makeHabitatCanvas } from '../ui/geographyPanel.js';
+import { makeTerrainCanvas } from './terrainDrawing.js';
+import { TerrainField } from '../shared/terrain.js';
 import { ObservationBuffer, followGain, focusGeometry, insideFocus } from './observation.js';
 import { drawRemains } from './remainsDrawing.js';
 
@@ -14,7 +15,8 @@ export class OceanRenderer {
     this.worldSize = OCEAN_GEOMETRY.worldSize;
     this.gridSize = OCEAN_GEOMETRY.gridSize;
     this.chamber = { cx: OCEAN_GEOMETRY.cx, cy: OCEAN_GEOMETRY.cy, r: OCEAN_GEOMETRY.radius };
-    this.habitatCanvas=makeHabitatCanvas();
+    this.terrain=new TerrainField();
+    this.habitatCanvas=makeTerrainCanvas(384,this.terrain);
     
     // Camera centered on chamber
     this.camera = {
@@ -41,6 +43,7 @@ export class OceanRenderer {
     
     // Ambient fluid particles
     this.particles = new ParticleSystem(600, this.worldSize, this.chamber);
+    this.particles.terrain=this.terrain;
     
     // Interaction ripples & food particles
     this.ripples = [];
@@ -60,6 +63,8 @@ export class OceanRenderer {
     this.thumbCanvas.height = 48;
     this.thumbCtx = this.thumbCanvas.getContext('2d');
     this.thumbImgData = this.thumbCtx.createImageData(48, 48);
+    this.substrateCanvas=document.createElement('canvas');this.substrateCanvas.width=this.substrateCanvas.height=48;
+    this.substrateCtx=this.substrateCanvas.getContext('2d');this.substrateImgData=this.substrateCtx.createImageData(48,48);
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -163,6 +168,7 @@ export class OceanRenderer {
       const sig = rawThumb[srcPtr++];
       const sub = isRGBA ? rawThumb[srcPtr++] : 0;
       if (sub > maxSub) maxSub = sub;
+      this.substrateImgData.data[i*4+3]=sub;
 
       if (sub > 35) {
         // Bio-calcite Coral Reef & Living Mineral Architecture (Stigmergy)
@@ -191,6 +197,7 @@ export class OceanRenderer {
     }
     this.hasReefs = maxSub > 50;
     this.thumbCtx.putImageData(this.thumbImgData, 0, 0);
+    this.substrateCtx.putImageData(this.substrateImgData,0,0);
   }
 
   onServerTick(packet) {
@@ -320,7 +327,7 @@ export class OceanRenderer {
     fluidGrad.addColorStop(1.0, '#010c18');
     ctx.fillStyle = fluidGrad;
     ctx.fillRect(chScreenX - chScreenR, chScreenY - chScreenR, chScreenR * 2, chScreenR * 2);
-    ctx.globalAlpha=0.15;
+    ctx.globalAlpha=0.72;
     ctx.drawImage(this.habitatCanvas,toScreenX(0),toScreenY(0),this.worldSize*camZoom,this.worldSize*camZoom);
     ctx.globalAlpha=1;
 

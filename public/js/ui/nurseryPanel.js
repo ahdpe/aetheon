@@ -140,6 +140,7 @@ export class NurseryPanel {
   ctx.clearRect(0,0,w,h);const bg=ctx.createRadialGradient(w/2,h/2,5,w/2,h/2,430);bg.addColorStop(0,'#103c46');bg.addColorStop(1,'#020f1a');ctx.fillStyle=bg;ctx.fillRect(0,0,w,h);
   if(this.result?.cells){
    const scale=177/OCEAN_GEOMETRY.radius;
+   ctx.drawImage(this.app.renderer.habitatCanvas,400-OCEAN_GEOMETRY.cx*scale,200-OCEAN_GEOMETRY.cy*scale,OCEAN_GEOMETRY.worldSize*scale,OCEAN_GEOMETRY.worldSize*scale);
    ctx.strokeStyle='#557b88';ctx.beginPath();ctx.arc(400,200,177,0,Math.PI*2);ctx.stroke();
    for(const v of this.result.vents){ctx.fillStyle='#f3cf8455';ctx.beginPath();ctx.arc(400+(v.x-OCEAN_GEOMETRY.cx)*scale,200+(v.y-OCEAN_GEOMETRY.cy)*scale,7,0,Math.PI*2);ctx.fill();}
    for(const p of this.result.remains??[])drawRemains(ctx,p,400+(p.x-OCEAN_GEOMETRY.cx)*scale,200+(p.y-OCEAN_GEOMETRY.cy)*scale,Math.max(2,p.size*.7),true);

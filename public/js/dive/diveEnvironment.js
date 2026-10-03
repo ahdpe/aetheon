@@ -1,11 +1,15 @@
 import * as THREE from '../lib/three.module.js';
 import { OCEAN_GEOMETRY } from '../shared/habitats.js';
+import {TerrainField} from '../shared/terrain.js';
+import {makeTerrainCanvas} from '../gl/terrainDrawing.js';
 
 export class DiveEnvironment {
   constructor(scene, worldSize = OCEAN_GEOMETRY.worldSize, chamberRadius = OCEAN_GEOMETRY.radius) {
     this.scene = scene;
     this.worldSize = worldSize;
     this.chamberRadius = chamberRadius;
+    this.terrain=new TerrainField();
+    this.reliefCanvas=makeTerrainCanvas(512,this.terrain);
 
     this.plumeParticles = [];
     this.marineSnow = null;
@@ -160,7 +164,7 @@ export class DiveEnvironment {
 
   setupSeafloor() {
     // 3D Bio-Calcite Reef Floor on XZ plane
-    const gridSegs = 72;
+    const gridSegs = 96;
     const planeGeo = new THREE.PlaneGeometry(this.worldSize, this.worldSize, gridSegs, gridSegs);
     // Rotate to lie flat on XZ plane: X is horizontal, Z is depth, Y is altitude
     planeGeo.rotateX(-Math.PI * 0.5);
@@ -174,23 +178,7 @@ export class DiveEnvironment {
       const vz = pos.getZ(i);
       const distFromCenter = Math.hypot(vx, vz);
 
-      let elevation = -16.0;
-      if (distFromCenter < this.chamberRadius) {
-        // Natural undulating seabed
-        elevation += Math.sin(vx * 0.015) * Math.cos(vz * 0.015) * 3.2;
-        elevation += Math.sin(vx * 0.035 + vz * 0.03) * 1.8;
-
-        // Elevated vent mounds beneath each hydrothermal chimney (peaks at Y = -9.5)
-        for (let v = 0; v < this.ventPositions3D.length; v++) {
-          const vent = this.ventPositions3D[v];
-          const vdist = Math.hypot(vx - vent.x, vz - vent.z);
-          if (vdist < 110) {
-            elevation += Math.cos((vdist / 110) * (Math.PI * 0.5)) * 6.5;
-          }
-        }
-      } else {
-        elevation -= 22.0; // Shelf drops off outside petri chamber
-      }
+      const elevation=distFromCenter<this.chamberRadius?this.terrain.sample(vx+this.worldSize/2,vz+this.worldSize/2).floorHeight:-42;
 
       this.baseElevations[i] = elevation;
       pos.setY(i, elevation);
@@ -245,8 +233,8 @@ export class DiveEnvironment {
         let elev = this.baseElevations[i];
 
         if (distFromCenter < this.chamberRadius) {
-          const gx = Math.max(0, Math.min(w - 1, Math.round(((vx + halfSize) / this.worldSize) * (w - 1))));
-          const gy = Math.max(0, Math.min(h - 1, Math.round(((vz + halfSize) / this.worldSize) * (h - 1))));
+          const gx = Math.max(0, Math.min(w - 1, Math.round(((vx + halfSize) / this.worldSize) * w)));
+          const gy = Math.max(0, Math.min(h - 1, Math.round(((vz + halfSize) / this.worldSize) * h)));
           const pIdx = (gy * w + gx) * 4;
 
           // Alpha channel is substrate bio-calcite (0..255)
@@ -443,6 +431,7 @@ export class DiveEnvironment {
     bgGrad.addColorStop(1, '#010c18');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(this.reliefCanvas,0,0,w,h);
 
     // Procedural organic sediment speckles & bio-calcite mineral grit
     ctx.fillStyle = 'rgba(0, 240, 255, 0.04)';
@@ -776,7 +765,7 @@ export class DiveEnvironment {
     }
   }
 
-  update(time, playerX3D = 0, playerZ3D = 0, thumbCanvas = null, serverBlooms = [], playerColor = '#00f0ff') {
+  update(time, playerX3D = 0, playerZ3D = 0, thumbCanvas = null, serverBlooms = [], playerColor = '#00f0ff', substrateCanvas = null) {
     // 1. Dynamic water atmosphere & vent lighting matching 2D
     this.updateAtmosphere(playerX3D, playerZ3D);
 
@@ -789,7 +778,7 @@ export class DiveEnvironment {
     // 1.6. Dynamic 3D seafloor topography update (throttled every 5000ms)
     if (!this.lastTerrainUpdate || time - this.lastTerrainUpdate > 5000) {
       this.lastTerrainUpdate = time;
-      this.updateTerrainMeshHeights(thumbCanvas);
+      this.updateTerrainMeshHeights(substrateCanvas);
     }
 
     // 1.8. Breathing pulsation of luminous bio-calcite hemispheres

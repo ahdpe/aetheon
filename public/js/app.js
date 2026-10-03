@@ -215,6 +215,7 @@ class AetheonApp {
     if(msg.geography) this.geographyPanel.update(msg.geography);
     if (msg.type === 'init') {
       this.renderer.resetStream();
+      if(msg.terrain){this.renderer.terrainState=msg.terrain;this.geographyPanel.terrainState=msg.terrain;}
       this.renderer.serverRemains=msg.remains??[];
       this.remainsPanel.update();
       this.observatory.init(msg.worldCreatedAt);

@@ -1,4 +1,5 @@
 import {makeResourceRecharge} from './habitats.js';
+import {TerrainField,transportChemicals} from './terrain.js';
 export function createChemicalGridClass(CONFIG, random) {
 class ChemicalGrid {
   constructor(size = CONFIG.GRID_SIZE) {
@@ -17,6 +18,7 @@ class ChemicalGrid {
     this.nextSignal = new Float32Array(this.cellCount);
     this.nextSubstrate = new Float32Array(this.cellCount);
     this.recharge = makeResourceRecharge(size,CONFIG.WORLD_SIZE);
+    this.terrain = new TerrainField(size,CONFIG.WORLD_SIZE);
     
     // Primary hydrothermal vents (mineral/energy sources) with tectonic micro-drift
     this.vents = [];
@@ -83,7 +85,9 @@ class ChemicalGrid {
     const nextSig = this.nextSignal;
     const nextSub = this.nextSubstrate;
 
-    // Vectorized 2D stencil with zero-flux Neumann reflective boundaries
+    transportChemicals(this,[diffN,diffW,diffS]);
+
+    // Local reactions after symmetric diffusion and conservative current transport.
     for (let y = 0; y < N; y++) {
       const ym1 = Math.max(0, y - 1) * N;
       const y0 = y * N;
@@ -94,30 +98,10 @@ class ChemicalGrid {
         const xp1 = Math.min(N - 1, x + 1);
         const idx = y0 + x;
 
-        // Impede fluid diffusion through dense bio-calcite reefs
-        const reefImpede = Math.max(0.12, 1.0 - sub[idx] * 0.88);
-        const effDiffN = diffN * reefImpede;
-        const effDiffW = diffW * reefImpede;
-
-        // Nutrients diffusion + steady ambient chemosynthetic replenishment
-        const avgN = (nut[ym1 + x] + nut[yp1 + x] + nut[y0 + xm1] + nut[y0 + xp1]) * 0.25;
-        let nVal = (nut[idx] + effDiffN * (avgN - nut[idx])) * decayN + this.recharge[idx];
-        if (nVal > 2.0) nVal = 2.0;
-        nextNut[idx] = nVal;
-
-        // Waste diffusion
-        const avgW = (wst[ym1 + x] + wst[yp1 + x] + wst[y0 + xm1] + wst[y0 + xp1]) * 0.25;
-        let wVal = (wst[idx] + effDiffW * (avgW - wst[idx])) * decayW;
-        if (wVal < 0.0001) wVal = 0;
-        else if (wVal > 2.0) wVal = 2.0;
-        nextWst[idx] = wVal;
-
-        // Signal diffusion
-        const avgS = (sig[ym1 + x] + sig[yp1 + x] + sig[y0 + xm1] + sig[y0 + xp1]) * 0.25;
-        let sVal = (sig[idx] + diffS * (avgS - sig[idx])) * decayS;
-        if (sVal < 0.0001) sVal = 0;
-        else if (sVal > 2.0) sVal = 2.0;
-        nextSig[idx] = sVal;
+        nextNut[idx] = Math.min(2,Math.max(0,nextNut[idx]*decayN+this.recharge[idx]));
+        const wVal=nextWst[idx]*decayW,sVal=nextSig[idx]*decayS;
+        nextWst[idx]=wVal<.0001?0:Math.min(2,wVal);
+        nextSig[idx]=sVal<.0001?0:Math.min(2,sVal);
 
         // Substrate: differential erosion & biogenic calcite crystallization
         const avgSub = (sub[ym1 + x] + sub[yp1 + x] + sub[y0 + xm1] + sub[y0 + xp1]) * 0.25;
