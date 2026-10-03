@@ -88,7 +88,36 @@ export class GeographyPanel {
   for(const p of this.app.renderer.algaeIsles){ctx.strokeStyle='#a0ffcc';ctx.beginPath();ctx.arc(p.x*scale,p.y*scale,Math.max(4,p.r*scale*.4),0,Math.PI*2);ctx.stroke();}
   for(const o of this.app.renderer.currEntities.values()){ctx.fillStyle=o.carnivory>.35?'#ffc38f':'#e3fff5';ctx.beginPath();ctx.arc(o.x*scale,o.y*scale,3,0,Math.PI*2);ctx.fill();}
   for(const v of this.app.renderer.vents){const x=v.x*this.app.renderer.worldSize/this.app.renderer.gridSize*scale,y=v.y*this.app.renderer.worldSize/this.app.renderer.gridSize*scale;ctx.fillStyle='#ffe8a5';ctx.beginPath();ctx.moveTo(x,y-6);ctx.lineTo(x+6,y);ctx.lineTo(x,y+6);ctx.lineTo(x-6,y);ctx.closePath();ctx.fill();}
-  const h=this.selectedPoint??HABITATS.find(h=>h.id===this.selected);ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.beginPath();ctx.arc(h.x*scale,h.y*scale,16,0,Math.PI*2);ctx.stroke();
+  if(this.selectedPoint){
+   const sx=this.selectedPoint.x*scale,sy=this.selectedPoint.y*scale;
+   ctx.save();
+   ctx.strokeStyle='rgba(255,255,255,0.45)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(sx,sy,18,0,Math.PI*2);ctx.stroke();
+   ctx.strokeStyle='#ffffff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(sx,sy,8,0,Math.PI*2);ctx.stroke();
+   ctx.beginPath();ctx.moveTo(sx-14,sy);ctx.lineTo(sx-4,sy);ctx.moveTo(sx+4,sy);ctx.lineTo(sx+14,sy);ctx.moveTo(sx,sy-14);ctx.lineTo(sx,sy-4);ctx.moveTo(sx,sy+4);ctx.lineTo(sx,sy+14);ctx.stroke();
+   ctx.restore();
+  }else{
+   const h=HABITATS.find(h=>h.id===this.selected);
+   if(h){
+    const sx=h.x*scale,sy=h.y*scale,color=h.color||'#58ba96';
+    ctx.save();
+    const auraR=h.id==='basin'?80:h.id==='frontier'?70:55;
+    const grad=ctx.createRadialGradient(sx,sy,2,sx,sy,auraR);
+    grad.addColorStop(0,color+'44');grad.addColorStop(0.6,color+'18');grad.addColorStop(1,color+'00');
+    ctx.fillStyle=grad;ctx.beginPath();ctx.arc(sx,sy,auraR,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(sx,sy,12,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle='#04161f';ctx.beginPath();ctx.arc(sx,sy,9.5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=color;ctx.beginPath();ctx.arc(sx,sy,3.5,0,Math.PI*2);ctx.fill();
+    const label=this.name(h.id);
+    ctx.font='600 12px Inter, sans-serif';
+    const tw=ctx.measureText(label).width,bw=tw+16,bh=20,bx=sx-bw*.5,by=sy-28;
+    ctx.fillStyle='rgba(4,22,31,0.92)';ctx.strokeStyle=color+'aa';ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(bx+10,by);ctx.lineTo(bx+bw-10,by);ctx.arcTo(bx+bw,by,bx+bw,by+10,10);ctx.lineTo(bx+bw,by+bh-10);ctx.arcTo(bx+bw,by+bh,bx+bw-10,by+bh,10);ctx.lineTo(bx+10,by+bh);ctx.arcTo(bx,by+bh,bx,by+bh-10,10);ctx.lineTo(bx,by+10);ctx.arcTo(bx,by,bx+10,by,10);ctx.closePath();
+    ctx.fill();ctx.stroke();
+    ctx.fillStyle='#ffffff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,sx,by+bh*.5+1);
+    ctx.restore();
+   }
+  }
  }
  drawChart(){
   const canvas=this.dialog.querySelector('.geography-chart'),ctx=canvas.getContext('2d'),index=HABITATS.findIndex(h=>h.id===this.selected);
