@@ -114,8 +114,7 @@ export class DiveEngine {
     this.canvas.style.opacity = '1';
     this.hud.show();
 
-    // 2. Play dive immersion sound & ensure sound engine is unmuted
-    sound.unmute();
+    // 2. Play dive immersion sound & start audio (respects user mute state)
     this.audio.start();
     sound.playDroplet(2400);
 

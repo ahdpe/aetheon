@@ -21,12 +21,14 @@ export class DiveAudio {
     if (this.isActive) return;
     this.isActive = true;
     
-    // Auto-unmute sound engine on 3D dive immersion
-    sound.unmute();
+    // Respect user mute state: do not force unmute if audio was disabled
+    if (!sound.isMuted && !sound.ctx) {
+      sound.init();
+    }
     this.ctx = sound.ctx;
     if (!this.ctx) return;
 
-    if (this.ctx.state === 'suspended') {
+    if (!sound.isMuted && this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
 

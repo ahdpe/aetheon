@@ -22,9 +22,10 @@ export function makeTerrainCanvas(size=320,terrain=new TerrainField(),{atlas=fal
   const shade=Math.max(.32,Math.min(1.2,.66+(s.gradientX-s.gradientY)*85));
   let rgb=seabedColour(s),contour=1;
   if(atlas){
-   const hex=HABITATS.find(h=>h.id===s.id).color.slice(1),ridge=Math.max(0,(s.elevation-.48)*2),channel=s.channel;
-   rgb=[parseInt(hex.slice(0,2),16)*.40+ridge*55-channel*12,parseInt(hex.slice(2,4),16)*.47+ridge*30+channel*4,parseInt(hex.slice(4,6),16)*.51+ridge*8+channel*14];
-   contour=Math.abs(s.elevation*18-Math.round(s.elevation*18))<Math.max(.012,Math.min(.09,Math.hypot(s.gradientX,s.gradientY)*scale*9))?.88:1;
+   // Enhanced bathymetric topographic map: natural organic relief with depth contours
+   const ridge=Math.max(0,(s.elevation-.48)*2),channel=s.channel;
+   rgb=[Math.min(255,rgb[0]*1.15+ridge*30-channel*8), Math.min(255,rgb[1]*1.2+ridge*25+channel*5), Math.min(255,rgb[2]*1.25+ridge*12+channel*14)];
+   contour=Math.abs(s.elevation*18-Math.round(s.elevation*18))<Math.max(.012,Math.min(.09,Math.hypot(s.gradientX,s.gradientY)*scale*9))?.82:1;
   }
   for(let c=0;c<3;c++)pixels.data[i+c]=rgb[c]*shade*contour;
   pixels.data[i+3]=255;

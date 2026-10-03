@@ -10,7 +10,7 @@ export const RESOURCE_OASES = Object.freeze([
 ]);
 export const HABITATS = Object.freeze([
  {id:'basin',en:'Inner basin',ru:'Внутренняя котловина',color:'#647ba8',x:1050,y:1050},
- {id:'meadow',en:'Meadow ring',ru:'Кольцо лугов',color:'#58ba96',x:1390,y:1050},
+ {id:'meadow',en:'Reef meadows',ru:'Подводные луга',color:'#58ba96',x:1390,y:1050},
  {id:'shadow',en:'Twilight backwater',ru:'Сумеречная заводь',color:'#a48bd3',x:780,y:1250},
  {id:'shoal',en:'Inner shallows',ru:'Внутренняя отмель',color:'#c4aa73',x:1600,y:1050},
  {id:'frontier',en:'Outer archipelago',ru:'Внешний архипелаг',color:'#74cdd5',x:1050,y:250}
