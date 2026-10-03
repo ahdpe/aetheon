@@ -47,13 +47,15 @@ export const CONFIG = {
   // Simulation Constants
   TICK_RATE_HZ: parseInt(process.env.TICK_RATE_HZ || '10', 10),
   TICK_INTERVAL_MS: 1000 / parseInt(process.env.TICK_RATE_HZ || '10', 10),
-  GRID_SIZE: parseInt(process.env.GRID_SIZE || '128', 10), // 128x128 chemical grid
-  WORLD_SIZE: 1400.0, // Continuous virtual coordinates [0, WORLD_SIZE)
+  // Geometry and chemistry form one versioned model. Old environment overrides
+  // must not silently stretch a saved field.
+  GRID_SIZE: OCEAN_GEOMETRY.gridSize,
+  WORLD_SIZE: OCEAN_GEOMETRY.worldSize,
   
   // Physical Chamber (Petri dish / droplet with soft surface tension)
   CHAMBER_RADIUS: OCEAN_GEOMETRY.radius,
-  CHAMBER_CENTER_X: 700.0,
-  CHAMBER_CENTER_Y: 700.0,
+  CHAMBER_CENTER_X: OCEAN_GEOMETRY.cx,
+  CHAMBER_CENTER_Y: OCEAN_GEOMETRY.cy,
   SURFACE_TENSION_MARGIN: 120.0,
   
   MAX_ORGANISMS: parseInt(process.env.MAX_ORGANISMS || '300', 10),

@@ -1,7 +1,8 @@
+import { OCEAN_GEOMETRY } from '../shared/habitats.js';
 import * as THREE from '../lib/three.module.js';
 
 export class DiveFoodManager {
-  constructor(scene, worldSize = 1400) {
+  constructor(scene, worldSize = OCEAN_GEOMETRY.worldSize) {
     this.scene = scene;
     this.worldSize = worldSize;
     this.bloomGroups = new Map(); // id -> { group, cloud, core, light, crystals, radius, x, z, targetScale, curScale }
@@ -149,8 +150,8 @@ export class DiveFoodManager {
     group.add(crystals);
 
     // Position at 3D water column coordinates
-    const x3D = bloom.x - 700;
-    const z3D = bloom.y - 700;
+    const x3D = bloom.x - OCEAN_GEOMETRY.cx;
+    const z3D = bloom.y - OCEAN_GEOMETRY.cy;
     const y3D = 18.0;
     group.position.set(x3D, y3D, z3D);
 

@@ -11,7 +11,7 @@ export class AlgaeManager {
     const distances=[240,360,210,390,280,340,220,380];
     for(let i=0;i<8;i++) {
       const a=i*Math.PI/4+0.35, d=distances[i];
-      this.isles.push(this.makePlant({id:this.nextId++,x:700+Math.cos(a)*d,y:700+Math.sin(a)*d,
+      this.isles.push(this.makePlant({id:this.nextId++,x:CONFIG.CHAMBER_CENTER_X+Math.cos(a)*d,y:CONFIG.CHAMBER_CENTER_Y+Math.sin(a)*d,
         baseRadius:34+random()*16,hue:0.28+random()*0.25,frondCount:10+Math.floor(random()*8),density:0.9}));
     }
   }

@@ -1,3 +1,4 @@
+import { OCEAN_GEOMETRY } from '../shared/habitats.js';
 import { i18n } from '../i18n.js';
 
 export class DiveCockpitHUD {
@@ -653,7 +654,7 @@ export class DiveCockpitHUD {
 
     // Chemical Compass (scaled correctly to 2D world coordinates!)
     if (nearestVent && compassNeedle && compassDist) {
-      const ventScale = 1400 / 128; // 10.9375
+      const ventScale = OCEAN_GEOMETRY.worldSize / OCEAN_GEOMETRY.gridSize; // 10.9375
       const vwx = (nearestVent.x !== undefined ? nearestVent.x : 64) * ventScale;
       const vwy = (nearestVent.y !== undefined ? nearestVent.y : 64) * ventScale;
 

@@ -1,4 +1,4 @@
-
+import {makeResourceRecharge} from './habitats.js';
 export function createChemicalGridClass(CONFIG, random) {
 class ChemicalGrid {
   constructor(size = CONFIG.GRID_SIZE) {
@@ -16,6 +16,7 @@ class ChemicalGrid {
     this.nextWaste = new Float32Array(this.cellCount);
     this.nextSignal = new Float32Array(this.cellCount);
     this.nextSubstrate = new Float32Array(this.cellCount);
+    this.recharge = makeResourceRecharge(size,CONFIG.WORLD_SIZE);
     
     // Primary hydrothermal vents (mineral/energy sources) with tectonic micro-drift
     this.vents = [];
@@ -28,7 +29,7 @@ class ChemicalGrid {
     // Symmetrically arranged vents in a regular pentagon inside the circular chamber
     const cx = this.size * 0.5;
     const cy = this.size * 0.5;
-    const ventDist = this.size * 0.25; // ~32 grid units from center (chamber R is ~56.7)
+    const ventDist = 350 * this.size / CONFIG.WORLD_SIZE;
 
     const ventHues = [0.12, 0.52, 0.95, 0.38, 0.78]; // Amber, Cyan, Rose, Phosphor, Violet
 
@@ -100,7 +101,7 @@ class ChemicalGrid {
 
         // Nutrients diffusion + steady ambient chemosynthetic replenishment
         const avgN = (nut[ym1 + x] + nut[yp1 + x] + nut[y0 + xm1] + nut[y0 + xp1]) * 0.25;
-        let nVal = (nut[idx] + effDiffN * (avgN - nut[idx])) * decayN + 0.004;
+        let nVal = (nut[idx] + effDiffN * (avgN - nut[idx])) * decayN + this.recharge[idx];
         if (nVal > 2.0) nVal = 2.0;
         nextNut[idx] = nVal;
 

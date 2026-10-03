@@ -1,3 +1,4 @@
+import { OCEAN_GEOMETRY } from '../shared/habitats.js';
 import * as THREE from '../lib/three.module.js';
 import { getSpeciesMorphology } from '../gl/morphology.js';
 
@@ -12,8 +13,8 @@ export class DiveCreatureManager {
   update(currentEntities, playerOrgId, colonyBonds = [], time = 0, pilotedIds = null) {
     const activeIds = new Set();
     const playerOrg = currentEntities.get(playerOrgId);
-    const px = playerOrg ? playerOrg.x : 700;
-    const py = playerOrg ? playerOrg.y : 700;
+    const px = playerOrg ? playerOrg.x : OCEAN_GEOMETRY.cx;
+    const py = playerOrg ? playerOrg.y : OCEAN_GEOMETRY.cx;
 
     // 1. Update or create visible creatures
     for (const [id, org] of currentEntities.entries()) {
@@ -51,9 +52,9 @@ export class DiveCreatureManager {
         bodyMat.opacity = Math.min(0.85, Math.max(0.08, lensDist / 14.0) * 0.85);
       }
 
-      // Convert 2D coordinates (0..1400) to 3D centered coordinates (X, Z) with Y as altitude
-      const x3d = org.x - 700;
-      const z3d = org.y - 700;
+      // Convert 2D coordinates (0..worldSize) to 3D centered coordinates (X, Z) with Y as altitude
+      const x3d = org.x - OCEAN_GEOMETRY.cx;
+      const z3d = org.y - OCEAN_GEOMETRY.cy;
       const y3d = 18.0 + Math.sin(time * 0.003 + org.id) * 3.5;
       group.position.set(x3d, y3d, z3d);
 
@@ -550,12 +551,12 @@ export class DiveCreatureManager {
         this.bondLines.push(lineMesh);
       }
 
-      const ax = orgA.x - 700;
-      const az = orgA.y - 700;
+      const ax = orgA.x - OCEAN_GEOMETRY.cx;
+      const az = orgA.y - OCEAN_GEOMETRY.cy;
       const ay = 30.0 + Math.sin(time * 0.003 + orgA.id) * 4.5;
 
-      const bx = orgB.x - 700;
-      const bz = orgB.y - 700;
+      const bx = orgB.x - OCEAN_GEOMETRY.cx;
+      const bz = orgB.y - OCEAN_GEOMETRY.cy;
       const by = 30.0 + Math.sin(time * 0.003 + orgB.id) * 4.5;
 
       const posAttr = lineMesh.geometry.attributes.position;

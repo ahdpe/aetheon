@@ -1,3 +1,4 @@
+import { OCEAN_GEOMETRY } from '../shared/habitats.js';
 import {i18n} from '../i18n.js';
 import {escapeHtml} from './safeHtml.js';
 import {developBody} from '../shared/anatomy.js';
@@ -137,9 +138,10 @@ export class NurseryPanel {
   if(!this.dialog.open)return;const canvas=this.dialog.querySelector('canvas'),ctx=canvas.getContext('2d'),time=performance.now(),w=800,h=400;
   ctx.clearRect(0,0,w,h);const bg=ctx.createRadialGradient(w/2,h/2,5,w/2,h/2,430);bg.addColorStop(0,'#103c46');bg.addColorStop(1,'#020f1a');ctx.fillStyle=bg;ctx.fillRect(0,0,w,h);
   if(this.result?.cells){
+   const scale=177/OCEAN_GEOMETRY.radius;
    ctx.strokeStyle='#557b88';ctx.beginPath();ctx.arc(400,200,177,0,Math.PI*2);ctx.stroke();
-   for(const v of this.result.vents){ctx.fillStyle='#f3cf8455';ctx.beginPath();ctx.arc(400+(v.x-700)*.26,200+(v.y-700)*.26,7,0,Math.PI*2);ctx.fill();}
-   for(const c of this.result.cells){const x=400+(c.x-700)*.26,y=200+(c.y-700)*.26;
+   for(const v of this.result.vents){ctx.fillStyle='#f3cf8455';ctx.beginPath();ctx.arc(400+(v.x-OCEAN_GEOMETRY.cx)*scale,200+(v.y-OCEAN_GEOMETRY.cy)*scale,7,0,Math.PI*2);ctx.fill();}
+   for(const c of this.result.cells){const x=400+(c.x-OCEAN_GEOMETRY.cx)*scale,y=200+(c.y-OCEAN_GEOMETRY.cy)*scale;
     this.app.renderer.drawOrganism(ctx,x,y,Math.max(c.own?6:3,c.size*.7),c,c.heading,c.own,time,c.own);
    }
   }else{

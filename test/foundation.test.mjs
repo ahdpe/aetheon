@@ -281,7 +281,7 @@ test('historical aliases are retained in an immutable archive instead of each li
   const allCount=e.lineage.getAllSpecies().length,fullSpecies=e.lineage.getAllSpecies();
   assert.equal(p.saveSnapshot(e),true);
   const saved=JSON.parse(fs.readFileSync(p.filePath)),archive=path.join(dir,saved.morphologyArchive.name);
-  assert.equal(saved.formatVersion,3);assert.equal(saved.morphologyArchive.count,5000);
+  assert.equal(saved.formatVersion,4);assert.equal(saved.morphologyArchive.count,5000);
   const fullBytes=Buffer.byteLength(JSON.stringify({...saved,speciesList:fullSpecies}));
   assert.ok(fs.statSync(p.filePath).size<fullBytes*.65);
   const originalArchive=fs.readFileSync(archive),mtime=fs.statSync(archive).mtimeMs;

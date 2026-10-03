@@ -9,7 +9,7 @@ export function createTrial(design,habitat='meadow',sample=[],seed=0xae7e00) {
  let state=seed>>>0;
  const random=()=>{state=(state+0x6D2B79F5)>>>0;let t=state;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296;};
  const O=createOrganismClass(TRIAL_PHYSICS,random),Grid=createChemicalGridClass(TRIAL_PHYSICS,random),Colony=createColonyClass(TRIAL_PHYSICS);
- const grid=new Grid(),hash=new SpatialHash(1400,35),colonies=new Colony();
+ const grid=new Grid(),hash=new SpatialHash(TRIAL_PHYSICS.WORLD_SIZE,35),colonies=new Colony();
  const {x,y}=habitatReleasePoint(habitat,-Math.PI/2),founder=new O(x,y,designGenome(design));
  founder.trialFamily=true;let orgs=[founder],ticks=0,births=0,peak=1,maxGeneration=1;
  const samples=sample.length?sample:Array.from({length:12},(_,i)=>designGenome(i<9?NURSERY_PRESETS.grazer:i<11?NURSERY_PRESETS.weaver:NURSERY_PRESETS.hunter));
@@ -47,6 +47,6 @@ export function createTrial(design,habitat='meadow',sample=[],seed=0xae7e00) {
   snapshot(){const family=orgs.filter(o=>o.trialFamily);return {ticks,seconds:ticks/10,living:family.length,births,peak,maxGeneration,
    meanEnergy:family.length?family.reduce((sum,o)=>sum+o.energy,0)/family.length:0,total:orgs.length,
    cells:orgs.map(o=>({id:o.id,x:o.x,y:o.y,size:o.size,hue:o.hue,carnivory:o.carnivory,phase:o.phase,heading:o.heading,
-    energy:o.energy,anatomy:o.body,own:!!o.trialFamily})),vents:grid.vents.map(v=>({x:v.x*1400/grid.size,y:v.y*1400/grid.size}))};}
+    energy:o.energy,anatomy:o.body,own:!!o.trialFamily})),vents:grid.vents.map(v=>({x:v.x*TRIAL_PHYSICS.WORLD_SIZE/grid.size,y:v.y*TRIAL_PHYSICS.WORLD_SIZE/grid.size}))};}
  };
 }

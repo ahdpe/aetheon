@@ -2,7 +2,7 @@ import * as THREE from '../lib/three.module.js';
 import { OCEAN_GEOMETRY } from '../shared/habitats.js';
 
 export class DiveEnvironment {
-  constructor(scene, worldSize = 1400, chamberRadius = OCEAN_GEOMETRY.radius) {
+  constructor(scene, worldSize = OCEAN_GEOMETRY.worldSize, chamberRadius = OCEAN_GEOMETRY.radius) {
     this.scene = scene;
     this.worldSize = worldSize;
     this.chamberRadius = chamberRadius;
@@ -44,8 +44,8 @@ export class DiveEnvironment {
     if (!rawVents || rawVents.length === 0) {
       // Symmetrically arranged canonical vents in a regular pentagon (matches server chemicalGrid.js)
       this.vents = [];
-      const cx = 64;
-      const cy = 64;
+      const cx = OCEAN_GEOMETRY.gridSize / 2;
+      const cy = OCEAN_GEOMETRY.gridSize / 2;
       const dist = 32;
       const hues = [0.12, 0.52, 0.95, 0.38, 0.78];
       for (let i = 0; i < 5; i++) {
@@ -71,19 +71,19 @@ export class DiveEnvironment {
   }
 
   calculateVentCoordinates() {
-    const ventScale = this.worldSize / 128; // 10.9375
+    const ventScale = this.worldSize / OCEAN_GEOMETRY.gridSize; // 10.9375
     const ventColors = [0xf59e0b, 0x06b6d4, 0xf43f5e, 0x10b981, 0x8b5cf6]; // Amber, Cyan, Rose, Emerald, Violet
     const ventAtmosphere = [0x3b1c04, 0x06283b, 0x380518, 0x052e16, 0x240e45];
 
     this.ventPositions3D = [];
     for (let i = 0; i < this.vents.length; i++) {
       const v = this.vents[i];
-      // Convert server grid coordinate (0..128) to 3D centered coordinate (-700..700)
-      const worldX = (v.x !== undefined ? v.x : 64) * ventScale;
-      const worldY = (v.y !== undefined ? v.y : 64) * ventScale;
+      // Convert server grid coordinate (0..gridSize) to 3D centered coordinate (centered world)
+      const worldX = (v.x !== undefined ? v.x : OCEAN_GEOMETRY.gridSize / 2) * ventScale;
+      const worldY = (v.y !== undefined ? v.y : OCEAN_GEOMETRY.gridSize / 2) * ventScale;
 
-      const x3d = worldX - 700;
-      const z3d = worldY - 700;
+      const x3d = worldX - OCEAN_GEOMETRY.cx;
+      const z3d = worldY - OCEAN_GEOMETRY.cy;
       const color = ventColors[i % ventColors.length];
       const atmoColor = ventAtmosphere[i % ventAtmosphere.length];
 
@@ -132,7 +132,7 @@ export class DiveEnvironment {
     dome.scale.set(1.0, 0.12, 1.0); // Gentle liquid meniscus curve overhead
     this.scene.add(dome);
 
-    // 2. Laboratory Petri Dish Glass Cylinder Boundary (radius 620)
+    // 2. Laboratory Petri Dish Glass Cylinder Boundary
     const wallGeo = new THREE.CylinderGeometry(this.chamberRadius, this.chamberRadius, 85, 64, 1, true);
     const wallMat = new THREE.MeshBasicMaterial({
       color: 0x00f0ff,
@@ -282,7 +282,7 @@ export class DiveEnvironment {
       this.algaeBubbles.mesh.visible=rawAlgae.length>0;
       for(let i=0;i<this.algaeBubbles.velocities.length && rawAlgae.length;i++) {
         const p=rawAlgae[i%rawAlgae.length],v=this.algaeBubbles.velocities[i];
-        v.centerX=p.x-700;v.centerZ=p.y-700;v.isleRadius=p.r*0.75;
+        v.centerX=p.x-OCEAN_GEOMETRY.cx;v.centerZ=p.y-OCEAN_GEOMETRY.cy;v.isleRadius=p.r*0.75;
       }
     }
     const byId=new Map(rawAlgae.map(p=>[p.id,p]));
@@ -321,8 +321,8 @@ export class DiveEnvironment {
 
     for (let i = 0; i < this.algaeIsles.length; i++) {
       const isle = this.algaeIsles[i];
-      const centerX = (isle.x || 700) - 700;
-      const centerZ = (isle.y || 700) - 700;
+      const centerX = (isle.x ?? OCEAN_GEOMETRY.cx) - OCEAN_GEOMETRY.cx;
+      const centerZ = (isle.y ?? OCEAN_GEOMETRY.cy) - OCEAN_GEOMETRY.cy;
       const rawR = Number(isle.r !== undefined ? isle.r : (isle.radius || 40));
       const isleR = rawR * 0.72;
       const frondCount = Math.min(9, Math.max(6, Math.floor(((isle.f || isle.frondCount || 12)) * 0.6)));
@@ -374,8 +374,8 @@ export class DiveEnvironment {
 
     for (let i = 0; i < count; i++) {
       const isle = this.algaeIsles[i % this.algaeIsles.length];
-      const centerX = (isle.x || 700) - 700;
-      const centerZ = (isle.y || 700) - 700;
+      const centerX = (isle.x ?? OCEAN_GEOMETRY.cx) - OCEAN_GEOMETRY.cx;
+      const centerZ = (isle.y ?? OCEAN_GEOMETRY.cy) - OCEAN_GEOMETRY.cy;
       const rawR = Number(isle.r !== undefined ? isle.r : (isle.radius || 40));
       const r = Math.random() * rawR * 0.75;
       const ang = Math.random() * Math.PI * 2;
@@ -533,7 +533,7 @@ export class DiveEnvironment {
     // 4. Draw Radiant Hydrothermal Vent Hearths & Geothermal Auras
     for (let i = 0; i < this.ventPositions3D.length; i++) {
       const vent = this.ventPositions3D[i];
-      // Convert centered 3D (-700..700) to seafloor canvas (0..512)
+      // Convert centered 3D (centered world) to seafloor canvas (0..512)
       const vx = ((vent.x + this.worldSize * 0.5) / this.worldSize) * w;
       const vz = ((vent.z + this.worldSize * 0.5) / this.worldSize) * h;
       const vr = 48; // Crisp, concentrated radiant pool directly beneath hemisphere

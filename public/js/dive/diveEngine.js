@@ -72,7 +72,7 @@ export class DiveEngine {
     this.environment.build(vents);
 
     this.creatures = new DiveCreatureManager(this.scene);
-    this.food = new DiveFoodManager(this.scene, 1400);
+    this.food = new DiveFoodManager(this.scene, OCEAN_GEOMETRY.worldSize);
     this.hud = new DiveCockpitHUD(this);
 
     // Dynamic cellular bioluminescent illumination from piloted organism
@@ -128,8 +128,8 @@ export class DiveEngine {
     }
 
     // 3. Initialize camera directly at organism coordinates in 3D centered space
-    const x3d = org.x - 700;
-    const z3d = org.y - 700;
+    const x3d = org.x - OCEAN_GEOMETRY.cx;
+    const z3d = org.y - OCEAN_GEOMETRY.cy;
     this.camPos.set(x3d, 18, z3d);
     this.currentHeading = Math.atan2(org.vy, org.vx) || 0;
 
@@ -316,8 +316,8 @@ export class DiveEngine {
 
     // 4. Position Camera at Organism Coordinates in 3D centered space (XZ plane)
     const forwardOffset = (org.size || 6.5) * 0.45;
-    const orgX3D = org.x - 700;
-    const orgZ3D = org.y - 700;
+    const orgX3D = org.x - OCEAN_GEOMETRY.cx;
+    const orgZ3D = org.y - OCEAN_GEOMETRY.cy;
 
     const camX = orgX3D + Math.cos(this.currentHeading) * forwardOffset;
     const camZ = orgZ3D + Math.sin(this.currentHeading) * forwardOffset;
@@ -348,7 +348,7 @@ export class DiveEngine {
     let nearestVent = null;
     let minVentDist = Infinity;
     const vents = this.app.renderer ? this.app.renderer.vents : [];
-    const ventScale = 1400 / 128; // 10.9375
+    const ventScale = OCEAN_GEOMETRY.worldSize / OCEAN_GEOMETRY.gridSize; // 10.9375
 
     for (let v = 0; v < vents.length; v++) {
       const vent = vents[v];

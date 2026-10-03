@@ -1,3 +1,4 @@
+import { OCEAN_GEOMETRY } from '../shared/habitats.js';
 import { sound } from '../audio/sound.js';
 import { i18n } from '../i18n.js';
 
@@ -21,7 +22,7 @@ export class InputController {
     // Two-finger pinch state
     this.pinchStartDist = 0;
     this.pinchStartZoom = 1.0;
-    this.pinchAnchorWorld = { x: 700.0, y: 700.0 };
+    this.pinchAnchorWorld = { x: OCEAN_GEOMETRY.cx, y: OCEAN_GEOMETRY.cx };
 
     // 30-second feeding cooldown & subtle hint tooltip
     this.lastFeedTime = 0;
@@ -102,7 +103,7 @@ export class InputController {
 
         if (this.pinchStartDist > 10) {
           const scale = currDist / this.pinchStartDist;
-          const minZoom = 0.28;
+          const minZoom = this.minimumZoom();
           const maxZoom = 4.80;
           const newZoom = Math.max(minZoom, Math.min(maxZoom, this.pinchStartZoom * scale));
 
@@ -168,7 +169,7 @@ export class InputController {
       e.preventDefault();
       const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
       const oldZoom = this.renderer.camera.targetZoom;
-      const minZoom = 0.28;
+      const minZoom = this.minimumZoom();
       const maxZoom = 4.80;
       const newZoom = Math.max(minZoom, Math.min(maxZoom, oldZoom * zoomFactor));
 
@@ -250,10 +251,15 @@ export class InputController {
     this.pinchAnchorWorld = this.renderer.screenToWorld(midX, midY);
   }
 
+  minimumZoom() {
+    const diameter=(this.renderer.chamber?.r ?? OCEAN_GEOMETRY.radius)*2+80;
+    return Math.min(.28,this.renderer.camera.viewportW/diameter,this.renderer.camera.viewportH/diameter);
+  }
+
   applyCameraBounds(targetX, targetY, isDirectTouch = false) {
-    const cx = this.renderer.chamber?.cx ?? 700.0;
-    const cy = this.renderer.chamber?.cy ?? 700.0;
-    const maxPan = (this.renderer.chamber?.r ?? 650.0) + 200.0;
+    const cx = this.renderer.chamber?.cx ?? OCEAN_GEOMETRY.cx;
+    const cy = this.renderer.chamber?.cy ?? OCEAN_GEOMETRY.cy;
+    const maxPan = (this.renderer.chamber?.r ?? OCEAN_GEOMETRY.radius) + 200.0;
     const distFromCenter = Math.hypot(targetX - cx, targetY - cy);
 
     let finalX = targetX;
@@ -294,7 +300,7 @@ export class InputController {
 
     // 2. Otherwise, drop nutrient into the petri chamber!
     const worldPt = this.renderer.screenToWorld(screenX, screenY);
-    const ch = this.renderer.chamber || { cx: 700, cy: 700, r: 620 };
+    const ch = this.renderer.chamber || { cx: OCEAN_GEOMETRY.cx, cy: OCEAN_GEOMETRY.cy, r: OCEAN_GEOMETRY.radius };
     const dx = worldPt.x - ch.cx;
     const dy = worldPt.y - ch.cy;
     const dist = Math.hypot(dx, dy);

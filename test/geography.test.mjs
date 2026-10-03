@@ -12,27 +12,27 @@ const {createTrial}=await import('../public/js/shared/nurseryTrial.js');
 const {NURSERY_PRESETS,designGenome}=await import('../public/js/shared/nurseryDesign.js');
 
 test('expanded water keeps grid resolution and offers a continuous darker, quieter inlet',()=>{
- assert.equal(CONFIG.WORLD_SIZE,1400);assert.equal(CONFIG.GRID_SIZE,128);assert.equal(CONFIG.CHAMBER_RADIUS,680);
- assert.ok(OCEAN_GEOMETRY.radius**2/OCEAN_GEOMETRY.previousRadius**2>1.20);
- const shadow=sampleHabitat(430,900),lit=sampleHabitat(970,900);
+ assert.equal(CONFIG.WORLD_SIZE,2100);assert.equal(CONFIG.GRID_SIZE,192);assert.equal(CONFIG.CHAMBER_RADIUS,1020);
+ assert.ok(OCEAN_GEOMETRY.radius**2/OCEAN_GEOMETRY.previousRadius**2===2.25);
+ const shadow=sampleHabitat(780,1250),lit=sampleHabitat(1320,1250);
  assert.equal(shadow.id,'shadow');assert.equal(lit.id,'meadow');assert.ok(shadow.light<lit.light*.4);
  assert.ok(Math.hypot(shadow.currentX,shadow.currentY)<Math.hypot(lit.currentX,lit.currentY)*.4);
- assert.equal(sampleHabitat(700,50).id,'frontier');
- const a=sampleHabitat(619.999,1000),b=sampleHabitat(620.001,1000);
+ assert.equal(sampleHabitat(1050,250).id,'frontier');
+ const a=sampleHabitat(969.999,1350),b=sampleHabitat(970.001,1350);
  assert.ok(Math.abs(a.light-b.light)<.0001);
 });
 
 test('the extra annulus is physically inhabitable rather than only a larger picture',()=>{
- const g=designGenome(NURSERY_PRESETS.grazer),Old=createOrganismClass({...CONFIG,CHAMBER_RADIUS:620},()=>.5),New=createOrganismClass(CONFIG,()=>.5);
- const old=new Old(1330,700,g),expanded=new New(1330,700,g),grid=new ChemicalGrid();grid.nutrients.fill(2);
- old.step(grid,[],[],620,1);expanded.step(grid,[],[],680,1);
- assert.ok(old.x<=1320);assert.ok(expanded.x>1320&&expanded.x<1380);assert.ok(!expanded.isDead());
+ const g=designGenome(NURSERY_PRESETS.grazer),Old=createOrganismClass({...CONFIG,CHAMBER_RADIUS:680},()=>.5),New=createOrganismClass(CONFIG,()=>.5);
+ const old=new Old(1870,1050,g),expanded=new New(1870,1050,g),grid=new ChemicalGrid();grid.nutrients.fill(2);
+ old.step(grid,[],[],680,1);expanded.step(grid,[],[],1020,1);
+ assert.ok(old.x<=1730);assert.ok(expanded.x>1730&&expanded.x<2070);assert.ok(!expanded.isDead());
 });
 
 test('each requested release habitat actually contains its release points',()=>{
  for(const h of HABITATS)for(let i=0;i<360;i++){
   const p=habitatReleasePoint(h.id,i*Math.PI/180);
-  assert.equal(sampleHabitat(p.x,p.y).id,h.id);assert.ok(Math.hypot(p.x-700,p.y-700)<CONFIG.CHAMBER_RADIUS-12);
+  assert.equal(sampleHabitat(p.x,p.y).id,h.id);assert.ok(Math.hypot(p.x-1050,p.y-1050)<CONFIG.CHAMBER_RADIUS-12);
  }
  assert.throws(()=>habitatReleasePoint('invented',0));
 });
@@ -82,7 +82,7 @@ test('frontier and inlet browser trials remain finite and isolated',()=>{
  for(const habitat of ['shadow','frontier']){
   const rng=getRandomState(),next=Organism.getNextId(),trial=createTrial(NURSERY_PRESETS.weaver,habitat);
   for(let i=0;i<1800;i++)trial.step();const result=trial.snapshot();
-  assert.ok(result.total<=64);assert.ok(result.cells.every(o=>[o.x,o.y,o.energy].every(Number.isFinite)&&Math.hypot(o.x-700,o.y-700)<=680+.001));
+  assert.ok(result.total<=64);assert.ok(result.cells.every(o=>[o.x,o.y,o.energy].every(Number.isFinite)&&Math.hypot(o.x-1050,o.y-1050)<=1020+.001));
   assert.equal(getRandomState(),rng);assert.equal(Organism.getNextId(),next);
  }
 });

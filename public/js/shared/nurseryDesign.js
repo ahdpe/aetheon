@@ -1,3 +1,4 @@
+import {OCEAN_GEOMETRY} from './habitats.js';
 // The budget constrains visitor designs; ordinary offspring still mutate naturally.
 export const DESIGN_BUDGET = 7.5;
 export const DESIGN_WEIGHTS = {size:2,speed:2,elongation:0.5,shell:2,flagella:2,sensing:2,adhesion:1.5,diet:1};
@@ -21,8 +22,8 @@ export function designGenome(d) {
   phaseCoupling:.5,splitThreshold:95+135*carnivory,metabolismEfficiency:1,mutationRate:.07};
 }
 // Defaults used by the isolated browser trial; server configuration remains authoritative.
-export const TRIAL_PHYSICS = {GRID_SIZE:128,WORLD_SIZE:1400,CHAMBER_RADIUS:680,CHAMBER_CENTER_X:700,CHAMBER_CENTER_Y:700,
+export const TRIAL_PHYSICS = {GRID_SIZE:OCEAN_GEOMETRY.gridSize,WORLD_SIZE:OCEAN_GEOMETRY.worldSize,CHAMBER_RADIUS:OCEAN_GEOMETRY.radius,CHAMBER_CENTER_X:OCEAN_GEOMETRY.cx,CHAMBER_CENTER_Y:OCEAN_GEOMETRY.cy,
  SURFACE_TENSION_MARGIN:120,TICK_RATE_HZ:10,BASE_METABOLIC_RATE:.08,INITIAL_ORGANISM_ENERGY:60,MAX_ORGANISM_ENERGY:250,
  DIFFUSION_RATE_NUTRIENT:.08,DIFFUSION_RATE_WASTE:.04,DIFFUSION_RATE_SIGNAL:.12,
  DECAY_RATE_NUTRIENT:.0005,DECAY_RATE_WASTE:.003,DECAY_RATE_SIGNAL:.02};
-export const HABITAT_RADII = {basin:140,meadow:350,shoal:500,shadow:336,frontier:650};
+export const HABITAT_RADII = {basin:140,meadow:350,shoal:500,shadow:336,frontier:800};

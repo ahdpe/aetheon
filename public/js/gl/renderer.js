@@ -10,17 +10,18 @@ export class OceanRenderer {
     this.ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
     
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.worldSize = 1400.0;
-    this.chamber = { cx: 700.0, cy: 700.0, r: OCEAN_GEOMETRY.radius };
+    this.worldSize = OCEAN_GEOMETRY.worldSize;
+    this.gridSize = OCEAN_GEOMETRY.gridSize;
+    this.chamber = { cx: OCEAN_GEOMETRY.cx, cy: OCEAN_GEOMETRY.cy, r: OCEAN_GEOMETRY.radius };
     this.habitatCanvas=makeHabitatCanvas();
     
     // Camera centered on chamber
     this.camera = {
-      x: 700.0,
-      y: 700.0,
+      x: OCEAN_GEOMETRY.cx,
+      y: OCEAN_GEOMETRY.cy,
       zoom: window.innerWidth < 600 ? 1.8 : 1.6,
-      targetX: 700.0,
-      targetY: 700.0,
+      targetX: OCEAN_GEOMETRY.cx,
+      targetY: OCEAN_GEOMETRY.cy,
       targetZoom: window.innerWidth < 600 ? 1.8 : 1.6,
       viewportW: window.innerWidth,
       viewportH: window.innerHeight,
@@ -356,7 +357,7 @@ export class OceanRenderer {
     ctx.restore();
 
     // 4. Render Hydrothermal Vents (Modulated by Planetary Climate)
-    const ventScale = this.worldSize / 128;
+    const ventScale = this.worldSize / this.gridSize;
     for (let i = 0; i < this.vents.length; i++) {
       const vent = this.vents[i];
       const vFactor = (this.climate && this.climate.vents && this.climate.vents[i]) ? this.climate.vents[i] : 1.0;
@@ -1341,10 +1342,10 @@ export class OceanRenderer {
     // Chamber identification badge
     ctx.fillStyle = 'rgba(0, 240, 255, 0.85)';
     ctx.font = '10px "JetBrains Mono", monospace';
-    ctx.fillText('◈ PETRI BIO-CHAMBER: Ø 1240 μm [ACTIVE MENISCUS]', cx - 135, cy - cr + 26);
+    ctx.fillText(`◈ PETRI BIO-CHAMBER: Ø ${Math.round(this.chamber.r*2)} μm [ACTIVE MENISCUS]`, cx - 135, cy - cr + 26);
 
     // 5. Hydrothermal Vents Isotherms in Lab Mode
-    const ventScale = this.worldSize / 128;
+    const ventScale = this.worldSize / this.gridSize;
     for (let v = 0; v < this.vents.length; v++) {
       const vent = this.vents[v];
       const vx = toScreenX(vent.x * ventScale);
@@ -1556,7 +1557,7 @@ export class OceanRenderer {
       sCtx.fillStyle = '#02040a';
       sCtx.fillRect(0, 0, targetSize, targetSize);
 
-      const ch = this.chamber || { cx: 700, cy: 700, r: 620 };
+      const ch = this.chamber || { cx: OCEAN_GEOMETRY.cx, cy: OCEAN_GEOMETRY.cy, r: OCEAN_GEOMETRY.radius };
       const pad = 12;
       const center = targetSize * 0.5;
       const destR = center - pad;
@@ -1587,7 +1588,7 @@ export class OceanRenderer {
         sCtx.imageSmoothingEnabled = true;
         sCtx.imageSmoothingQuality = 'high';
         sCtx.globalAlpha = 0.42;
-        const wsPix = (this.worldSize || 1400) * scale;
+        const wsPix = (this.worldSize || OCEAN_GEOMETRY.worldSize) * scale;
         const originX = toSnapX(0);
         const originY = toSnapY(0);
         sCtx.drawImage(this.thumbCanvas, originX, originY, wsPix, wsPix);
@@ -1602,7 +1603,7 @@ export class OceanRenderer {
       }
 
       // 2.3. Hydrothermal Vents (Atmospheric thermal glow & bright orifice core)
-      const ventScale = (this.worldSize || 1400) / 128;
+      const ventScale = (this.worldSize || OCEAN_GEOMETRY.worldSize) / this.gridSize;
       const vents = this.vents || [];
       for (let i = 0; i < vents.length; i++) {
         const vent = vents[i];

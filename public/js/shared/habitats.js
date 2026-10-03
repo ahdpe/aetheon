@@ -1,27 +1,60 @@
-export const OCEAN_GEOMETRY = Object.freeze({worldSize:1400,cx:700,cy:700,radius:680,previousRadius:620});
+// Expansion adds cells, keeping the chemical cell 10.9375 world units wide.
+export const LEGACY_GEOMETRY = Object.freeze({version:1,worldSize:1400,gridSize:128,cx:700,cy:700,radius:680});
+export const OCEAN_GEOMETRY = Object.freeze({version:2,worldSize:2100,gridSize:192,cx:1050,cy:1050,radius:1020,previousRadius:680});
+export const RESOURCE_OASES = Object.freeze([
+ {x:1050,y:250,radius:145}, {x:1810,y:800,radius:130}, {x:1520,y:1690,radius:150},
+ {x:560,y:1700,radius:135}, {x:285,y:800,radius:145}
+]);
 export const HABITATS = Object.freeze([
- {id:'basin',en:'Inner basin',ru:'Внутренняя котловина',color:'#647ba8',x:700,y:700},
- {id:'meadow',en:'Meadow ring',ru:'Кольцо лугов',color:'#58ba96',x:1040,y:700},
- {id:'shadow',en:'Twilight backwater',ru:'Сумеречная заводь',color:'#a48bd3',x:430,y:900},
- {id:'shoal',en:'Shallow rim',ru:'Мелководный край',color:'#c4aa73',x:1250,y:700},
- {id:'frontier',en:'Outer frontier',ru:'Внешняя отмель',color:'#74cdd5',x:700,y:50}
+ {id:'basin',en:'Inner basin',ru:'Внутренняя котловина',color:'#647ba8',x:1050,y:1050},
+ {id:'meadow',en:'Meadow ring',ru:'Кольцо лугов',color:'#58ba96',x:1390,y:1050},
+ {id:'shadow',en:'Twilight backwater',ru:'Сумеречная заводь',color:'#a48bd3',x:780,y:1250},
+ {id:'shoal',en:'Inner shallows',ru:'Внутренняя отмель',color:'#c4aa73',x:1600,y:1050},
+ {id:'frontier',en:'Outer archipelago',ru:'Внешний архипелаг',color:'#74cdd5',x:1050,y:250}
 ]);
 
-// Existing radial gradients keep their scale; the added inlet blends smoothly.
+export function frontierFertility(x,y) {
+ let strength=0;
+ for(const p of RESOURCE_OASES)strength=Math.max(strength,Math.exp(-(((x-p.x)/p.radius)**2)-(((y-p.y)/p.radius)**2)));
+ return strength;
+}
+// Inner gradients retain their original physical scale and translated coordinates.
 export function sampleHabitat(x, y) {
-  const dx=x-700, dy=y-700, radius=Math.hypot(dx,dy), r=radius/620;
+  const dx=x-OCEAN_GEOMETRY.cx, dy=y-OCEAN_GEOMETRY.cy, radius=Math.hypot(dx,dy), r=radius/620;
   const meadow=Math.exp(-(((r-0.56)/0.25)**2));
-  const shadow=Math.exp(-(((x-430)/130)**2)-(((y-900)/100)**2));
+  const shadow=Math.exp(-(((x-780)/130)**2)-(((y-1250)/100)**2));
+  const outer=radius>620?frontierFertility(x,y):0;
   const current=(0.03+0.15*Math.max(0,1-r))*(1-0.72*shadow);
-  return { id:shadow>0.5?'shadow':radius>620?'frontier':r<0.34?'basin':r<0.76?'meadow':'shoal', light:(0.3+0.7*meadow)*(1-0.68*shadow),
+  return { id:shadow>0.5?'shadow':radius>620?'frontier':r<0.34?'basin':r<0.76?'meadow':'shoal', light:(0.3+0.7*Math.max(meadow,.85*outer))*(1-0.68*shadow),
     currentX:radius?(-dy/radius)*current:0, currentY:radius?(dx/radius)*current:0 };
 }
 
+// External chemosynthetic recharge has a fixed total budget, even in larger water.
+export function resourceWeight(x,y) {
+ const radius=Math.hypot(x-OCEAN_GEOMETRY.cx,y-OCEAN_GEOMETRY.cy);
+ if(radius>OCEAN_GEOMETRY.radius)return 0;
+ const meadow=Math.exp(-(((radius/620-.56)/.25)**2));
+ return .015+.5*meadow+1.2*frontierFertility(x,y);
+}
+export function makeResourceRecharge(size=OCEAN_GEOMETRY.gridSize,worldSize=OCEAN_GEOMETRY.worldSize) {
+ const values=new Float32Array(size*size),scale=worldSize/size;
+ let sum=0,oldWetCells=0;
+ for(let y=0;y<128;y++)for(let x=0;x<128;x++)if(Math.hypot(x*1400/128-700,y*1400/128-700)<=680)oldWetCells++;
+ for(let y=0;y<size;y++)for(let x=0;x<size;x++){const i=y*size+x;values[i]=resourceWeight(x*scale,y*scale);sum+=values[i];}
+ const budget=.004*oldWetCells;
+ for(let i=0;i<values.length;i++)values[i]*=budget/sum;
+ return values;
+}
+
 export function habitatReleasePoint(habitat,angle) {
-  if(habitat==='shadow')return {x:430+Math.cos(angle)*35,y:900+Math.sin(angle)*25};
-  const radius={basin:140,meadow:350,shoal:500,frontier:650}[habitat];
+  if(habitat==='shadow')return {x:780+Math.cos(angle)*35,y:1250+Math.sin(angle)*25};
+  if(habitat==='frontier'){
+   const index=Math.floor(((angle%(Math.PI*2)+Math.PI*2)%(Math.PI*2))/(Math.PI*2)*RESOURCE_OASES.length);
+   const p=RESOURCE_OASES[index];return {x:p.x+Math.cos(angle)*30,y:p.y+Math.sin(angle)*30};
+  }
+  const radius={basin:140,meadow:350,shoal:500}[habitat];
   if(radius===undefined)throw new Error('Unknown habitat');
-  const point={x:700+Math.cos(angle)*radius,y:700+Math.sin(angle)*radius};
-  if(habitat==='meadow'&&sampleHabitat(point.x,point.y).id==='shadow')point.x=1400-point.x;
+  const point={x:1050+Math.cos(angle)*radius,y:1050+Math.sin(angle)*radius};
+  if(habitat==='meadow'&&sampleHabitat(point.x,point.y).id==='shadow')point.x=2100-point.x;
   return point;
 }

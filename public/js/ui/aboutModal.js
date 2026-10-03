@@ -410,8 +410,8 @@ export class AboutModal {
             <h3 class="sec-title">Хемодинамика и диффузия субстрата (Reaction-Diffusion PDE)</h3>
           </div>
           <p>
-            Пространство среды непрерывно (<strong>x</strong> ∈ [0, 1400 мкм]²), а химические концентрации рассчитываются 
-            на регулярной матрице 128 × 128 узлов. В растворе эволюционируют три взаимосвязанных скалярных поля: 
+            Пространство среды непрерывно (<strong>x</strong> ∈ [0, 2100 мкм]²), а химические концентрации рассчитываются
+            на регулярной матрице 192 × 192 узлов. В растворе эволюционируют три взаимосвязанных скалярных поля:
             питательные вещества <em>N(x, y, t)</em>, продукты жизнедеятельности <em>W(x, y, t)</em> и сигнальные феромоны <em>S(x, y, t)</em>.
           </p>
           <div class="formula-box">
@@ -421,15 +421,17 @@ export class AboutModal {
               <span class="m-op">=</span> <span class="m-const">D<sub>N</sub></span> ∇²N 
               <span class="m-op">−</span> <span class="m-const">γ<sub>N</sub></span> N 
               <span class="m-op">+</span> ∑ S<sub>vent, v</sub>(<strong>x</strong>) 
+              <span class="m-op">+</span> S<sub>recharge</sub>(<strong>x</strong>)
               <span class="m-op">+</span> S<sub>bloom</sub>(<strong>x</strong>, t) 
               <span class="m-op">−</span> ∑ C<sub>org, k</sub>(<strong>x</strong>, t)
             </div>
             <div class="formula-vars">
+              <div><strong>S<sub>recharge</sub>(x):</strong> Пища поступает в кольцо лугов и пять внешних оазисов. Суммарный фоновый приток ограничен прежней обитаемой площадью: 48,564 единицы концентрации по сетке за шаг; расширение не умножает питание. Это открытая система с внешним источником энергии.</div>
               <div><strong>D<sub>N</sub> = 0.08:</strong> Коэффициент молекулярной диффузии питательных солей.</div>
               <div><strong>γ<sub>N</sub> = 0.0005:</strong> Скорость фонового распада (гидролиза) питательных веществ.</div>
               <div><strong>S<sub>vent, v</sub>(x):</strong> Непрерывный приток от 5 гидротермальных жерл с радиальным профилем Гаусса:
                 <div class="sub-formula">
-                  S<sub>v</sub>(<strong>x</strong>) = P<sub>v</sub> · exp(− ||<strong>x</strong> − <strong>x</strong><sub>v</sub>||² / (1.5 · r<sub>v</sub>²)), 
+                  S<sub>v</sub>(<strong>x</strong>) = P<sub>v</sub> · exp(− ||<strong>x</strong> − <strong>x</strong><sub>v</sub>||² / (1.5 · r<sub>v</sub>)),
                   где P<sub>v</sub> = 0.14, r<sub>v</sub> = 7 ячеек
                 </div>
               </div>
@@ -535,7 +537,7 @@ export class AboutModal {
             <h3 class="sec-title">Капиллярный мениск и гидростатика капли (Surface Tension Boundary)</h3>
           </div>
           <p>
-            Биокамера представляет собой круговой микрообъем радиусом R<sub>chamber</sub> = 680 мкм с центром в (700, 700) мкм.
+            Биокамера представляет собой круговой микрообъем радиусом R<sub>chamber</sub> = 1020 мкм с центром в (1050, 1050) мкм.
             Край капли формирует мягкое капиллярное поверхностное натяжение мениска с шириной переходного слоя δ<sub>m</sub> = 120 мкм.
           </p>
           <div class="formula-box">
@@ -792,7 +794,7 @@ export class AboutModal {
             <h3 class="sec-title">Substrate Chemodynamics (2D Reaction-Diffusion PDE)</h3>
           </div>
           <p>
-            The continuous world domain (<strong>x</strong> ∈ [0, 1400 μm]²) is discretized into a 128 × 128 cell chemical matrix. 
+            The continuous world domain (<strong>x</strong> ∈ [0, 2100 μm]²) is discretized into a 192 × 192 cell chemical matrix.
             Three coupled scalar fields co-evolve: nutrients <em>N(x, y, t)</em>, waste byproducts <em>W(x, y, t)</em>, and bioluminescent signals <em>S(x, y, t)</em>.
           </p>
           <div class="formula-box">
@@ -802,15 +804,17 @@ export class AboutModal {
               <span class="m-op">=</span> <span class="m-const">D<sub>N</sub></span> ∇²N 
               <span class="m-op">−</span> <span class="m-const">γ<sub>N</sub></span> N 
               <span class="m-op">+</span> ∑ S<sub>vent, v</sub>(<strong>x</strong>) 
+              <span class="m-op">+</span> S<sub>recharge</sub>(<strong>x</strong>)
               <span class="m-op">+</span> S<sub>bloom</sub>(<strong>x</strong>, t) 
               <span class="m-op">−</span> ∑ C<sub>org, k</sub>(<strong>x</strong>, t)
             </div>
             <div class="formula-vars">
+              <div><strong>S<sub>recharge</sub>(x):</strong> Food recharge is shared by the meadow ring and five outer oases. Its total is bounded by the former habitable area: 48.564 concentration units summed over the grid per step; more water does not multiply food. This is an open system with external energy input.</div>
               <div><strong>D<sub>N</sub> = 0.08:</strong> Molecular diffusion coefficient of nutrient salts.</div>
               <div><strong>γ<sub>N</sub> = 0.0005:</strong> Ambient hydrolysis decay rate.</div>
               <div><strong>S<sub>vent, v</sub>(x):</strong> Gaussian injection from 5 hydrothermal vents:
                 <div class="sub-formula">
-                  S<sub>v</sub>(<strong>x</strong>) = P<sub>v</sub> · exp(− ||<strong>x</strong> − <strong>x</strong><sub>v</sub>||² / (1.5 · r<sub>v</sub>²)), 
+                  S<sub>v</sub>(<strong>x</strong>) = P<sub>v</sub> · exp(− ||<strong>x</strong> − <strong>x</strong><sub>v</sub>||² / (1.5 · r<sub>v</sub>)),
                   where P<sub>v</sub> = 0.14, r<sub>v</sub> = 7 cells
                 </div>
               </div>
@@ -910,7 +914,7 @@ export class AboutModal {
             <h3 class="sec-title">Capillary Surface Tension Meniscus</h3>
           </div>
           <p>
-            The chamber is an organic circular droplet of radius R = 680 μm centered at (700, 700) μm.
+            The chamber is an organic circular droplet of radius R = 1020 μm centered at (1050, 1050) μm.
             The edge simulates viscoelastic surface tension with boundary margin δ<sub>m</sub> = 120 μm:
           </p>
           <div class="formula-box">

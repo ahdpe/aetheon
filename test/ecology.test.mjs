@@ -115,8 +115,8 @@ test('new plant bodies, counters, ecology epoch and future evolution survive a f
 });
 
 test('contrasting habitats use continuous light and current gradients',()=>{
- const basin=sampleHabitat(700,700),meadow=sampleHabitat(1040,700),rim=sampleHabitat(1280,700);
+ const basin=sampleHabitat(1050,1050),meadow=sampleHabitat(1390,1050),rim=sampleHabitat(1630,1050);
  assert.equal(basin.id,'basin');assert.equal(meadow.id,'meadow');assert.equal(rim.id,'shoal');assert.ok(meadow.light>basin.light&&meadow.light>rim.light);
- const a=sampleHabitat(700+620*.3399,700),b=sampleHabitat(700+620*.3401,700);
+ const a=sampleHabitat(1050+620*.3399,1050),b=sampleHabitat(1050+620*.3401,1050);
  assert.ok(Math.abs(a.light-b.light)<.002);assert.ok(Math.abs(a.currentY-b.currentY)<.002);
 });

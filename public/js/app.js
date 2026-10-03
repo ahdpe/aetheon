@@ -214,6 +214,7 @@ class AetheonApp {
     if (msg.type === 'init') {
       this.renderer.resetStream();
       this.observatory.init(msg.worldCreatedAt);
+      if(msg.gridSize)this.renderer.gridSize=msg.gridSize;
       if (msg.worldSize) {
         this.renderer.worldSize = msg.worldSize;
         if (this.renderer.particles) this.renderer.particles.worldSize = msg.worldSize;

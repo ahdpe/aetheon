@@ -5,6 +5,7 @@ import { CONFIG } from '../config.js';
 import { completeGenome, developBody } from '../../public/js/shared/anatomy.js';
 import { Organism } from './organism.js';
 import { getRandomState, setRandomState } from './random.js';
+import {expandSnapshot,savedGeometry} from './expansion.js';
 const checksum = data => createHash('sha256').update(JSON.stringify(data)).digest('hex');
 const fieldNames = ['nutrients', 'waste', 'signal', 'substrate'];
 const encode = array => Buffer.from(array.buffer, array.byteOffset, array.byteLength).toString('base64');
@@ -47,7 +48,7 @@ export class PersistenceManager {
   }
   read(file) {
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-    if (data.formatVersion !== undefined && ![2,3].includes(data.formatVersion)) throw new Error('Unsupported snapshot version');
+    if (data.formatVersion !== undefined && ![2,3,4].includes(data.formatVersion)) throw new Error('Unsupported snapshot version');
     if (data.formatVersion >= 2 && typeof data.checksum !== 'string') throw new Error('Missing snapshot checksum');
     if (data.checksum) {
       const { checksum: expected, ...payload } = data;
@@ -56,7 +57,7 @@ export class PersistenceManager {
     if (!Array.isArray(data.organisms) || !Array.isArray(data.speciesList) || !Number.isSafeInteger(data.ticks) || data.ticks < 0 || !Number.isFinite(data.genesisTime)) throw new Error('Invalid snapshot');
     if (data.formatVersion >= 2 && (!Number.isSafeInteger(data.rngState) || data.rngState < 0 || data.rngState > 0xffffffff)) throw new Error('Invalid random state');
     if (data.morphologyArchive) {
-      if (data.formatVersion !== 3) throw new Error('Unsupported morphology archive format');
+      if (![3,4].includes(data.formatVersion)) throw new Error('Unsupported morphology archive format');
       this.readArchive(data.morphologyArchive);
     }
     const ids = new Set();
@@ -75,7 +76,8 @@ export class PersistenceManager {
       engine.history?.synchronize(engine.organisms, engine.ticks);
       const morphologyArchive = this.archiveFor(engine);
       const data = {
-        formatVersion: 3, savedAt: Date.now(), genesisTime: engine.genesisTime, ticks: engine.ticks,
+        formatVersion: 4, worldGeometry:savedGeometry(), expansionState:engine.expansionState,
+        savedAt: Date.now(), genesisTime: engine.genesisTime, ticks: engine.ticks,
         rngState: getRandomState(), nextOrganismId: Organism.getNextId(),
         organisms: engine.organisms.map(o => {
           const { playerSteer, isPiloted, ...state } = o;
@@ -114,13 +116,15 @@ export class PersistenceManager {
     if (!candidates.length) return false;
     let data;
     for (const file of candidates) {
-      try { data = this.read(file); this.validateFields(data, engine.grid); break; }
+      try { data = this.read(file); if(data.formatVersion)data=expandSnapshot(data); this.validateFields(data, engine.grid); break; }
       catch (err) { data = null; console.error('[Persistence] Rejected snapshot:', file, err.message); }
     }
     if (!data) throw new Error('No valid world snapshot; refusing to replace the existing world with Genesis');
     this.archiveReference = data.morphologyArchive;
     const speciesList = [...data.speciesList, ...(data.morphologyArchive ? this.readArchive(data.morphologyArchive) : [])];
     const identityRecovery = !data.formatVersion ? this.recoverLegacyIds(data) : null;
+    if(!data.formatVersion)data=expandSnapshot(data);
+    engine.expansionState=data.expansionState;
     engine.migrationState = data.migrationState ?? identityRecovery;
     engine.legacyColonyArchive = data.legacyColonyArchive ?? (identityRecovery?.identitiesReassigned ? data.colonyData : undefined);
     engine.genesisTime = data.genesisTime;

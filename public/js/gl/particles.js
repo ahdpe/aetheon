@@ -1,7 +1,8 @@
+import { OCEAN_GEOMETRY } from '../shared/habitats.js';
 import { insideFocus } from './observation.js';
 
 export class ParticleSystem {
-  constructor(count = 450, worldSize = 1400.0, chamber = { cx: 700.0, cy: 700.0, r: 620.0 }, random = Math.random) {
+  constructor(count = 450, worldSize = OCEAN_GEOMETRY.worldSize, chamber = { cx: OCEAN_GEOMETRY.cx, cy: OCEAN_GEOMETRY.cy, r: OCEAN_GEOMETRY.radius }, random = Math.random) {
     this.count = count;
     this.worldSize = worldSize;
     this.chamber = chamber;
