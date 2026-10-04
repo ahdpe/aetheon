@@ -14,6 +14,8 @@ export class AINaturalist {
     this.budget = new VeniceBudget();
     this.observationBusy = false;
     this.totalJevCalls = 0;
+    this.lastObservationTheme = null;
+    this.themeCycleCounter = 0;
     
     // Seed initial poetic observation
     this.addEntry({
@@ -602,61 +604,209 @@ JSON format ONLY:
       }
     }
 
-    // Adaptive procedural narrative dispatches (based on real recent events & JEV focus)
-    let icon = '⚖️';
-    let badgeEn = 'Equilibrium';
-    let badgeRu = 'Баланс капли';
-    let titleEn = 'A Moment in the Ocean';
-    let titleRu = 'Мгновение жизни океана';
-    let storyEn = `The ocean holds ${stats.organismCount ?? 0} organisms in ${stats.speciesCount ?? 0} registered living forms. During this observation window, ${stats.recentBirths ?? 0} divisions and ${stats.recentKills ?? 0} fatal hunts were recorded.`;
-    let storyRu = `В океане живут ${stats.organismCount ?? 0} организмов, относящихся к ${stats.speciesCount ?? 0} зарегистрированным формам. За окно наблюдения отмечено ${stats.recentBirths ?? 0} делений и ${stats.recentKills ?? 0} смертельных атак.`;
-    let insightEn = `Resource gradients, local interactions and inherited traits determine each organism's next step.`;
-    let insightRu = `Следующий шаг организма зависит от ресурсов, соседей и наследуемых признаков.`;
+    // Dynamic candidates pool based on real events in this window
+    const candidates = [];
+    if ((stats.recentKills ?? 0) > 0) candidates.push('predation');
+    if ((stats.recentBirths ?? 0) >= 3) candidates.push('mitosis');
+    if ((stats.recentSpeciations ?? 0) > 0) candidates.push('speciation');
+    if (stats.dominantSpeciesNameRu && (stats.dominantCount ?? 0) > 15) candidates.push('dominance');
+    if ((stats.colonyCount ?? 0) >= 2) candidates.push('colonies');
+    if ((stats.organismCount ?? 0) > 30) candidates.push('vents');
+    candidates.push('equilibrium');
 
-    if ((stats.recentKills ?? 0) > 2) {
-      icon = '⚔️';
-      badgeEn = 'Predator Hunt';
-      badgeRu = 'Охота хищников';
-      titleEn = '⚔️ The Crimson Stalkers';
-      titleRu = `⚔️ Охотничий рейд: ${stats.topPredatorNameRu || 'Ловчие'}`;
-      storyEn = `${stats.recentKills} organisms died from predatory attacks during this observation window. Local pursuit and escape change where organisms can feed and survive.`;
-      storyRu = `За окно наблюдения ${stats.recentKills} организмов погибли от хищных атак. Преследование и бегство меняют доступ к питанию и шансы выживания в разных местах.`;
-      insightEn = `Whether faster escape spreads through the population depends on the survival and reproduction of its carriers.`;
-      insightRu = `Распространение скорости бегства зависит от выживания и размножения её носителей.`;
-    } else if ((stats.colonyCount ?? 0) >= 3) {
-      icon = '🪸';
-      badgeEn = 'Reef Genesis';
-      badgeRu = 'Рост рифов';
-      titleEn = '🪸 Bio-Calcite Architecture';
-      titleRu = `🪸 Морфогенез рифов: оазисы жизни`;
-      storyEn = `${stats.colonyCount} connected colonies are alive, with up to ${stats.largestColonySize ?? 0} cells in the largest. Their bonds transmit forces and redistribute energy between connected members.`;
-      storyRu = `Живут ${stats.colonyCount} связанных колоний; в крупнейшей — ${stats.largestColonySize ?? 0} клеток. Связи передают усилия и позволяют обмениваться энергией внутри связной группы.`;
-      insightEn = `A broken connection can split a colony and end its shared energy supply.`;
-      insightRu = `Разрыв связи может разделить колонию и прекратить общий обмен энергией.`;
-    } else if ((stats.recentSpeciations ?? 0) > 0) {
-      icon = '🧬';
-      badgeEn = 'Speciation';
-      badgeRu = 'Ветвление жизни';
-      titleEn = '🧬 Evolutionary Divergence';
-      titleRu = '🧬 Новое ответвление древа жизни';
-      storyEn = `${stats.recentSpeciations} newly registered trait combinations appeared during this observation window. Registration marks genetic distance from a prototype; successful adaptation is still to be tested.`;
-      storyRu = `За окно наблюдения зарегистрировано ${stats.recentSpeciations} новых сочетаний признаков. Регистрация отмечает отличие от образца; успешная адаптация ещё не доказана.`;
-      insightEn = `Follow later generations to learn which forms persist and which disappear.`;
-      insightRu = `Следующие поколения покажут, какие формы закрепятся, а какие исчезнут.`;
+    // Never repeat the same theme consecutively
+    let available = candidates.filter(t => t !== this.lastObservationTheme);
+    if (!available.length) available = candidates;
+
+    this.themeCycleCounter = (this.themeCycleCounter + 1) % 1000;
+    const selectedTheme = available[this.themeCycleCounter % available.length];
+    this.lastObservationTheme = selectedTheme;
+
+    const variant = (stats.generation || this.themeCycleCounter) % 2;
+    let chosen;
+
+    switch (selectedTheme) {
+      case 'predation':
+        chosen = variant === 0 ? {
+          icon: '⚔️',
+          badgeEn: 'Predator Hunt',
+          badgeRu: 'Охота хищников',
+          titleEn: '⚔️ The Crimson Stalkers',
+          titleRu: `⚔️ Охотничий рейд: ${stats.topPredatorNameRu || 'Ловчие'}`,
+          storyEn: `${stats.recentKills} organisms fell victim to predatory attacks during this window. Ambush lunges and swift maneuvers reshape survival near the seabed.`,
+          storyRu: `За окно наблюдения ${stats.recentKills} организмов пали жертвами хищников. Скоростные маневры и внезапные выпады меняют баланс в придонных слоях.`,
+          insightEn: 'Predatory pressure selects for higher sensory acuity and agile acceleration.',
+          insightRu: 'Давление хищников отбирает самых чутких и быстрых особей, ускоряя развитие сенсорных систем.'
+        } : {
+          icon: '🦈',
+          badgeEn: 'Selection Pressure',
+          badgeRu: 'Давление отбора',
+          titleEn: '🦈 Apex Hunter Sweep',
+          titleRu: `🦈 Теневые охотники: ${stats.topPredatorNameRu || 'Апекс-хищники'}`,
+          storyEn: `Apex hunters patrol the shelf boundaries, driving peaceful grazers toward protective reef shelters and thermal upwellings.`,
+          storyRu: `Ловчие особи патрулируют границы шельфа, вынуждая мирных планктоноядных искать спасения в лабиринтах рифов.`,
+          insightEn: 'Schooling behavior and reef shelters significantly reduce the odds of being singled out.',
+          insightRu: 'Стайное поведение и укрытия в зарослях снижают вероятность стать легкой добычей.'
+        };
+        break;
+
+      case 'colonies':
+        chosen = variant === 0 ? {
+          icon: '🪸',
+          badgeEn: 'Reef Genesis',
+          badgeRu: 'Рост рифов',
+          titleEn: '🪸 Bio-Calcite Architecture',
+          titleRu: '🪸 Морфогенез рифов: оазисы жизни',
+          storyEn: `${stats.colonyCount} multicellular colonies thrive across the ocean (up to ${stats.largestColonySize ?? 0} cells in the largest). Elastic membrane bonds coordinate flagellar propulsion.`,
+          storyRu: `В океане процветают ${stats.colonyCount} связанных колоний (до ${stats.largestColonySize ?? 0} клеток в крупнейшей). Эластичные мембраны объединяют усилия гребли жгутиков.`,
+          insightEn: 'Multicellular clusters overcome counter-currents and resist predator attacks more effectively.',
+          insightRu: 'Многоклеточные агрегаты эффективнее преодолевают противотоки и противостоят атакам хищников.'
+        } : {
+          icon: '🔗',
+          badgeEn: 'Membrane Bonds',
+          badgeRu: 'Симбиоз мембран',
+          titleEn: '🔗 Cytoplasmic Energy Bridges',
+          titleRu: '🔗 Цитоплазматический мост: взаимная поддержка',
+          storyEn: `Colony members transfer energy across intercellular channels, sustaining hungry neighbors from collective reserves.`,
+          storyRu: `Клетки в колониях непрерывно перекачивают энергию по цитоплазматическим каналам, питая голодающих соседей из общих запасов.`,
+          insightEn: 'Trophic sharing increases resilience against local nutrient fluctuations.',
+          insightRu: 'Трофический обмен повышает устойчивость группы к локальным перепадам питательных веществ.'
+        };
+        break;
+
+      case 'mitosis':
+        chosen = variant === 0 ? {
+          icon: '🌾',
+          badgeEn: 'Mitosis Surge',
+          badgeRu: 'Прилив делений',
+          titleEn: '🌾 Mitotic Population Surge',
+          titleRu: '🌾 Демографический бум: деление поколений',
+          storyEn: `${stats.recentBirths} cell divisions were recorded. An abundance of dissolved nutrients triggered a reproductive boom, bringing the population to ${stats.organismCount} cells.`,
+          storyRu: `Зафиксировано ${stats.recentBirths} клеточных делений. Обилие растворенной органики вызвало всплеск рождаемости, доведя популяцию до ${stats.organismCount} особей.`,
+          insightEn: 'Higher population density intensifies competition for light and mineral salts on the shallows.',
+          insightRu: 'Рост плотности населения усиливает конкуренцию за свет и минеральные соли на отмелях.'
+        } : {
+          icon: '✨',
+          badgeEn: 'Energy Pulse',
+          badgeRu: 'Энергетический пик',
+          titleEn: '✨ Microfauna Proliferation',
+          titleRu: '✨ Пролиферация микрофауны',
+          storyEn: `Favorable feeding conditions around the reefs accelerated energy storage, triggering cascading mitosis waves among primary producers.`,
+          storyRu: `Благоприятные условия вокруг рифов ускорили накопление АТФ, запуская каскадные волны митоза среди первичных продуцентов.`,
+          insightEn: 'Rapid reproduction allows a species to swiftly colonize newly available food niches.',
+          insightRu: 'Быстрое размножение позволяет виду стремительно занять свободные пищевые ниши.'
+        };
+        break;
+
+      case 'speciation':
+        chosen = variant === 0 ? {
+          icon: '🧬',
+          badgeEn: 'Speciation',
+          badgeRu: 'Ветвление жизни',
+          titleEn: '🧬 Evolutionary Divergence',
+          titleRu: '🧬 Новое ответвление древа жизни',
+          storyEn: `${stats.recentSpeciations} newly registered trait combinations emerged. Mutations in flagellar morphology and membrane adhesion branch into new lineages.`,
+          storyRu: `За окно наблюдения зарегистрировано ${stats.recentSpeciations} новых сочетаний признаков. Изменения в строении жгутиков и мембран формируют новые адаптивные ветви.`,
+          insightEn: 'Time will reveal which genetic innovations offer lasting survival advantages in an evolving habitat.',
+          insightRu: 'Только время покажет, какие мутации дадут долгосрочное преимущество в изменчивой среде.'
+        } : {
+          icon: '🌱',
+          badgeEn: 'Genetic Drift',
+          badgeRu: 'Генетический дрейф',
+          titleEn: '🌱 Novel Morphological Strands',
+          titleRu: '🌱 Рождение нового морфотипа',
+          storyEn: `Spontaneous genetic drift introduced subtle variations in sensory radius and ciliary frequency among emerging lineages.`,
+          storyRu: `Спонтанные мутации привели к тонким изменениям в сенсорном радиусе и частоте биения ресничек среди молодых ветвей.`,
+          insightEn: 'Slight physiological differences can lead to profound divergence in ecological strategy.',
+          insightRu: 'Небольшие физиологические различия могут положить начало совершенно разным стратегиям выживания.'
+        };
+        break;
+
+      case 'dominance':
+        chosen = variant === 0 ? {
+          icon: '👑',
+          badgeEn: 'Dominant Lineage',
+          badgeRu: 'Доминирующий вид',
+          titleEn: `👑 Rise of ${stats.dominantSpeciesNameEn || 'the Dominant Lineage'}`,
+          titleRu: `👑 Экспансия вида: «${stats.dominantSpeciesNameRu}»`,
+          storyEn: `${stats.dominantSpeciesNameEn || 'The dominant lineage'} took the leading position with ${stats.dominantCount} cells, outcompeting rivals across mineral-rich zones.`,
+          storyRu: `Вид «${stats.dominantSpeciesNameRu}» занял лидирующую позицию в капле (${stats.dominantCount} особей), вытесняя конкурентов с богатых участков.`,
+          insightEn: 'A winning genome dominates by balancing swimming speed, body size, and metabolic efficiency.',
+          insightRu: 'Успешный геном доминирует за счет идеального баланса скорости, размера и энергопотребления.'
+        } : {
+          icon: '🏆',
+          badgeEn: 'Species Flourishing',
+          badgeRu: 'Триумф популяции',
+          titleEn: `🏆 Ecological Monopolist: ${stats.dominantSpeciesNameEn || 'Dominant Form'}`,
+          titleRu: `🏆 Экологический монополист: «${stats.dominantSpeciesNameRu}»`,
+          storyEn: `Dense concentrations of ${stats.dominantSpeciesNameEn || 'the dominant species'} now form the living foundation of the benthic reefs.`,
+          storyRu: `Плотные скопления особей «${stats.dominantSpeciesNameRu}» теперь формируют живой каркас подводных отмелей.`,
+          insightEn: 'High density increases vulnerability to specialized parasites and predatory focus.',
+          insightRu: 'Высокая плотность вида привлекает к нему внимание ловчих хищников, балансируя экосистему.'
+        };
+        break;
+
+      case 'vents':
+        chosen = variant === 0 ? {
+          icon: '🌋',
+          badgeEn: 'Tectonic Rifts',
+          badgeRu: 'Дыхание разломов',
+          titleEn: '🌋 Abyssal Hydrothermal Plumes',
+          titleRu: '🌋 Абиссальные минеральные плюмы',
+          storyEn: `Geothermal vents along the tectonic rift fissure release warm sulfide plumes, sustaining dense swarms of chemosynthetic cells.`,
+          storyRu: `Геотермальные источники вдоль тектонического разлома выбрасывают струи сульфидов и солей, собирая вокруг себя мерцающие рои хемосинтетиков.`,
+          insightEn: 'Thermal and chemical gradients around the rift power the primary metabolism of the entire ocean.',
+          insightRu: 'Температурные и химические градиенты разломов служат главным двигателем метаболизма всей капли.'
+        } : {
+          icon: '♨️',
+          badgeEn: 'Geothermal Pulse',
+          badgeRu: 'Геотермальный ток',
+          titleEn: '♨️ Deep-Water Chemosynthesis',
+          titleRu: '♨️ Глубоководный хемосинтез',
+          storyEn: `Mineral-laden waters swirl around the volcanic chimneys, nurturing cells that never see the surface light.`,
+          storyRu: `Насыщенная минералами вода циркулирует вокруг вулканических башен, питая клетки, никогда не видевшие поверхностного света.`,
+          insightEn: 'Abyssal ecosystems thrive entirely independent of sunlight through mineral catalysis.',
+          insightRu: 'Абиссальные экосистемы живут полностью независимо от солнечного света благодаря минеральному катализу.'
+        };
+        break;
+
+      default: // equilibrium
+        chosen = variant === 0 ? {
+          icon: '⚖️',
+          badgeEn: 'Equilibrium',
+          badgeRu: 'Баланс капли',
+          titleEn: '⚖️ Ocean Homeostasis',
+          titleRu: '⚖️ Гармония течений и метаболизма',
+          storyEn: `The ocean holds ${stats.organismCount ?? 0} organisms across ${stats.speciesCount ?? 0} living forms. During this observation window, ${stats.recentBirths ?? 0} divisions and ${stats.recentKills ?? 0} fatal hunts were recorded.`,
+          storyRu: `В океане живут ${stats.organismCount ?? 0} организмов, относящихся к ${stats.speciesCount ?? 0} зарегистрированным формам. За окно наблюдения отмечено ${stats.recentBirths ?? 0} делений и ${stats.recentKills ?? 0} смертельных атак.`,
+          insightEn: 'Resource gradients, local interactions and inherited traits determine each organism\'s next step.',
+          insightRu: 'Следующий шаг организма зависит от ресурсов, соседей и наследуемых признаков.'
+        } : {
+          icon: '🌊',
+          badgeEn: 'Fluid Serenity',
+          badgeRu: 'Спокойствие глубин',
+          titleEn: '🌊 Planktonic Currents',
+          titleRu: '🌊 Ламинарные придонные течения',
+          storyEn: `Gentle currents sweep across the seabed, carrying organic detritus and microscopic spores to quiet backwaters. During this quiet interval, ${stats.recentBirths ?? 0} divisions and ${stats.recentKills ?? 0} fatal hunts were recorded.`,
+          storyRu: `Мягкие придонные течения омывают океанское дно, разнося питательную взвесь в тихие заводи. За окно наблюдения отмечено ${stats.recentBirths ?? 0} делений и ${stats.recentKills ?? 0} смертельных атак.`,
+          insightEn: 'Circulation prevents resource stagnation, linking distant habitats into a single living biosphere.',
+          insightRu: 'Циркуляция предотвращает застой ресурсов, связывая отдаленные биотопы в единую биосферу.'
+        };
+        break;
     }
 
     this.addEntry({
       type: 'observation',
-      icon,
-      badgeEn,
-      badgeRu,
-      titleEn: `${titleEn} (Gen #${stats.generation || 1})`,
-      titleRu: `${titleRu} (Поколение #${stats.generation || 1})`,
-      contentEn: storyEn,
-      contentRu: storyRu,
-      insightEn,
-      insightRu,
-      editorialFocus: focusTheme,
+      icon: chosen.icon,
+      badgeEn: chosen.badgeEn,
+      badgeRu: chosen.badgeRu,
+      titleEn: `${chosen.titleEn} (Gen #${stats.generation || 1})`,
+      titleRu: `${chosen.titleRu} (Поколение #${stats.generation || 1})`,
+      contentEn: chosen.storyEn,
+      contentRu: chosen.storyRu,
+      insightEn: chosen.insightEn,
+      insightRu: chosen.insightRu,
+      editorialFocus: selectedTheme,
       screener: jevDecision ? 'jev-latest' : 'baseline',
       timestamp: Date.now()
     });

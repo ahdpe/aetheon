@@ -36,7 +36,7 @@ export class VeniceBudget {
       this.catalog = new Map(data.data.map(m => [m.id, m.model_spec])); this.catalogDay = this.day();
     }
     const spec = this.catalog.get(model), input = spec?.pricing?.input?.usd, output = spec?.pricing?.output?.usd;
-    const context = spec?.availableContextTokens;
+    const context = spec?.availableContextTokens ?? spec?.maxTotalTokens ?? spec?.maxStateTokens;
     if (![input, output, context].every(Number.isFinite) || input < 0 || output < 0 || context < 1) throw new Error('Unverified model price/context');
     return { input, output, context };
   }
@@ -45,7 +45,7 @@ export class VeniceBudget {
     this.busy = true;
     try {
       let ledger = this.load(); this.save(ledger);
-      if (ledger.spent >= this.limit || ledger.calls[kind] >= (kind === 'text' ? 12 : 144)) return null;
+      if (ledger.spent >= this.limit || ledger.calls[kind] >= (kind === 'text' ? 96 : 144)) return null;
       const prices = await this.prices(body.model);
       const inputBound = kind === 'text' ? Buffer.byteLength(JSON.stringify(body.messages)) + 2048 : prices.context * Object.keys(body.questions ?? {}).length;
       const outputBound = kind === 'text' ? body.max_tokens : inputBound;
