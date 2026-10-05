@@ -101,16 +101,16 @@ export class CataclysmManager {
       const { H, maxDominance, speciesCount } = this.calcShannonDiversity();
       this.lastObservedDiversity = H;
 
-      // Stagnation triggers when:
-      // 1. Single species forms an ecological monopoly (> 80% of entire population)
-      // 2. OR diversity index falls below 0.60 for extended time
-      // 3. AND no new species has emerged for > 20000 ticks (~33 minutes)
-      const isMonopoly = maxDominance > 0.82 && this.engine.organisms.length >= 160;
-      const isLowDiversity = H < 0.65 && speciesCount <= 2;
-      const isProlongedStasis = this.ticksSinceLastSpeciation > 20000;
+      // Stagnation triggers only during genuine evolutionary crisis:
+      // 1. Single species forms an overwhelming monopoly (> 92% of entire population with >= 180 cells)
+      // 2. OR diversity collapses to absolute monoculture (speciesCount <= 1 with >= 100 cells)
+      // 3. AND no new or revived species has emerged for > 72000 ticks (~2 hours)
+      const isMonopoly = maxDominance > 0.92 && this.engine.organisms.length >= 180;
+      const isLowDiversity = speciesCount <= 1 && this.engine.organisms.length >= 100;
+      const isProlongedStasis = this.ticksSinceLastSpeciation > 72000;
 
       if ((isMonopoly || isLowDiversity) && isProlongedStasis && this.stagnationCooldownTicks <= 0) {
-        this.stagnationScore = Math.min(1.0, this.stagnationScore + 0.015);
+        this.stagnationScore = Math.min(1.0, this.stagnationScore + 0.005);
       } else {
         this.stagnationScore = Math.max(0.0, this.stagnationScore - 0.005);
       }
@@ -143,9 +143,9 @@ export class CataclysmManager {
 
       case CATACLYSM_PHASES.CRISIS:
         this.stepCrisis(progress);
-        // Crisis concludes when target survivor count (3-6) is reached or timer expires
+        // Crisis concludes when target survivor count is reached or timer expires
         const alive = this.engine.organisms.length;
-        if (this.phaseTicks >= this.phaseMaxTicks || alive <= 5) {
+        if (this.phaseTicks >= this.phaseMaxTicks || alive <= 18) {
           this.transitionTo(CATACLYSM_PHASES.LAZARUS_DAWN);
         }
         break;
@@ -187,7 +187,7 @@ export class CataclysmManager {
   // 2. Peak Crisis: severe environmental mortality
   stepCrisis(progress) {
     const orgs = this.engine.organisms;
-    const targetSurvivors = 5;
+    const targetSurvivors = 18;
     
     const candidates = orgs.slice();
 
@@ -354,7 +354,8 @@ export class CataclysmManager {
     if (newPhase === CATACLYSM_PHASES.DORMANT) {
       this.currentType = null;
       this.stagnationScore = 0.0;
-      this.stagnationCooldownTicks = 36000; // 1 hour cooldown before next cataclysm
+      this.stagnationCooldownTicks = 144000; // 4 hours cooldown before next cataclysm
+      this.ticksSinceLastSpeciation = 0; // Fresh start for new geological epoch
       this.extinctionsCount++;
       // Clear Lazarus flags
       for (const org of this.engine.organisms) {
@@ -385,7 +386,7 @@ export class CataclysmManager {
   // Hyper-mutation multiplier during Cambrian Adaptive Radiation phase
   getMutationMultiplier() {
     if (this.phase === CATACLYSM_PHASES.ADAPTIVE_RADIATION) {
-      return 2.8; // High genetic mutation bursts into new body shapes
+      return 3.2; // High genetic mutation bursts into new body shapes
     }
     return 1.0;
   }
@@ -393,7 +394,7 @@ export class CataclysmManager {
   // Speciation divergence threshold multiplier (lowered during adaptive radiation for rapid speciation)
   getSpeciationThresholdMultiplier() {
     if (this.phase === CATACLYSM_PHASES.ADAPTIVE_RADIATION) {
-      return 0.65; // Much easier to establish brand new species
+      return 0.55; // Much easier to establish brand new species
     }
     return 1.0;
   }

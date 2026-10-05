@@ -463,7 +463,7 @@ class Organism {
     this.energy -= metabolicCost + this.body.upkeep * (0.4 + 0.6 * this.maturity);
 
     // Graze nutrients from the chemical substrate (grazers or hungry carnivores)
-    if (this.carnivory < 0.72 || this.energy < 40.0) {
+    if (this.carnivory < 0.85 || this.energy < 60.0) {
       const intakeLimit = Math.max(0.08, (1.0 - this.carnivory * 0.7)) * (this.size * 0.22) * this.body.feeding;
       const consumed = grid.consumeAndExcrete(
         this.x, 
@@ -472,7 +472,7 @@ class Organism {
         0.3, // waste ratio
         0.06 * ciliaryPulse // luminescence signal
       );
-      this.energy += consumed * 5.4 * this.genome.metabolismEfficiency * (1-this.carnivory)**3;
+      this.energy += consumed * 5.4 * this.genome.metabolismEfficiency * Math.pow(Math.max(0.08, 1.0 - this.carnivory * 0.82), 2.0);
 
       // Filter-feeders and grazers continuously precipitate mineral grains
       if (grid.depositSubstrate && this.carnivory < 0.35 && consumed > 0.04) {

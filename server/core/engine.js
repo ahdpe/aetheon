@@ -202,12 +202,18 @@ export class SimulationEngine {
       }
     }
 
-    // Allocate only real vacant slots, fairly among surviving parents. No forced turnover cull.
+    // 4. Allocate only real vacant slots, fairly among surviving parents.
     const parents = eligibleParents.filter(o => !deadSet.has(o.id) && !o.isDead() && o.canReproduce());
     for(let i=parents.length-1;i>0;i--) {
       const j=Math.floor(random()*(i+1));[parents[i],parents[j]]=[parents[j],parents[i]];
     }
-    const slots = Math.max(0,this.maxOrganisms-(this.organisms.length-deadSet.size));
+    let activeHunters = 0;
+    for (let i = 0; i < this.organisms.length; i++) {
+      if (this.organisms[i].carnivory > 0.35) activeHunters++;
+    }
+    const blockBiogenesis = this.cataclysms && this.cataclysms.isBiogenesisBlocked();
+    const hunterSlot = (!blockBiogenesis && activeHunters < 4 && deadSet.size > 0) ? 1 : 0;
+    const slots = Math.max(0,this.maxOrganisms-(this.organisms.length-deadSet.size)-hunterSlot);
     const nurserySlot=slots>0&&this.nursery.ready(this)?1:0;
     for(const org of parents.slice(0,slots-nurserySlot)) {
           const specThresholdMult = this.cataclysms ? this.cataclysms.getSpeciationThresholdMultiplier() : 1.0;
@@ -218,7 +224,9 @@ export class SimulationEngine {
           child.speciesId = childSpeciesId;
           this.history.recordBirth(org, child, this.ticks);
           this.lineage.recordBirth(childSpeciesId);
-          if (this.lineage.nextSpeciesId > nextSpeciesBefore) {
+          const targetSpecies = this.lineage.getSpecies(childSpeciesId);
+          const isRevival = Boolean(targetSpecies && targetSpecies.extinctTime !== null && targetSpecies.id !== org.speciesId);
+          if (this.lineage.nextSpeciesId > nextSpeciesBefore || isRevival) {
             this.recentWindow.speciations++;
             if (this.cataclysms) this.cataclysms.onSpeciation();
           }
@@ -268,7 +276,6 @@ export class SimulationEngine {
     }
 
     // 6. Spontaneous Biogenesis (if population dips too low, vents nucleate fresh life)
-    const blockBiogenesis = this.cataclysms && this.cataclysms.isBiogenesisBlocked();
     if (!blockBiogenesis && this.organisms.length < CONFIG.MIN_ORGANISMS) {
       const needed = Math.min(CONFIG.MIN_ORGANISMS-this.organisms.length,Math.max(0,this.maxOrganisms-this.organisms.length-nurserySlot));
       const vents = this.grid.vents;
@@ -286,7 +293,7 @@ export class SimulationEngine {
     }
 
     // 6.5. Natural Ecological Balance: prevent total hunter extinction without vent-camping
-    let activeHunters = 0;
+    activeHunters = 0;
     for (let i = 0; i < this.organisms.length; i++) {
       if (this.organisms[i].carnivory > 0.35) activeHunters++;
     }

@@ -115,7 +115,7 @@ export class LineageManager {
     const effectiveThreshold = this.divergenceThreshold * thresholdMultiplier;
     
     if (dist > effectiveThreshold) {
-      let closest = null, nearest = effectiveThreshold * 0.65;
+      let closest = null, nearest = effectiveThreshold * 0.52;
       for (const candidate of this.prototypeIndex.values()) {
         if (candidate.id === parentSpeciesId) continue;
         const distance = this.calcGeneticDistance(childGenome, candidate);
