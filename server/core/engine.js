@@ -504,6 +504,22 @@ export class SimulationEngine {
       }
     }
 
+    const geo = this.geography ? this.geography.broadcast() : null;
+    let habitatSummary = '';
+    if (geo?.regions) {
+      habitatSummary = geo.regions.map(r => `${r.nameRu || r.id}: ${r.cells} кл.`).join(', ');
+    }
+
+    let topDynastyName = null;
+    let topDynastyGen = 0;
+    for (let i = 0; i < this.organisms.length; i++) {
+      const o = this.organisms[i];
+      if (o.dynastyName && o.dynastyGen > topDynastyGen) {
+        topDynastyGen = o.dynastyGen;
+        topDynastyName = o.dynastyName;
+      }
+    }
+
     return {
       organismCount: this.organisms.length,
       speciesCount: liveSpecies.length,
@@ -525,6 +541,11 @@ export class SimulationEngine {
       topPredatorNameRu: apexHunterSpecies ? (apexHunterSpecies.nameRu || apexHunterSpecies.nameLa) : null,
       topPredatorNameEn: apexHunterSpecies ? (apexHunterSpecies.nameEn || apexHunterSpecies.nameLa) : null,
       reefCoverage: this.grid.getReefCoverage ? this.grid.getReefCoverage() : 0,
+      habitatSummary,
+      activeDynastiesCount: this.activeDynasties ? this.activeDynasties.size : 0,
+      topDynastyName,
+      topDynastyGen,
+      cataclysmPhase: this.cataclysms?.phase || 'stable',
       ...this.colonies.getStats(),
       ...this.climate.getStats()
     };

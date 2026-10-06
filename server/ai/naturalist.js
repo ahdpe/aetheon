@@ -251,13 +251,15 @@ export class AINaturalist {
     const kills = engineStats.recentKills || 0;
     const speciations = engineStats.recentSpeciations || 0;
     const colonyCount = engineStats.colonyCount || 0;
+    const topGen = engineStats.topDynastyGen || 0;
 
     // Only genuine milestones qualify:
     // - New speciation branch
-    // - Apex hunting rampage (10+ kills)
-    // - Multicellular supercolony expansion (4+ colonies)
+    // - Apex hunting rampage (8+ kills)
+    // - Multicellular supercolony expansion (3+ colonies)
+    // - High dynasty generation milestone (F3+)
     // - Or rare deep ecological contemplation after 35+ minutes of silence
-    const hasSignificantEvent = speciations > 0 || kills >= 10 || colonyCount >= 4;
+    const hasSignificantEvent = speciations > 0 || kills >= 8 || colonyCount >= 3 || topGen >= 3;
     const longSilence = minutesSinceLastDispatch >= 35;
 
     if (!hasSignificantEvent && !longSilence) {
@@ -305,6 +307,13 @@ export class AINaturalist {
       dominantSpecies: stats.dominantSpeciesNameRu || stats.dominantSpeciesNameEn || 'Unknown',
       dominantCount: stats.dominantCount || 0,
       topApexPredator: stats.topPredatorNameRu || stats.topPredatorNameEn || 'None',
+      colonyCount: stats.colonyCount || 0,
+      bondedOrganisms: stats.bondedOrganisms || 0,
+      largestColony: stats.largestColonySize || 0,
+      activeDynasties: stats.activeDynastiesCount || 0,
+      topDynasty: stats.topDynastyName ? `${stats.topDynastyName} (F${stats.topDynastyGen})` : 'None',
+      habitats: stats.habitatSummary || 'Open Water',
+      cataclysmPhase: stats.cataclysmPhase || 'stable',
       minutesSinceLastDispatch: Math.round(minutesSinceLastDispatch * 10) / 10
     };
 
@@ -313,8 +322,8 @@ export class AINaturalist {
         type: 'choice',
         instructions: 'Should this ecological interval be published as a journal dispatch for visitors, or skipped as routine baseline?',
         criteria: {
-          publish: 'Speciation branch event, severe apex predator wave (10+ kills), multicellular supercolony, or 35+ min tranquil equilibrium milestone',
-          skip: 'Routine cell divisions/mitosis, minor predatory grazing, and background population fluctuations'
+          publish: 'Speciation branch event, severe apex predator wave (8+ kills), multicellular supercolony, ancient dynasty milestone (F3+), or 35+ min tranquil equilibrium milestone',
+          skip: 'Routine cell divisions/mitosis, minor grazing, and background population fluctuations'
         }
       },
       editorial_focus: {
@@ -322,8 +331,10 @@ export class AINaturalist {
         instructions: 'What is the primary driving drama or theme of this ecosystem moment?',
         criteria: {
           speciation_branch: 'A new lineage or species has adapted and split off',
-          predation_hunt: 'Apex predators striking in high numbers in open water',
-          reef_architecture: 'Colonies and bio-calcite mineral reefs growing around vents',
+          predation_hunt: 'Apex predators striking with tactical intercepts in open water',
+          colonial_superorganism: 'Multicellular colonies or membrane bonds forming collective superorganisms',
+          dynasty_legacy: 'An ancient observer-guided dynasty or lineage enduring across multiple generations',
+          reef_architecture: 'Colonies and bio-calcite mineral reefs growing around vents and shallows',
           tranquil_equilibrium: 'Deep peaceful harmony and rhythmic metabolic drifting'
         }
       },
@@ -371,26 +382,26 @@ export class AINaturalist {
     if (isVeniceAvailable) {
       try {
         const isHunter = species.carnivory > 0.35;
-        const prompt = `A newly evolved species has stabilized in the living microscopic ocean:
+        const prompt = `A newly evolved species has stabilized in the microscopic ocean AETHEON:
 - Species ID: ${species.id}
 - Ancestor ID: ${species.parentSpeciesId}
 - Color hue: ${Math.round(species.hue * 360)}°
-- Feeding rule: ${isHunter ? 'Can attack neighbors and absorb dissolved nutrients; carnivory is a numerical trait' : 'Absorbs dissolved nutrients; no photosynthesis is simulated'}
+- Trophic role: ${isHunter ? 'Active predator: pursues other cells with predictive lunges, deals strike damage and digests biomass' : 'Grazer / Chemotroph: filters dissolved organic nutrients from the mineral plumes'}
 - Speed: ${Math.round(species.speedMax * 10) / 10} μm/step
 - Body Size: ${Math.round(species.size * 10) / 10} μm
 - Current Population: ${species.population}
 
 Provide an engaging natural history entry in JSON:
-1. "nameLa": Latin binomial name (e.g. "Vibrionox velox")
-2. "nameEn": English common name (e.g. "Crimson Dart")
-3. "nameRu": Russian common name (e.g. "Алый стрелочник")
-4. "icon": emoji (e.g. ⚔️ for predator, 🌿 for grazer)
+1. "nameLa": Latin binomial name reflecting morphology and behavior (e.g. "Vibrionox velox", "Aethenella spiralis")
+2. "nameEn": English common name (e.g. "Crimson Dart", "Abyssal Spinner")
+3. "nameRu": Russian common name (e.g. "Алый стрелочник", "Глубоководный веретенник")
+4. "icon": emoji (e.g. ⚔️, 🌿, ⚡, 🌀, 🐋)
 5. "titleEn": Short engaging title with emoji
 6. "titleRu": Краткий увлекательный заголовок с эмодзи
-7. "storyEn": 2 captivating, documentary-style sentences in English describing their behavior and beauty.
-8. "storyRu": 2 захватывающих, художественных предложения на русском о повадках и жизни вида.
-9. "insightEn": 1 simple sentence explaining what this species brings to the ecosystem.
-10. "insightRu": 1 простое предложение: что появление этого вида значит для экосистемы.
+7. "storyEn": 2 captivating, documentary-style sentences in English describing their swimming mechanics, hunting/feeding strategy, and visual elegance.
+8. "storyRu": 2 захватывающих, художественных предложения на русском о биомеханике движения, способе питания и повадках вида.
+9. "insightEn": 1 clear astrobiological/ecological takeaway about this adaptation.
+10. "insightRu": 1 емкий научный вывод об адаптивном преимуществе этих признаков.
 
 JSON ONLY, NO MARKDOWN.`;
 
@@ -525,23 +536,31 @@ JSON ONLY, NO MARKDOWN.`;
 
     const focusTheme = jevDecision?.editorialFocus || (
       (stats.recentKills || 0) > 2 ? 'predation_hunt' : (
-        (stats.recentBirths || 0) > 8 ? 'population_boom' : (
-          (stats.recentSpeciations || 0) > 0 ? 'speciation_branch' : 'tranquil_equilibrium'
+        (stats.colonyCount || 0) >= 2 ? 'colonial_superorganism' : (
+          (stats.topDynastyGen || 0) >= 2 ? 'dynasty_legacy' : (
+            (stats.recentBirths || 0) > 8 ? 'population_boom' : (
+              (stats.recentSpeciations || 0) > 0 ? 'speciation_branch' : 'tranquil_equilibrium'
+            )
+          )
         )
       )
     );
 
     let themeGuidance = '';
     if (focusTheme === 'predation_hunt') {
-      themeGuidance = `Apex predator hunts (${stats.topPredatorNameRu || 'ловчие'}), sudden strikes claiming ${stats.recentKills || 0} prey, and grazers fleeing toward the mineral vents.`;
+      themeGuidance = `Tactical apex predator hunts (${stats.topPredatorNameRu || 'ловчие'}), predictive lead intercept strikes claiming ${stats.recentKills || 0} prey, and grazers executing boundary evasions along the droplet rim.`;
     } else if (focusTheme === 'population_boom') {
-      themeGuidance = `Mitotic population surge (${stats.recentBirths || 0} divisions), crowding around mineral vents, and total population climbing to ${stats.organismCount}.`;
+      themeGuidance = `Mitotic population surge (${stats.recentBirths || 0} divisions), crowding around mineral vents and shallows, total population climbing to ${stats.organismCount}.`;
     } else if (focusTheme === 'speciation_branch') {
-      themeGuidance = `Evolutionary divergence (${stats.recentSpeciations || 0} new species split), ciliary variations, and colonizing a new fluid niche.`;
+      themeGuidance = `Evolutionary divergence (${stats.recentSpeciations || 0} new species split), morphological variation in ciliary drives and size, colonizing new archipelago zones.`;
+    } else if (focusTheme === 'colonial_superorganism' || focusTheme === 'reef_architecture') {
+      themeGuidance = `Multicellular superorganisms and membrane bonds (${stats.colonyCount || 0} clusters, ${stats.bondedOrganisms || 0} interconnected cells), cytoplasmic energy sharing, and bio-calcite accretion.`;
+    } else if (focusTheme === 'dynasty_legacy') {
+      themeGuidance = `Endurance of the ancient dynasty "${stats.topDynastyName || 'Первородные'}" (Gen F${stats.topDynastyGen || 1}), surviving environmental shifts and passing honed survival traits across generations.`;
     } else if (focusTheme === 'extinction_threat') {
-      themeGuidance = `Vulnerable species dwindled under predatory pressure and competing for thermal plumes.`;
+      themeGuidance = `Vulnerable species dwindling under predatory pressure and competing for thermal plumes in phase ${stats.cataclysmPhase || 'stable'}.`;
     } else {
-      themeGuidance = `Calm metabolic harmony, peaceful gliding along hydrothermal currents, and steady nutrient filtration.`;
+      themeGuidance = `Deep metabolic harmony, peaceful laminar drifting along hydrothermal currents, and steady nutrient filtration across habitats.`;
     }
 
     if (isVeniceAvailable) {
@@ -549,32 +568,36 @@ JSON ONLY, NO MARKDOWN.`;
         const recentTitles = this.journalEntries.slice(0, 5).map(e => `"${e.titleEn}" / "${e.titleRu}"`).join(', ');
         const prompt = `Live field observation of the microscopic aquarium AETHEON:
 - Editorial Theme: ${themeGuidance}
-- Recent hunts / predation strikes: ${stats.recentKills || 0}
+- Recent hunts / predation strikes: ${stats.recentKills || 0} (predators use predictive lead intercept; prey uses rim evasion)
 - Recent cell divisions (mitosis): ${stats.recentBirths || 0}
 - Recent speciation branches: ${stats.recentSpeciations || 0}
+- Multicellular Colonies: ${stats.colonyCount || 0} colonies (${stats.bondedOrganisms || 0} bonded cells, max cluster size: ${stats.largestColonySize || 0})
+- Dynasties: ${stats.activeDynastiesCount || 0} active (Leading: "${stats.topDynastyName || 'None'}" at F${stats.topDynastyGen || 0})
+- Regional Habitats: ${stats.habitatSummary || 'Open Water'}
 - Dominant lineage: "${stats.dominantSpeciesNameRu || stats.dominantSpeciesNameEn || 'Пастбищник'}" (${stats.dominantCount || 0} organisms)
 - Top Apex Hunter: "${stats.topPredatorNameRu || stats.topPredatorNameEn || 'Охотник'}"
 - Active population: ${stats.organismCount} organisms across ${stats.speciesCount} species
+- Cataclysm state: ${stats.cataclysmPhase || 'stable'}
 - Generation milestone: #${stats.generation}
 - RECENT TITLES TO NEVER REPEAT: ${recentTitles || 'None'}
 
-CRITICAL RULES:
-1. NEVER start with 'В недрах AETHEON', 'В сердце AETHEON', 'In the depths of AETHEON', 'A vibrant tapestry', or 'A kaleidoscope of life'.
-2. NEVER use the phrase 'Это значит, что' or 'This means that'.
+CRITICAL RULES & STYLE GUIDELINES:
+1. NEVER start with clichés like 'В недрах AETHEON', 'В сердце AETHEON', 'In the depths of AETHEON', 'A vibrant tapestry', 'A kaleidoscope of life', or 'В глубинах'.
+2. NEVER use the robotic phrase 'Это значит, что' or 'This means that'.
 3. DO NOT repeat words from recent titles. You MUST invent a completely fresh, unique headline and original metaphor.
-4. Describe the EXACT current drama based on the field data and editorial theme above:
-   - Make it cinematic, thrilling, and accessible for general audiences.
-4. "insightRu" / "insightEn": 1 brief scientific takeaway (without saying "это значит"), OR empty string "" if not strictly needed.
+4. Deep ecological and astrobiological causal reasoning: connect the physical environment (currents, mineral oases, surface tension rim, thermal chimneys) with cellular behaviors (tactical chases, membrane bonds, shared cytoplasm).
+5. Cinematic, thrilling, natural-documentary voice (David Attenborough / Jacques Cousteau).
+6. "insightRu" / "insightEn": 1 profound scientific insight explaining the evolutionary or ecological mechanism, OR empty string "" if not strictly needed.
 
 JSON format ONLY:
 {
-  "icon": "emoji fitting the story (e.g. ⚔️, 🌪️, 🌾, 🧬, 🌋, ⚡)",
-  "badgeEn": "Short 2-word badge in English (e.g. 'Predator Surge', 'Thermal Bloom', 'Mitosis Wave')",
-  "badgeRu": "Короткий бейдж 2 слова на русском (напр. 'Охота хищника', 'Тепловой всплеск', 'Волна делений')",
+  "icon": "emoji fitting the story (e.g. ⚔️, 🌪️, 🌾, 🧬, 🌋, ⚡, 🪸, 👑)",
+  "badgeEn": "Short 2-word badge in English (e.g. 'Predator Surge', 'Thermal Bloom', 'Colonial Nexus', 'Dynastic Drift')",
+  "badgeRu": "Короткий бейдж 2 слова на русском (напр. 'Охота хищника', 'Тепловой всплеск', 'Колониальный узел', 'Эхо династии')",
   "titleEn": "Unique engaging headline",
   "titleRu": "Уникальный интригующий заголовок",
-  "storyEn": "2 vivid documentary sentences.",
-  "storyRu": "2 ярких, кинематографичных предложения на русском языке.",
+  "storyEn": "2 vivid documentary sentences with deep narrative depth.",
+  "storyRu": "2 ярких, кинематографичных предложения на русском языке с глубоким повествованием.",
   "insightEn": "1 punchy scientific takeaway (or empty string)",
   "insightRu": "1 емкий научный вывод (или пустая строка)"
 }`;
@@ -611,6 +634,7 @@ JSON format ONLY:
     if ((stats.recentSpeciations ?? 0) > 0) candidates.push('speciation');
     if (stats.dominantSpeciesNameRu && (stats.dominantCount ?? 0) > 15) candidates.push('dominance');
     if ((stats.colonyCount ?? 0) >= 2) candidates.push('colonies');
+    if (stats.topDynastyName && (stats.topDynastyGen ?? 0) >= 2) candidates.push('dynasty');
     if ((stats.organismCount ?? 0) > 30) candidates.push('vents');
     candidates.push('equilibrium');
 
@@ -746,6 +770,30 @@ JSON format ONLY:
         };
         break;
 
+      case 'dynasty':
+        chosen = variant === 0 ? {
+          icon: '👑',
+          badgeEn: 'Dynastic Lineage',
+          badgeRu: 'Династическая ветвь',
+          titleEn: `👑 Legacy of ${stats.topDynastyName || 'the Ancients'}`,
+          titleRu: `👑 Наследие династии: «${stats.topDynastyName || 'Первородные'}»`,
+          storyEn: `The lineage of "${stats.topDynastyName}" has endured to generation F${stats.topDynastyGen || 1}. Generations of continuous division refine their metabolic stamina across changing currents.`,
+          storyRu: `Генеалогическая ветвь «${stats.topDynastyName}» успешно достигла поколения F${stats.topDynastyGen || 1}. Непрерывная череда митозов закалила их метаболизм в изменчивых придонных течениях.`,
+          insightEn: 'Long-surviving lineages develop high metabolic efficiency, buffering them against localized nutrient droughts.',
+          insightRu: 'Долгоживущие династии накапливают высокий энергетический КПД, защищающий популяцию при колебаниях ресурсов.'
+        } : {
+          icon: '🏛️',
+          badgeEn: 'Ancestral Memory',
+          badgeRu: 'Память поколений',
+          titleEn: `🏛️ Enduring Lineage: ${stats.topDynastyName || 'Ancestral Strain'}`,
+          titleRu: `🏛️ Неугасимый род: «${stats.topDynastyName || 'Древние'}»`,
+          storyEn: `Generation F${stats.topDynastyGen || 1} of the "${stats.topDynastyName}" dynasty navigates the archipelago reefs with steady ciliary pulses, carrying the founder's imprint forward.`,
+          storyRu: `Поколение F${stats.topDynastyGen || 1} династии «${stats.topDynastyName}» уверенно бороздит рифовые отмели, сохраняя первоначальный отпечаток основателя сквозь эпохи.`,
+          insightEn: 'Inherited ciliary drive parameters stabilize navigation patterns across successive generations.',
+          insightRu: 'Наследуемые параметры жгутикового аппарата стабилизируют навигацию сквозь поколения.'
+        };
+        break;
+
       case 'vents':
         chosen = variant === 0 ? {
           icon: '🌋',
@@ -817,15 +865,16 @@ JSON format ONLY:
     if (!CONFIG.VENICE_API_KEY) return null;
     this.totalApiCalls++;
 
-    const systemPrompt = `You are a world-renowned Nature Documentary Narrator (like David Attenborough or Jacques Cousteau) observing a living microscopic aquarium called AETHEON.
+    const systemPrompt = `You are a world-renowned Nature Documentary Narrator (like David Attenborough or Jacques Cousteau) and Astrobiologist observing a living microscopic ocean called AETHEON.
+You combine deep evolutionary insight with thrilling, poetic storytelling. You explain ecological adaptations—how organisms navigate currents, hunt with predictive lunges, evade predators along the meniscus rim, cooperate via multicellular membrane channels, and endure across generations.
 ABSOLUTELY FORBIDDEN: Do NOT use dry, robotic jargon like 'interfacial reactor', 'solitons', 'active resonators', 'substrate equilibrium', 'scalar field'.
-INSTEAD: Write thrilling, easy-to-understand, poetic nature stories for curious everyday visitors with warmth and wonder.
-Use only the supplied measured facts. Never invent population losses, diets, photosynthesis, achievements or causal certainty. Describe uncertainty as uncertainty. OUTPUT VALID JSON ONLY.`;
+NEVER invent false facts (no photosynthesis, no eyes, no brains—only cilia, chemotaxis, cell membranes, organelles).
+Write captivating, emotionally resonant, documentary-grade prose with warmth, precision, and wonder. OUTPUT VALID JSON ONLY.`;
 
     const data = await this.budget.request('text', CONFIG.VENICE_API_URL, {
       model: CONFIG.VENICE_MODEL,
       messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }],
-      temperature: 0.7, max_tokens: 750,
+      temperature: 0.75, max_tokens: 1100,
       venice_parameters: { include_venice_system_prompt: false }
     });
     if (!data) return null;

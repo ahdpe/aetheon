@@ -283,10 +283,10 @@ class Organism {
         // B. Identify single nearest threat / prey to avoid force cancellation
         if (other.carnivory > 0.35 && other.size > this.size * 1.1 && d < nearestPredatorDist) {
           nearestPredatorDist = d;
-          nearestPredator = { dx, dy, d };
+          nearestPredator = { dx, dy, d, org: other };
         } else if (this.carnivory > 0.35 && (other.carnivory <= 0.35 || other.size < this.size * 0.85) && other.size <= this.size * 1.18 && d < nearestPreyDist) {
           nearestPreyDist = d;
-          nearestPrey = { dx, dy, d };
+          nearestPrey = { dx, dy, d, org: other };
         }
       }
 
@@ -301,23 +301,54 @@ class Organism {
       }
     }
 
-    // Apply fleeing force if predator is near
+    // Apply fleeing force if predator is near (tactical boundary evasion)
     const fleeThreshold = Math.max(38.0, this.size * 4.8);
     if (nearestPredator && nearestPredator.d < fleeThreshold) {
       isFleeing = true;
       const urgency = 1.0 - (nearestPredator.d / fleeThreshold);
       const fleeForce = 2.8 + urgency * 2.5; // up to 5.3
-      steerX -= (nearestPredator.dx / nearestPredator.d) * fleeForce;
-      steerY -= (nearestPredator.dy / nearestPredator.d) * fleeForce;
+      let escapeX = -nearestPredator.dx / nearestPredator.d;
+      let escapeY = -nearestPredator.dy / nearestPredator.d;
+
+      // Smart boundary evasion: deflect tangentially along the dish rim to avoid getting trapped
+      const toCenterX = this.x - CONFIG.CHAMBER_CENTER_X;
+      const toCenterY = this.y - CONFIG.CHAMBER_CENTER_Y;
+      const distC = Math.hypot(toCenterX, toCenterY) || 0.001;
+      const R = effectiveRadius || CONFIG.CHAMBER_RADIUS;
+      const rimMargin = Math.min(CONFIG.SURFACE_TENSION_MARGIN, R * 0.22);
+      if (distC > R - rimMargin) {
+        const tanX = -toCenterY / distC;
+        const tanY = toCenterX / distC;
+        const dot = escapeX * tanX + escapeY * tanY;
+        const sign = dot >= 0 ? 1 : -1;
+        escapeX = escapeX * 0.6 + tanX * sign * 0.8;
+        escapeY = escapeY * 0.6 + tanY * sign * 0.8;
+        const escLen = Math.hypot(escapeX, escapeY) || 0.01;
+        escapeX /= escLen;
+        escapeY /= escLen;
+      }
+
+      steerX += escapeX * fleeForce;
+      steerY += escapeY * fleeForce;
     }
 
-    // Apply pursuit force if prey is near (active hunting lunge)
+    // Apply pursuit force if prey is near (tactical predictive intercept)
     const huntThreshold = Math.max(55.0, this.size * 8.0);
     if (nearestPrey && nearestPrey.d < huntThreshold) {
       const huntUrgency = 1.0 - (nearestPrey.d / huntThreshold);
       const huntForce = 4.2 + huntUrgency * 3.5; // up to 7.7 pursuit force!
-      steerX += (nearestPrey.dx / nearestPrey.d) * huntForce;
-      steerY += (nearestPrey.dy / nearestPrey.d) * huntForce;
+
+      let chaseX = nearestPrey.dx;
+      let chaseY = nearestPrey.dy;
+      // Predictive lead vector: lead moving prey based on relative velocity
+      if (nearestPrey.org && (nearestPrey.org.vx || nearestPrey.org.vy)) {
+        const lead = Math.min(5.0, nearestPrey.d / Math.max(1.5, this.maxSpeed * 1.3));
+        chaseX += (nearestPrey.org.vx - this.vx * 0.35) * lead;
+        chaseY += (nearestPrey.org.vy - this.vy * 0.35) * lead;
+      }
+      const chaseDist = Math.hypot(chaseX, chaseY) || 0.01;
+      steerX += (chaseX / chaseDist) * huntForce;
+      steerY += (chaseY / chaseDist) * huntForce;
     }
 
     // Add separation force
