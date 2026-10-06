@@ -2,11 +2,13 @@
 export const LEGACY_GEOMETRY = Object.freeze({version:1,worldSize:1400,gridSize:128,cx:700,cy:700,radius:680});
 export const OCEAN_GEOMETRY = Object.freeze({version:2,worldSize:2100,gridSize:192,cx:1050,cy:1050,radius:1020,previousRadius:680});
 export const RESOURCE_OASES = Object.freeze([
- {x:1050,y:240,radius:150},
- {x:1780,y:690,radius:135},
- {x:1620,y:1560,radius:140},
- {x:680,y:1780,radius:145},
- {x:275,y:920,radius:130}
+ {x:1050,y:240,radius:155},
+ {x:1520,y:360,radius:135},
+ {x:1860,y:850,radius:145},
+ {x:1720,y:1420,radius:135},
+ {x:540,y:1660,radius:130},
+ {x:260,y:1200,radius:140},
+ {x:380,y:560,radius:130}
 ]);
 export const HABITATS = Object.freeze([
  {id:'basin',en:'Inner basin',ru:'Внутренняя котловина',color:'#647ba8',x:1050,y:1050},

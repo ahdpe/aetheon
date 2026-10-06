@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {TerrainField,TERRAIN_SEED,validateTerrainState,transportChemicals} from '../public/js/shared/terrain.js';
-import {makeResourceRecharge} from '../public/js/shared/habitats.js';
+import {makeResourceRecharge,RESOURCE_OASES} from '../public/js/shared/habitats.js';
 process.env.VENICE_API_KEY='';
 process.env.SNAPSHOT_FILE=path.join(fs.mkdtempSync(path.join(os.tmpdir(),'aetheon-terrain-test-')),'world.json');
 const {ChemicalGrid}=await import('../server/core/chemicalGrid.js');
@@ -116,6 +116,20 @@ test('asymmetric rift vents break the 72-degree regular pentagon and circular me
  assert.ok(steps.every(s=>Math.abs(s-72)>4));
  // Distances from center must vary naturally along the rift
  assert.ok(Math.max(...distances)-Math.min(...distances)>6);
+});
+
+test('outer archipelago resource oases break 5-point pentagram symmetry with organic archipelago distribution',()=>{
+ assert.ok(RESOURCE_OASES.length !== 5);
+ const angles=[],distances=[];
+ for(const p of RESOURCE_OASES){
+  const dx=p.x-1050,dy=p.y-1050;
+  distances.push(Math.hypot(dx,dy));
+  angles.push((Math.atan2(dy,dx)+Math.PI*2)%(Math.PI*2));
+ }
+ angles.sort((a,b)=>a-b);
+ const steps=angles.map((a,i)=>(i<angles.length-1?angles[i+1]-a:angles[0]+Math.PI*2-angles[i])*180/Math.PI);
+ assert.ok(steps.every(s=>Math.abs(s-72)>8));
+ assert.ok(Math.max(...distances)-Math.min(...distances)>40);
 });
 
 test('biogenic substrate and algae feedback dynamically reshapes terrain relief, permeability, shading and currents',()=>{
