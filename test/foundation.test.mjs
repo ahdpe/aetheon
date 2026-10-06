@@ -185,7 +185,7 @@ test('budget persists reservations on ambiguous failures and skips simultaneous 
   await Promise.all([b.request('text','https://venice.invalid/chat',body),b.request('text','https://venice.invalid/chat',body)]);
   assert.equal(fake.paid,1); const charged=b.load().spent; assert.ok(charged>0);
   const restarted=new VeniceBudget({file,key:'test',bootstrap:false,fetcher:fake.fetcher}); assert.equal(restarted.load().spent,charged);
-  const state=restarted.load(); state.spent=79999; restarted.save(state);
+  const state=restarted.load(); state.spent=restarted.limit-1; restarted.save(state);
   assert.equal(await restarted.request('text','https://venice.invalid/chat',body),null); assert.equal(fake.paid,1);
 });
 test('budget uses actual usage, first legacy day is protected, corruption fails closed',async()=>{

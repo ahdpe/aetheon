@@ -4,9 +4,9 @@ import { CONFIG } from '../config.js';
 
 // Reservations survive failed requests and restarts. Missing usage is charged conservatively.
 export class VeniceBudget {
-  constructor({ file = path.join(path.dirname(CONFIG.SNAPSHOT_FILE), 'venice-budget.json'), fetcher = fetch, clock = Date.now, key = CONFIG.VENICE_API_KEY, bootstrap = true } = {}) {
+  constructor({ file = path.join(path.dirname(CONFIG.SNAPSHOT_FILE), 'venice-budget.json'), fetcher = fetch, clock = Date.now, key = CONFIG.VENICE_API_KEY, bootstrap = true, limit = CONFIG.VENICE_BUDGET_LIMIT || 160000 } = {}) {
     this.file = file; this.fetcher = fetcher; this.clock = clock; this.key = key;
-    this.limit = 80000; // USD micro-units: $0.08, leaving $0.02 safety margin.
+    this.limit = limit; // USD micro-units: $0.16 (doubled from $0.08), leaving safety margin.
     this.bootstrap = bootstrap; this.catalog = null; this.catalogDay = null;
   }
   day() { return new Date(this.clock()).toISOString().slice(0, 10); }
@@ -45,7 +45,8 @@ export class VeniceBudget {
     this.busy = true;
     try {
       let ledger = this.load(); this.save(ledger);
-      if (ledger.spent >= this.limit || ledger.calls[kind] >= (kind === 'text' ? 96 : 144)) return null;
+      const maxCalls = kind === 'text' ? (CONFIG.VENICE_TEXT_CALLS_LIMIT || 192) : (CONFIG.VENICE_DECISION_CALLS_LIMIT || 288);
+      if (ledger.spent >= this.limit || ledger.calls[kind] >= maxCalls) return null;
       const prices = await this.prices(body.model);
       const inputBound = kind === 'text' ? Buffer.byteLength(JSON.stringify(body.messages)) + 2048 : prices.context * Object.keys(body.questions ?? {}).length;
       const outputBound = kind === 'text' ? body.max_tokens : inputBound;
