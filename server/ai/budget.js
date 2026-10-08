@@ -4,9 +4,9 @@ import { CONFIG } from '../config.js';
 
 // Reservations survive failed requests and restarts. Missing usage is charged conservatively.
 export class VeniceBudget {
-  constructor({ file = path.join(path.dirname(CONFIG.SNAPSHOT_FILE), 'venice-budget.json'), fetcher = fetch, clock = Date.now, key = CONFIG.VENICE_API_KEY, bootstrap = true, limit = CONFIG.VENICE_BUDGET_LIMIT || 200000 } = {}) {
+  constructor({ file = path.join(path.dirname(CONFIG.SNAPSHOT_FILE), 'venice-budget.json'), fetcher = fetch, clock = Date.now, key = CONFIG.VENICE_API_KEY, bootstrap = true, limit = CONFIG.VENICE_BUDGET_LIMIT || 300000 } = {}) {
     this.file = file; this.fetcher = fetcher; this.clock = clock; this.key = key;
-    this.limit = limit; // USD micro-units: $0.20 (200,000 micro-units)
+    this.limit = limit; // USD micro-units: $0.30 (300,000 micro-units)
     this.bootstrap = bootstrap; this.catalog = null; this.catalogDay = null;
   }
   day() { return new Date(this.clock()).toISOString().slice(0, 10); }
