@@ -98,6 +98,7 @@ export class JournalDrawer {
   open() {
     if (this.isOpen) return;
     this.isOpen = true;
+    this.render();
     this.drawer?.classList.add('open');
     this.backdrop?.classList.add('open');
     this.footer?.classList.add('drawer-active');
