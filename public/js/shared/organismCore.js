@@ -493,13 +493,13 @@ class Organism {
 
     // 3. Metabolism & Feeding
     const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-    const predatorPenalty = this.carnivory > 0.35 ? (1.2 + this.carnivory * 0.3) : 1.0;
-    const metabolicCost = ((CONFIG.BASE_METABOLIC_RATE * (this.size * 0.12) + (currentSpeed * currentSpeed) * 0.02) * predatorPenalty) / this.genome.metabolismEfficiency;
+    const predatorPenalty = this.carnivory > 0.35 ? (1.1 + this.carnivory * 0.15) : 1.0;
+    const metabolicCost = ((CONFIG.BASE_METABOLIC_RATE * (this.size * 0.12) + (currentSpeed * currentSpeed) * 0.008) * predatorPenalty) / this.genome.metabolismEfficiency;
     this.energy -= metabolicCost + this.body.upkeep * (0.4 + 0.6 * this.maturity);
 
     // Graze nutrients from the chemical substrate (grazers or hungry carnivores)
-    if (this.carnivory < 0.85 || this.energy < 60.0) {
-      const intakeLimit = Math.max(0.08, (1.0 - this.carnivory * 0.7)) * (this.size * 0.22) * this.body.feeding;
+    if (this.carnivory < 0.85 || this.energy < 75.0) {
+      const intakeLimit = Math.max(0.12, (1.0 - this.carnivory * 0.55)) * (this.size * 0.22) * this.body.feeding;
       const consumed = grid.consumeAndExcrete(
         this.x, 
         this.y, 
@@ -507,7 +507,7 @@ class Organism {
         0.3, // waste ratio
         0.06 * ciliaryPulse // luminescence signal
       );
-      this.energy += consumed * 5.4 * this.genome.metabolismEfficiency * Math.pow(Math.max(0.08, 1.0 - this.carnivory * 0.82), 2.0);
+      this.energy += consumed * 5.4 * this.genome.metabolismEfficiency * Math.max(0.20, Math.pow(Math.max(0.08, 1.0 - this.carnivory * 0.75), 1.6));
 
       // Filter-feeders and grazers continuously precipitate mineral grains
       if (grid.depositSubstrate && this.carnivory < 0.35 && consumed > 0.04) {
