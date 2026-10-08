@@ -260,8 +260,9 @@ export class JournalDrawer {
 
       // Contextual Visual Illustration: If news is about a species/creature, show its micro-portrait!
       let visualHtml = '';
+      const targetSpeciesId = entry.speciesId || entry.species?.id;
       if (isSpecies || entry.species) {
-        visualHtml = this.renderOrganismPortraitSvg(entry.species || entry, isRu);
+        visualHtml = this.renderOrganismPortraitSvg(entry.species || entry, isRu, targetSpeciesId);
       } else if (isCataclysm) {
         visualHtml = `
           <div class="journal-cataclysm-banner">
@@ -288,12 +289,29 @@ export class JournalDrawer {
         <div class="journal-story">${escapeHtml(content || '')}</div>
         ${insightHtml}
       `;
+
+      // Attach click events for specimen tracking buttons in journal
+      const trackBtn = item.querySelector('.journal-track-btn:not(.disabled)');
+      if (trackBtn) {
+        trackBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const spId = parseInt(trackBtn.getAttribute('data-species-id'), 10);
+          if (spId) {
+            this.close();
+            const app = this.app || window.aetheonApp;
+            if (app && typeof app.trackSpeciesInOcean === 'function') {
+              app.trackSpeciesInOcean(spId);
+            }
+          }
+        });
+      }
+
       this.timeline.appendChild(item);
     });
   }
 
   // Generate authentic micro-anatomical SVG portrait of a specimen
-  renderOrganismPortraitSvg(species, isRu = true) {
+  renderOrganismPortraitSvg(species, isRu = true, speciesId = null) {
     if (!species) return '';
     const hue = Math.round((species.hue !== undefined ? species.hue : 0.52) * 360);
     const isHunter = (species.carnivory || 0) > 0.38;
@@ -340,6 +358,26 @@ export class JournalDrawer {
     const badgeLabel = isRu ? '🔬 МИКРО-ПОРТРЕТ ОСОБИ' : '🔬 SPECIMEN PORTRAIT';
     const dietLabel = isHunter ? (isRu ? '⚔️ Хищник' : '⚔️ Predator') : (isRu ? '🌿 Продуцент' : '🌿 Grazer');
 
+    const spId = speciesId || species.id;
+    const renderer = this.app?.renderer || window.aetheonApp?.renderer;
+    const liveCount = (renderer && renderer.currEntities && spId)
+      ? Array.from(renderer.currEntities.values()).filter(o => o.speciesId === spId).length
+      : 0;
+
+    const isAlive = liveCount > 0;
+    const statusHtml = isAlive
+      ? `<span class="journal-species-status status-alive">🟢 ${isRu ? `В океане: ${liveCount} шт.` : `In ocean: ${liveCount}`}</span>`
+      : `<span class="journal-species-status status-extinct" title="${isRu ? 'Особи этого вида погибли в ходе естественного отбора' : 'All specimens have perished in natural selection'}">💀 ${isRu ? 'Вымер в океане' : 'Extinct in ocean'}</span>`;
+
+    const trackBtnHtml = spId ? (isAlive
+      ? `<button class="journal-track-btn" data-species-id="${spId}" title="${isRu ? 'Найти и следить за особью в чаше' : 'Track specimen in ocean'}">
+           <span>🎯</span> <span>${isRu ? 'Найти в чаше' : 'Track in Ocean'}</span>
+         </button>`
+      : `<button class="journal-track-btn disabled" disabled title="${isRu ? 'Этот вид вымер и больше не присутствует в толще воды' : 'This species has gone extinct'}">
+           <span>💀</span> <span>${isRu ? 'Вид вымер' : 'Extinct'}</span>
+         </button>`
+    ) : '';
+
     return `
       <div class="journal-organism-portrait">
         <div class="portrait-lens">
@@ -372,6 +410,10 @@ export class JournalDrawer {
             <span>📏 Ø ${sizeFormatted} мкм</span>
             <span>⚡ ${speed} мкм/шаг</span>
             <span>${dietLabel}</span>
+          </div>
+          <div class="portrait-footer">
+            ${statusHtml}
+            ${trackBtnHtml}
           </div>
         </div>
       </div>

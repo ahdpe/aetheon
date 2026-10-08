@@ -652,16 +652,17 @@ export class SimulationEngine {
 
         const CX = CONFIG.CHAMBER_CENTER_X;
         const CY = CONFIG.CHAMBER_CENTER_Y;
-        for (let i = 0; i < 2; i++) {
+        const clusterSize = 6; // Viable pioneer cluster (prevents instant extinction)
+        for (let i = 0; i < clusterSize; i++) {
           const angle = random() * Math.PI * 2;
-          const dist = 120 + random() * 250;
+          const dist = 100 + random() * 260;
           const founderOrg = new Organism(
             CX + Math.cos(angle) * dist,
             CY + Math.sin(angle) * dist,
             Organism.createRandomGenome(founderSpecies.hue, founderSpecies.carnivory > 0.35),
             1, 0, founderSpecies.id
           );
-          founderOrg.energy = 90.0;
+          founderOrg.energy = 140.0;
           founderOrg.size = founderSpecies.size;
           this.history.addRoot(founderOrg, this.ticks, 'ai_genesis');
           this.organisms.push(founderOrg);
