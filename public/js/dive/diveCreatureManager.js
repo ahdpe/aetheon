@@ -185,6 +185,29 @@ export class DiveCreatureManager {
         pos.setXYZ(i, vx * 1.35, vy * 0.70 * lateralWidth, vz * lateralWidth);
       }
       bodyGeo.computeVertexNormals();
+    } else if (shape === 'serpent') {
+      // Sinuous undulating micro-eel / spirochaete matching 2D
+      bodyGeo = new THREE.SphereGeometry(bodyR, 26, 20);
+      const pos = bodyGeo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        let vx = pos.getX(i);
+        let vy = pos.getY(i);
+        let vz = pos.getZ(i);
+        const nx = vx / bodyR; // -1 to 1
+        const wave = Math.sin(nx * Math.PI * 2.2) * (bodyR * 0.45);
+        const taper = 0.45 + 0.65 * (1.0 - (nx + 1.0) * 0.4);
+        pos.setXYZ(i, vx * 2.3, vy * 0.60 * taper, (vz * 0.60 + wave) * taper);
+      }
+      bodyGeo.computeVertexNormals();
+    } else if (shape === 'radiolarian') {
+      // Crystalline 6-pointed star / faceted diatom carapace matching 2D
+      bodyGeo = new THREE.IcosahedronGeometry(bodyR * 0.90, 0); // Faceted geometric core
+      bodyGeo.scale(1.15, 0.85, 1.15);
+    } else if (shape === 'medusa') {
+      // Hydrozoan umbrella bell dome matching 2D siphonophore bell
+      bodyGeo = new THREE.SphereGeometry(bodyR * 1.15, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.55);
+      bodyGeo.scale(0.95, 1.25, 0.95);
+      bodyGeo.rotateZ(-Math.PI * 0.5); // Apex facing forward along +X, opening toward -X
     } else {
       // Ovoid: Streamlined oval matching 2D aspect ratios
       bodyGeo = new THREE.SphereGeometry(bodyR, 22, 20);
@@ -202,7 +225,9 @@ export class DiveCreatureManager {
       metalness: 0.08
     });
 
-    bodyGeo.scale(morph.aspectX/1.25,1,morph.aspectY/0.85);
+    if (shape === 'ovoid') {
+      bodyGeo.scale(morph.aspectX / 1.25, 1, morph.aspectY / 0.85);
+    }
     const body = new THREE.Mesh(bodyGeo, bodyMat);
     group.add(body);
     group.userData.bodyMat = bodyMat;
@@ -327,6 +352,93 @@ export class DiveCreatureManager {
 
       group.add(c1); group.add(nu1);
       group.add(c2); group.add(nu2);
+    } else if (morph.pattern === 'crystal_lattice') {
+      // Radiolarian silica spicules & inner facet ring matching 2D
+      const spiculeMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(`hsl(${accentHue}, 95%, 85%)`),
+        transparent: true,
+        opacity: 0.95,
+        blending: THREE.AdditiveBlending
+      });
+      const tipMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+      // 6 radiating silica spicules in cardinal & diagonal directions
+      const spiculeLen = bodyR * 1.45;
+      const spThickness = Math.max(0.08, bodyR * 0.05);
+      for (let p = 0; p < 6; p++) {
+        const ang = (p / 6) * Math.PI * 2;
+        const spGeo = new THREE.CylinderGeometry(spThickness * 0.5, spThickness, spiculeLen, 5);
+        spGeo.translate(0, spiculeLen * 0.5, 0);
+        spGeo.rotateZ(Math.PI * 0.5);
+        spGeo.rotateY(ang);
+        const spMesh = new THREE.Mesh(spGeo, spiculeMat);
+        group.add(spMesh);
+
+        // Gleaming crystal tip node
+        const tipGeo = new THREE.SphereGeometry(spThickness * 1.8, 4, 4);
+        const tipMesh = new THREE.Mesh(tipGeo, tipMat);
+        tipMesh.position.set(Math.cos(ang) * spiculeLen, 0, Math.sin(ang) * spiculeLen);
+        group.add(tipMesh);
+      }
+    } else if (morph.pattern === 'metamere_spine') {
+      // Segmented undulating nerve cord with metamere rib arches matching 2D
+      const cordMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(`hsl(${accentHue}, 95%, 80%)`),
+        transparent: true,
+        opacity: 0.95,
+        blending: THREE.AdditiveBlending
+      });
+      const nodeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+      const segs = 6;
+      const step = (bodyR * 1.8) / (segs + 1);
+      for (let s = 1; s <= segs; s++) {
+        const sx = -bodyR * 0.9 + s * step;
+        const ringGeo = new THREE.TorusGeometry(bodyR * 0.55 * (1.0 - (s / segs) * 0.4), bodyR * 0.04, 5, 16);
+        ringGeo.rotateY(Math.PI * 0.5);
+        const ringMesh = new THREE.Mesh(ringGeo, cordMat);
+        ringMesh.position.set(sx, 0, 0);
+        group.add(ringMesh);
+
+        // Glowing node sphere
+        const node = new THREE.Mesh(new THREE.SphereGeometry(bodyR * 0.12, 5, 5), nodeMat);
+        node.position.set(sx, bodyR * 0.45 * (1.0 - (s / segs) * 0.4), 0);
+        group.add(node);
+      }
+    } else if (morph.pattern === 'gastric_ring') {
+      // Central gastric cavity with radial canals & trailing margin tentacles matching 2D
+      const stomachMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(`hsl(${accentHue}, 90%, 75%)`),
+        transparent: true,
+        opacity: 0.85,
+        blending: THREE.AdditiveBlending
+      });
+      const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+      // Stomach node
+      const stom = new THREE.Mesh(new THREE.SphereGeometry(bodyR * 0.35, 8, 8), stomachMat);
+      stom.position.set(bodyR * 0.15, 0, 0);
+      const nuc = new THREE.Mesh(new THREE.SphereGeometry(bodyR * 0.16, 6, 6), coreMat);
+      nuc.position.set(bodyR * 0.15, 0, 0);
+      group.add(stom); group.add(nuc);
+
+      // Trailing tentacles from the posterior margin
+      const tentMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(`hsl(${accentHue}, 85%, 75%)`),
+        transparent: true,
+        opacity: 0.70,
+        blending: THREE.AdditiveBlending
+      });
+      const tentLen = bodyR * 1.8;
+      for (let t = 0; t < 4; t++) {
+        const tAng = (t / 4) * Math.PI * 2;
+        const tentGeo = new THREE.CylinderGeometry(bodyR * 0.03, bodyR * 0.06, tentLen, 4);
+        tentGeo.translate(0, -tentLen * 0.5, 0);
+        tentGeo.rotateZ(Math.PI * 0.5);
+        const tentMesh = new THREE.Mesh(tentGeo, tentMat);
+        tentMesh.position.set(-bodyR * 0.5, Math.sin(tAng) * (bodyR * 0.4), Math.cos(tAng) * (bodyR * 0.4));
+        group.add(tentMesh);
+      }
     } else {
       // Stippled glowing granules
       const granMat = new THREE.MeshBasicMaterial({

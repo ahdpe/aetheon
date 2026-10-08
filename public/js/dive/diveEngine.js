@@ -132,6 +132,11 @@ export class DiveEngine {
     this.camPos.set(x3d, 18, z3d);
     this.currentHeading = Math.atan2(org.vy, org.vx) || 0;
 
+    // 3.5. Immediately sync live biogenic coral reefs into 3D environment
+    if (this.app.renderer?.biogenicReefs) {
+      this.environment.updateBiogenicReefs(this.app.renderer.biogenicReefs, this.app.renderer.dayPhase ?? 0.5, performance.now());
+    }
+
     // 4. Start 3D animation loop
     this.loop(performance.now());
   }
@@ -394,8 +399,9 @@ export class DiveEngine {
       this.audio.playFeedChime();
       this.hud.flashFeeding();
     }
-
-    this.environment.update(time, orgX3D, orgZ3D, this.app.renderer.thumbCanvas, serverBlooms, org.color, this.app.renderer.substrateCanvas);
+    const reefs = this.app.renderer ? this.app.renderer.biogenicReefs : [];
+    const dayPhase = this.app.renderer ? (this.app.renderer.dayPhase ?? 0.5) : 0.5;
+    this.environment.update(time, orgX3D, orgZ3D, this.app.renderer.thumbCanvas, serverBlooms, org.color, this.app.renderer.substrateCanvas, reefs, dayPhase);
     this.creatures.update(orgs, this.trackedId, this.app.renderer.colonyBonds, time, this.app.renderer.pilotedIds);
     this.hud.update(org, this.currentHeading, nearestVent, nearestPredatorDist, time);
     this.audio.update(org, speed, minVentDist, org.ciliaryFrequency);

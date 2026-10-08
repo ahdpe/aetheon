@@ -200,20 +200,51 @@ export class OceanRenderer {
     this.thumbCtx.putImageData(this.thumbImgData, 0, 0);
     this.substrateCtx.putImageData(this.substrateImgData, 0, 0);
 
-    // Extract dynamic biogenic reef formations (calcified coral clusters)
-    const reefs = [];
+    // Extract dynamic biogenic reef formations (organic calcified coral clusters)
+    // Avoid rectilinear grid rows; sample local substrate peaks with organic jitter and Poisson distance
+    const candidates = [];
     const step = this.worldSize / 48;
-    for (let gy = 2; gy < 46; gy += 2) {
-      for (let gx = 2; gx < 46; gx += 2) {
+    for (let gy = 2; gy < 46; gy++) {
+      for (let gx = 2; gx < 46; gx++) {
         const sub = this.substrateImgData.data[(gy * 48 + gx) * 4 + 3];
         if (sub > 38) {
-          reefs.push({
-            x: (gx + 0.5) * step,
-            y: (gy + 0.5) * step,
+          // Deterministic organic hash (rock-stable across frames)
+          const h1 = ((gx * 374761393 + gy * 668265263) ^ 0x5bf03635) >>> 0;
+          const h2 = ((gx * 668265263 + gy * 374761393) ^ 0x1b873593) >>> 0;
+          const jx = ((h1 % 1000) / 1000 - 0.5) * 0.95 * step;
+          const jy = ((h2 % 1000) / 1000 - 0.5) * 0.95 * step;
+          candidates.push({
+            x: (gx + 0.5) * step + jx,
+            y: (gy + 0.5) * step + jy,
             density: sub / 255,
-            seed: (gx * 73 + gy * 109) % 1000
+            sub,
+            seed: (h1 ^ h2) % 10000
           });
         }
+      }
+    }
+
+    // Sort by density descending so the strongest mineralized formations claim their territory
+    candidates.sort((a, b) => b.sub - a.sub);
+
+    // Poisson-disk distance rejection: prevents overlapping while breaking straight lines
+    const minDist = step * 1.55; // ~45.2px in world coordinates
+    const minDistSq = minDist * minDist;
+    const reefs = [];
+
+    for (let i = 0; i < candidates.length; i++) {
+      const cand = candidates[i];
+      let tooClose = false;
+      for (let j = 0; j < reefs.length; j++) {
+        const dx = cand.x - reefs[j].x;
+        const dy = cand.y - reefs[j].y;
+        if (dx * dx + dy * dy < minDistSq) {
+          tooClose = true;
+          break;
+        }
+      }
+      if (!tooClose) {
+        reefs.push(cand);
       }
     }
     this.biogenicReefs = reefs;
@@ -642,37 +673,44 @@ export class OceanRenderer {
 
       // 2. Branching Coral Fans & Calcite Formations (visible when zoomed in)
       if (baseR > 6.0) {
-        const armCount = 4 + Math.round(reef.density * 4);
+        const armCount = 3 + (reef.seed % 4); // 3 to 6 branches, varied per head
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
+        const baseRot = (reef.seed * 0.082); // Individual random orientation per head
+
         for (let a = 0; a < armCount; a++) {
-          const armAngle = (a / armCount) * Math.PI * 2 + (reef.seed * 0.05);
-          const armLen = baseR * (0.55 + 0.45 * Math.sin(a * 2.1 + reef.seed));
+          // Organic non-uniform angular spacing (breaks snowflake wheel symmetry)
+          const angJitter = Math.sin(a * 2.7 + reef.seed * 0.3) * 0.32;
+          const armAngle = (a / armCount) * Math.PI * 2 + baseRot + angJitter;
+          const armLen = baseR * (0.65 + 0.40 * Math.sin(a * 2.1 + reef.seed * 0.17));
           const sway = Math.sin(time * 0.0012 + a * 1.4 + reef.seed) * (baseR * 0.10);
 
           const startX = sx + Math.cos(armAngle) * (baseR * 0.18);
           const startY = sy + Math.sin(armAngle) * (baseR * 0.18);
-          const midX = sx + Math.cos(armAngle) * (armLen * 0.55) + Math.cos(armAngle + Math.PI * 0.5) * sway;
-          const midY = sy + Math.sin(armAngle) * (armLen * 0.55) + Math.sin(armAngle + Math.PI * 0.5) * sway;
+          
+          // Organic curved branch
+          const curveSide = Math.sin(a * 1.5 + reef.seed) * 0.25;
+          const midX = sx + Math.cos(armAngle + curveSide) * (armLen * 0.52) + Math.cos(armAngle + Math.PI * 0.5) * sway;
+          const midY = sy + Math.sin(armAngle + curveSide) * (armLen * 0.52) + Math.sin(armAngle + Math.PI * 0.5) * sway;
           const tipX = sx + Math.cos(armAngle) * armLen + Math.cos(armAngle + Math.PI * 0.5) * (sway * 1.4);
           const tipY = sy + Math.sin(armAngle) * armLen + Math.sin(armAngle + Math.PI * 0.5) * (sway * 1.4);
 
           // Calcite branch trunk
-          ctx.strokeStyle = `hsla(45, 60%, ${ivoryL}%, ${(0.65 + reef.density * 0.3).toFixed(2)})`;
-          ctx.lineWidth = Math.max(1.2, 2.8 * camZoom);
+          ctx.strokeStyle = `hsla(45, 55%, ${ivoryL}%, ${(0.70 + reef.density * 0.25).toFixed(2)})`;
+          ctx.lineWidth = Math.max(1.2, 2.6 * camZoom);
           ctx.beginPath();
           ctx.moveTo(startX, startY);
           ctx.quadraticCurveTo(midX, midY, tipX, tipY);
           ctx.stroke();
 
-          // Secondary fork branch
-          if (reef.density > 0.35) {
-            const forkAngle = armAngle + (a % 2 === 0 ? 0.45 : -0.45);
-            const forkLen = armLen * 0.45;
-            const fTipX = midX + Math.cos(forkAngle) * forkLen;
-            const fTipY = midY + Math.sin(forkAngle) * forkLen;
-            ctx.lineWidth = Math.max(0.8, 1.6 * camZoom);
+          // Secondary fork branch (for denser, mature corals)
+          if (reef.density > 0.32) {
+            const forkSide = (a + reef.seed) % 2 === 0 ? 0.52 : -0.52;
+            const forkLen = armLen * (0.42 + 0.15 * Math.sin(a + reef.seed));
+            const fTipX = midX + Math.cos(armAngle + forkSide) * forkLen;
+            const fTipY = midY + Math.sin(armAngle + forkSide) * forkLen;
+            ctx.lineWidth = Math.max(0.8, 1.5 * camZoom);
             ctx.beginPath();
             ctx.moveTo(midX, midY);
             ctx.lineTo(fTipX, fTipY);
