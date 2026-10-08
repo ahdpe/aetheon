@@ -127,7 +127,7 @@ export class BioInspector {
         this.diveBtn.style.opacity = '1.0';
         this.diveBtn.style.cursor = 'pointer';
         this.diveBtn.title = '';
-        this.diveBtn.innerHTML = `<span>🤿</span> <span>${isRu ? 'Войти в клетку (3D)' : 'Dive Inside (3D)'}</span>`;
+        this.diveBtn.innerHTML = `<span>🤿</span> <span>${isRu ? 'Погрузиться внутрь (3D)' : 'Dive Inside (3D)'}</span>`;
       }
     }
 
@@ -359,7 +359,7 @@ export class BioInspector {
         this.diveBtn.style.opacity = '1.0';
         this.diveBtn.style.cursor = 'pointer';
         this.diveBtn.title = '';
-        this.diveBtn.innerHTML = `<span>🤿</span> <span>${isRu ? 'Войти в клетку (3D)' : 'Dive Inside (3D)'}</span>`;
+        this.diveBtn.innerHTML = `<span>🤿</span> <span>${isRu ? 'Погрузиться внутрь (3D)' : 'Dive Inside (3D)'}</span>`;
       }
     }
   }

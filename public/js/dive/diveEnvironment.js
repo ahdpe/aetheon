@@ -302,8 +302,13 @@ export class DiveEnvironment {
     while (this.coralReefsGroup.children.length > 0) {
       const child = this.coralReefsGroup.children[0];
       this.coralReefsGroup.remove(child);
-      if (child.geometry) child.geometry.dispose();
-      child.material?.dispose();
+      child.traverse(obj => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+          else obj.material.dispose();
+        }
+      });
     }
     this.coralReefMeshes = [];
     this.coralReefsSignature = '';
@@ -324,7 +329,7 @@ export class DiveEnvironment {
       for (let i = 0; i < this.coralReefMeshes.length; i++) {
         const item = this.coralReefMeshes[i];
         if (item.polyp && item.polyp.material) {
-          item.polyp.material.emissiveIntensity = 0.50 + night * 0.90;
+          item.polyp.material.emissiveIntensity = 1.0 + night * 0.8;
         }
       }
       return;
@@ -341,21 +346,39 @@ export class DiveEnvironment {
 
     const night = Math.max(0, 1.0 - (dayPhase ?? 0.5) * 1.3);
 
-    const calciteMat = new THREE.MeshStandardMaterial({
-      color: 0xede4ce,       // Warm ivory calcite
-      emissive: 0x443622,    // Subterranean amber glow
-      emissiveIntensity: 0.35,
-      roughness: 0.78,
-      metalness: 0.12,
-      flatShading: false
+    // Ethereal translucent milky ivory-cyan tendril material matching 2D
+    const branchMat = new THREE.MeshStandardMaterial({
+      color: 0xecfdf5,       // Pale translucent milky ivory-cyan
+      emissive: 0x2dd4bf,    // Turquoise/cyan bioluminescent emission
+      emissiveIntensity: 0.65,
+      roughness: 0.25,
+      metalness: 0.05,
+      transparent: true,
+      opacity: 0.88,
+      side: THREE.DoubleSide
     });
 
+    // Luminous turquoise/cyan polyp core material
     const polypMat = new THREE.MeshStandardMaterial({
-      color: night > 0.25 ? 0x6ee7b7 : 0xfef08a,
-      emissive: night > 0.25 ? 0x10b981 : 0xeab308,
-      emissiveIntensity: 0.55 + night * 0.90,
-      roughness: 0.25,
-      metalness: 0.1
+      color: 0x2dd4bf,
+      emissive: 0x14b8a6,
+      emissiveIntensity: 1.2 + night * 0.8,
+      roughness: 0.20,
+      metalness: 0.10
+    });
+
+    // Inner bright white nucleus core
+    const nucleusMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff
+    });
+
+    // Soft additive cyan halo
+    const haloMat = new THREE.MeshBasicMaterial({
+      color: 0x2dd4bf,
+      transparent: true,
+      opacity: 0.38,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
     });
 
     for (let i = 0; i < biogenicReefs.length; i++) {
@@ -366,85 +389,129 @@ export class DiveEnvironment {
       if (dist > this.chamberRadius * 0.96) continue;
 
       const floorY = this.getFloorHeight(x3D, z3D);
-      const moundR = 4.5 + reef.density * 9.5;
-      const moundH = 2.5 + reef.density * 5.0;
 
-      // 1. Calcified Coral Base Mound
-      const baseGeo = new THREE.CylinderGeometry(moundR * 0.65, moundR, moundH, 8);
-      baseGeo.translate(0, moundH * 0.5, 0);
-      const baseMesh = new THREE.Mesh(baseGeo, calciteMat);
-      baseMesh.position.set(x3D, floorY, z3D);
-      this.coralReefsGroup.add(baseMesh);
+      // 1. Soft glowing bio-calcite bed decal on the seafloor (matching 2D radial gradient base)
+      const bedR = 4.5 + reef.density * 8.5;
+      const bedGeo = new THREE.CircleGeometry(bedR, 24);
+      bedGeo.rotateX(-Math.PI * 0.5);
+      const bedMat = new THREE.MeshBasicMaterial({
+        color: 0x5eead4,
+        transparent: true,
+        opacity: 0.16 + reef.density * 0.12,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const bedMesh = new THREE.Mesh(bedGeo, bedMat);
+      bedMesh.position.set(x3D, floorY + 0.08, z3D);
+      this.coralReefsGroup.add(bedMesh);
 
-      // 2. Branching Staghorn Calcite Arms (3 to 6 branches matching 2D morphology)
+      // 2. Branching Staghorn Calcite Tendrils (3 to 6 gracefully curving arms)
       const armCount = 3 + (reef.seed % 4);
-      const baseRot = (reef.seed * 0.082);
+      const baseRot = reef.seed * 0.082;
 
       for (let a = 0; a < armCount; a++) {
         const angJitter = Math.sin(a * 2.7 + reef.seed * 0.3) * 0.32;
         const armAngle = (a / armCount) * Math.PI * 2 + baseRot + angJitter;
-        const armHeight = (7.0 + reef.density * 13.0) * (0.65 + 0.35 * Math.sin(a * 2.1 + reef.seed * 0.17));
-        const armR = Math.max(0.45, moundR * 0.11);
+        const armHeight = (8.0 + reef.density * 15.0) * (0.68 + 0.32 * Math.sin(a * 2.1 + reef.seed * 0.17));
+        const armSpan = armHeight * (0.32 + 0.14 * Math.sin(a * 1.7 + reef.seed));
+        const armRadius = Math.max(0.20, 0.24 + reef.density * 0.16);
 
-        const branchGeo = new THREE.CylinderGeometry(armR * 0.5, armR, armHeight, 6);
-        branchGeo.translate(0, armHeight * 0.5, 0);
-        const branchMesh = new THREE.Mesh(branchGeo, calciteMat);
+        // Group rooted at (startX, floorY, startZ) on the seabed
+        const rootOffset = bedR * 0.15;
+        const startX = x3D + Math.cos(armAngle) * rootOffset;
+        const startZ = z3D + Math.sin(armAngle) * rootOffset;
+        const branchGroup = new THREE.Group();
+        branchGroup.position.set(startX, floorY, startZ);
 
-        const startR = moundR * 0.32;
-        const bx = x3D + Math.cos(armAngle) * startR;
-        const by = floorY + moundH * 0.8;
-        const bz = z3D + Math.sin(armAngle) * startR;
-        branchMesh.position.set(bx, by, bz);
+        // Organic curved path from (0,0,0) to tip
+        const curveSide = Math.sin(a * 1.5 + reef.seed) * 0.35;
+        const midSpan = armSpan * 0.48;
+        const p0 = new THREE.Vector3(0, 0, 0);
+        const p1 = new THREE.Vector3(
+          Math.cos(armAngle + curveSide) * midSpan,
+          armHeight * 0.52,
+          Math.sin(armAngle + curveSide) * midSpan
+        );
+        const p2 = new THREE.Vector3(
+          Math.cos(armAngle) * armSpan,
+          armHeight,
+          Math.sin(armAngle) * armSpan
+        );
 
-        const leanAngle = 0.22 + 0.18 * Math.sin(a + reef.seed);
-        branchMesh.rotation.y = -armAngle;
-        branchMesh.rotation.z = leanAngle;
-        this.coralReefsGroup.add(branchMesh);
+        const curve = new THREE.QuadraticBezierCurve3(p0, p1, p2);
+        const branchGeo = new THREE.TubeGeometry(curve, 16, armRadius, 8, false);
+        const branchMesh = new THREE.Mesh(branchGeo, branchMat);
+        branchGroup.add(branchMesh);
 
-        // Living Coral Polyp at branch tip
-        const tipY = by + Math.cos(leanAngle) * armHeight;
-        const tipX = bx + Math.sin(leanAngle) * Math.cos(armAngle) * armHeight;
-        const tipZ = bz + Math.sin(leanAngle) * Math.sin(armAngle) * armHeight;
-
-        const polypGeo = new THREE.SphereGeometry(armR * 1.5, 6, 6);
+        // Main tip polyp (Luminous turquoise/cyan sphere)
+        const polypGeo = new THREE.SphereGeometry(armRadius * 1.8, 12, 10);
         const polypMesh = new THREE.Mesh(polypGeo, polypMat);
-        polypMesh.position.set(tipX, tipY, tipZ);
-        this.coralReefsGroup.add(polypMesh);
+        polypMesh.position.copy(p2);
+        branchGroup.add(polypMesh);
+
+        // Inner bright white nucleus core
+        const nucleusGeo = new THREE.SphereGeometry(armRadius * 0.85, 8, 8);
+        const nucleusMesh = new THREE.Mesh(nucleusGeo, nucleusMat);
+        nucleusMesh.position.copy(p2);
+        branchGroup.add(nucleusMesh);
+
+        // Soft luminous additive halo around polyp
+        const haloGeo = new THREE.SphereGeometry(armRadius * 3.6, 12, 10);
+        const haloMesh = new THREE.Mesh(haloGeo, haloMat);
+        haloMesh.position.copy(p2);
+        branchGroup.add(haloMesh);
+
+        // Secondary forked branch for mature reefs (matching 2D secondary branch)
+        if (reef.density > 0.30) {
+          const forkSide = (a + reef.seed) % 2 === 0 ? 0.48 : -0.48;
+          const forkLen = armHeight * (0.38 + 0.12 * Math.sin(a + reef.seed));
+          const forkSpan = forkLen * 0.55;
+          const midPt = curve.getPoint(0.52);
+
+          const fTip = new THREE.Vector3(
+            midPt.x + Math.cos(armAngle + forkSide) * forkSpan,
+            midPt.y + forkLen,
+            midPt.z + Math.sin(armAngle + forkSide) * forkSpan
+          );
+          const fCtrl = new THREE.Vector3(
+            (midPt.x + fTip.x) * 0.5 + Math.cos(armAngle + forkSide * 1.3) * (forkSpan * 0.22),
+            midPt.y + forkLen * 0.48,
+            (midPt.z + fTip.z) * 0.5 + Math.sin(armAngle + forkSide * 1.3) * (forkSpan * 0.22)
+          );
+          const fCurve = new THREE.QuadraticBezierCurve3(midPt, fCtrl, fTip);
+          const forkGeo = new THREE.TubeGeometry(fCurve, 10, armRadius * 0.65, 6, false);
+          const forkMesh = new THREE.Mesh(forkGeo, branchMat);
+          branchGroup.add(forkMesh);
+
+          // Fork tip polyp
+          const fPolypGeo = new THREE.SphereGeometry(armRadius * 1.3, 10, 8);
+          const fPolypMesh = new THREE.Mesh(fPolypGeo, polypMat);
+          fPolypMesh.position.copy(fTip);
+          branchGroup.add(fPolypMesh);
+
+          // Fork tip nucleus
+          const fNucleusGeo = new THREE.SphereGeometry(armRadius * 0.6, 6, 6);
+          const fNucleusMesh = new THREE.Mesh(fNucleusGeo, nucleusMat);
+          fNucleusMesh.position.copy(fTip);
+          branchGroup.add(fNucleusMesh);
+
+          // Fork tip halo
+          const fHaloGeo = new THREE.SphereGeometry(armRadius * 2.6, 10, 8);
+          const fHaloMesh = new THREE.Mesh(fHaloGeo, haloMat);
+          fHaloMesh.position.copy(fTip);
+          branchGroup.add(fHaloMesh);
+        }
+
+        this.coralReefsGroup.add(branchGroup);
 
         this.coralReefMeshes.push({
-          mesh: branchMesh,
+          group: branchGroup,
           polyp: polypMesh,
-          initialRotZ: leanAngle,
-          phase: reef.seed + a * 1.5,
-          speed: 0.0012 + (a % 3) * 0.0004
+          initialRotZ: 0,
+          initialRotX: 0,
+          phase: reef.seed + a * 1.4,
+          speed: 0.0013 + (a % 3) * 0.0004
         });
-
-        // Forked secondary branch for dense mature reefs
-        if (reef.density > 0.32) {
-          const forkHeight = armHeight * 0.48;
-          const forkGeo = new THREE.CylinderGeometry(armR * 0.4, armR * 0.65, forkHeight, 5);
-          forkGeo.translate(0, forkHeight * 0.5, 0);
-          const forkMesh = new THREE.Mesh(forkGeo, calciteMat);
-
-          const midFrac = 0.55;
-          const fBaseX = bx + Math.sin(leanAngle) * Math.cos(armAngle) * (armHeight * midFrac);
-          const fBaseY = by + Math.cos(leanAngle) * (armHeight * midFrac);
-          const fBaseZ = bz + Math.sin(leanAngle) * Math.sin(armAngle) * (armHeight * midFrac);
-          forkMesh.position.set(fBaseX, fBaseY, fBaseZ);
-          forkMesh.rotation.y = -armAngle;
-          forkMesh.rotation.z = leanAngle + 0.42;
-          this.coralReefsGroup.add(forkMesh);
-
-          // Fork polyp
-          const fTipGeo = new THREE.SphereGeometry(armR * 1.2, 5, 5);
-          const fPolyp = new THREE.Mesh(fTipGeo, polypMat);
-          fPolyp.position.set(
-            fBaseX + Math.sin(leanAngle + 0.42) * Math.cos(armAngle) * forkHeight,
-            fBaseY + Math.cos(leanAngle + 0.42) * forkHeight,
-            fBaseZ + Math.sin(leanAngle + 0.42) * Math.sin(armAngle) * forkHeight
-          );
-          this.coralReefsGroup.add(fPolyp);
-        }
       }
     }
   }
@@ -975,12 +1042,16 @@ export class DiveEnvironment {
       this.updateBiogenicReefs(biogenicReefs, dayPhase, time);
     }
 
-    // 1.45. Animate swaying biogenic coral reef branches
+    // 1.45. Animate swaying biogenic coral reef branches (graceful oceanic current drift)
     if (this.coralReefMeshes && this.coralReefMeshes.length > 0) {
       for (let i = 0; i < this.coralReefMeshes.length; i++) {
-        const b = this.coralReefMeshes[i];
-        const sway = Math.sin(time * b.speed + b.phase) * 0.05;
-        b.mesh.rotation.z = b.initialRotZ + sway;
+        const item = this.coralReefMeshes[i];
+        const swayZ = Math.sin(time * item.speed + item.phase) * 0.08;
+        const swayX = Math.cos(time * item.speed * 0.85 + item.phase * 1.2) * 0.06;
+        if (item.group) {
+          item.group.rotation.z = (item.initialRotZ || 0) + swayZ;
+          item.group.rotation.x = (item.initialRotX || 0) + swayX;
+        }
       }
     }
 
