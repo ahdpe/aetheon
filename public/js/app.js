@@ -96,6 +96,9 @@ class AetheonApp {
         if (this.renderer && this.renderer.algaeIsles && this.diveEngine.environment) {
           this.diveEngine.environment.updateAlgae(this.renderer.algaeIsles);
         }
+        if (this.renderer && this.renderer.biogenicReefs && this.diveEngine.environment) {
+          this.diveEngine.environment.updateBiogenicReefs(this.renderer.biogenicReefs, this.renderer.dayPhase ?? 0.5, performance.now());
+        }
         return this.diveEngine;
       }).catch(err => {
         console.error('[Aetheon] Failed to load 3D Dive Engine:', err);
@@ -234,7 +237,12 @@ class AetheonApp {
           this.diveEngine.environment.updateAlgae(msg.algae);
         }
       }
-      if (msg.thumbnail) this.renderer.updateThumbnail(msg.thumbnail);
+      if (msg.thumbnail) {
+        this.renderer.updateThumbnail(msg.thumbnail);
+        if (this.diveEngine && this.diveEngine.environment) {
+          this.diveEngine.environment.updateBiogenicReefs(this.renderer.biogenicReefs, this.renderer.dayPhase, performance.now());
+        }
+      }
       this.updateStats(msg.stats);
       this.updateVisitors(msg.visitors);
       if (msg.journal && msg.journal.length > 0) {
