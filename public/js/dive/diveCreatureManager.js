@@ -6,6 +6,7 @@ export class DiveCreatureManager {
   constructor(scene) {
     this.scene = scene;
     this.creaturePool = new Map(); // id -> Three.js Group
+    this.dyingPool = new Map(); // id -> { group, deathTime, duration, vx, vy }
     this.bondLines = [];
     this.maxVisibleDist = 135.0; // Optimized microscopic field of view (reduces scene load by 75%)
   }
@@ -37,13 +38,29 @@ export class DiveCreatureManager {
 
       if (!group) {
         group = this.createCreatureMesh(org);
+        group.userData.birthTime = performance.now();
         this.creaturePool.set(id, group);
         this.scene.add(group);
       }
 
       group.visible = true;
-      const growth=(org.size||6.5)/group.userData.initialSize;
-      group.scale.set(growth,growth,growth);
+      const growth = (org.size || 6.5) / group.userData.initialSize;
+
+      // Newborn budding scale bloom (0.3 -> 1.0 over 500ms)
+      let birthScale = 1.0;
+      if (group.userData.birthTime) {
+        const age = performance.now() - group.userData.birthTime;
+        if (age < 500) {
+          birthScale = 0.3 + 0.7 * Math.sin((age / 500) * (Math.PI / 2));
+        } else {
+          group.userData.birthTime = null;
+        }
+      }
+      group.scale.set(growth * birthScale, growth * birthScale, growth * birthScale);
+
+      // Track last velocity for gentle death momentum
+      group.userData.lastVx = org.vx || 0;
+      group.userData.lastVy = org.vy || 0;
 
       // Anti-clipping lens fade: prevent organisms right next to the lens from blocking the viewport
       const bodyMat = group.userData.bodyMat;
@@ -86,22 +103,68 @@ export class DiveCreatureManager {
       }
     }
 
-    // 2. Hide entities outside player view and cleanly dispose creatures that died on server
+    // 2. Hide entities outside player view and handle dying creatures with smooth dissolution
+    const now = performance.now();
     for (const [id, group] of this.creaturePool.entries()) {
       if (!currentEntities.has(id)) {
-        // Creature has died on server: clean up from Three.js scene & GPU memory
-        this.scene.remove(group);
-        group.traverse((child) => {
+        // Creature died on server: transition to dying pool for smooth dissolution
+        const lastVx = group.userData.lastVx || 0;
+        const lastVy = group.userData.lastVy || 0;
+        this.dyingPool.set(id, {
+          group,
+          deathTime: now,
+          duration: 800,
+          vx: lastVx,
+          vy: lastVy
+        });
+        this.creaturePool.delete(id);
+      } else if (!activeIds.has(id)) {
+        // Creature is alive, but outside player's visibility range
+        group.visible = false;
+      }
+    }
+
+    // 2.5. Animate and dissolve dying creatures
+    for (const [id, item] of this.dyingPool.entries()) {
+      const elapsed = now - item.deathTime;
+      if (elapsed >= item.duration) {
+        // Dissolution complete: cleanly dispose geometry & materials from GPU memory
+        this.scene.remove(item.group);
+        item.group.traverse((child) => {
           if (child.geometry) child.geometry.dispose();
           if (child.material) {
             if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
             else child.material.dispose();
           }
         });
-        this.creaturePool.delete(id);
-      } else if (!activeIds.has(id)) {
-        // Creature is alive, but outside player's visibility range
-        group.visible = false;
+        this.dyingPool.delete(id);
+      } else {
+        const p = elapsed / item.duration; // 0.0 -> 1.0
+        const fade = Math.max(0, 1.0 - p);
+        // Expand slightly as cell membrane lyses
+        item.group.scale.multiplyScalar(1.0 + 0.003);
+        // Drift with residual velocity and gentle buoyant lift
+        item.group.position.x += item.vx * 0.05;
+        item.group.position.z += item.vy * 0.05;
+        item.group.position.y += 0.04;
+        // Fade all transparent materials
+        item.group.traverse((child) => {
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach(m => {
+                m.transparent = true;
+                if (m.userData.baseOpacity === undefined) m.userData.baseOpacity = m.opacity || 0.8;
+                m.opacity = m.userData.baseOpacity * fade;
+              });
+            } else {
+              child.material.transparent = true;
+              if (child.material.userData.baseOpacity === undefined) {
+                child.material.userData.baseOpacity = child.material.opacity || 0.8;
+              }
+              child.material.opacity = child.material.userData.baseOpacity * fade;
+            }
+          }
+        });
       }
     }
 
@@ -693,6 +756,18 @@ export class DiveCreatureManager {
       });
     }
     this.creaturePool.clear();
+
+    for (const item of this.dyingPool.values()) {
+      this.scene.remove(item.group);
+      item.group.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+          else child.material.dispose();
+        }
+      });
+    }
+    this.dyingPool.clear();
 
     for (const line of this.bondLines) {
       this.scene.remove(line);

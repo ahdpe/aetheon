@@ -58,6 +58,11 @@ export class OceanRenderer {
     this.biogenicReefs = [];
     this.isLabMode = false;
 
+    // Life cycle transition effects (Birth & Death cellular events)
+    this.birthEvents = [];
+    this.deathEvents = [];
+    this.birthTimes = new Map();
+
     // Chemical thumbnail buffer for fluid field
     this.thumbCanvas = document.createElement('canvas');
     this.thumbCanvas.width = 48;
@@ -200,54 +205,91 @@ export class OceanRenderer {
     this.thumbCtx.putImageData(this.thumbImgData, 0, 0);
     this.substrateCtx.putImageData(this.substrateImgData, 0, 0);
 
-    // Extract dynamic biogenic reef formations (organic calcified coral clusters)
-    // Avoid rectilinear grid rows; sample local substrate peaks with organic jitter and Poisson distance
-    const candidates = [];
+    // Extract dynamic biogenic reef formations with Temporal Hysteresis
+    // Prevents abrupt jumping/reshuffling when local substrate density fluctuates
     const step = this.worldSize / 48;
-    for (let gy = 2; gy < 46; gy++) {
-      for (let gx = 2; gx < 46; gx++) {
+    const minDist = step * 1.55; // ~45.2px in world coordinates
+    const minDistSq = minDist * minDist;
+    const survivingReefs = [];
+
+    // 1. Preserve existing anchored reef heads (temporal persistence & hysteresis)
+    // If an existing reef still has substrate >= 26, it stays anchored at its exact position!
+    if (this.biogenicReefs && this.biogenicReefs.length > 0) {
+      for (let i = 0; i < this.biogenicReefs.length; i++) {
+        const reef = this.biogenicReefs[i];
+        const gx = Math.max(0, Math.min(47, Math.floor(reef.x / step)));
+        const gy = Math.max(0, Math.min(47, Math.floor(reef.y / step)));
         const sub = this.substrateImgData.data[(gy * 48 + gx) * 4 + 3];
-        if (sub > 38) {
-          // Deterministic organic hash (rock-stable across frames)
-          const h1 = ((gx * 374761393 + gy * 668265263) ^ 0x5bf03635) >>> 0;
-          const h2 = ((gx * 668265263 + gy * 374761393) ^ 0x1b873593) >>> 0;
-          const jx = ((h1 % 1000) / 1000 - 0.5) * 0.95 * step;
-          const jy = ((h2 % 1000) / 1000 - 0.5) * 0.95 * step;
-          candidates.push({
-            x: (gx + 0.5) * step + jx,
-            y: (gy + 0.5) * step + jy,
-            density: sub / 255,
-            sub,
-            seed: (h1 ^ h2) % 10000
-          });
+
+        if (sub >= 26) {
+          // Update density smoothly, but NEVER change position or seed
+          reef.sub = sub;
+          reef.density = sub / 255;
+          survivingReefs.push(reef);
         }
       }
     }
 
-    // Sort by density descending so the strongest mineralized formations claim their territory
-    candidates.sort((a, b) => b.sub - a.sub);
+    // 2. Scan for candidate new reef heads (birth threshold >= 42)
+    // Candidates use deterministic hash priority so order NEVER flips due to +/- 1 density noise
+    const newCandidates = [];
+    for (let gy = 2; gy < 46; gy++) {
+      for (let gx = 2; gx < 46; gx++) {
+        const sub = this.substrateImgData.data[(gy * 48 + gx) * 4 + 3];
+        if (sub >= 42) {
+          const h1 = ((gx * 374761393 + gy * 668265263) ^ 0x5bf03635) >>> 0;
+          const h2 = ((gx * 668265263 + gy * 374761393) ^ 0x1b873593) >>> 0;
+          const jx = ((h1 % 1000) / 1000 - 0.5) * 0.95 * step;
+          const jy = ((h2 % 1000) / 1000 - 0.5) * 0.95 * step;
+          const candX = (gx + 0.5) * step + jx;
+          const candY = (gy + 0.5) * step + jy;
 
-    // Poisson-disk distance rejection: prevents overlapping while breaking straight lines
-    const minDist = step * 1.55; // ~45.2px in world coordinates
-    const minDistSq = minDist * minDist;
-    const reefs = [];
+          // Check if already covered by an existing surviving reef
+          let nearSurviving = false;
+          for (let s = 0; s < survivingReefs.length; s++) {
+            const dx = candX - survivingReefs[s].x;
+            const dy = candY - survivingReefs[s].y;
+            if (dx * dx + dy * dy < minDistSq) {
+              nearSurviving = true;
+              break;
+            }
+          }
 
-    for (let i = 0; i < candidates.length; i++) {
-      const cand = candidates[i];
+          if (!nearSurviving) {
+            newCandidates.push({
+              x: candX,
+              y: candY,
+              density: sub / 255,
+              sub,
+              seed: (h1 ^ h2) % 10000,
+              hashPriority: (h1 ^ h2) >>> 0 // Rock-solid deterministic priority
+            });
+          }
+        }
+      }
+    }
+
+    // Deterministic priority ordering for new candidates (immune to floating sub fluctuations)
+    newCandidates.sort((a, b) => b.hashPriority - a.hashPriority);
+
+    // Accept new candidate reefs that don't collide with each other
+    for (let c = 0; c < newCandidates.length; c++) {
+      const cand = newCandidates[c];
       let tooClose = false;
-      for (let j = 0; j < reefs.length; j++) {
-        const dx = cand.x - reefs[j].x;
-        const dy = cand.y - reefs[j].y;
+      for (let j = 0; j < survivingReefs.length; j++) {
+        const dx = cand.x - survivingReefs[j].x;
+        const dy = cand.y - survivingReefs[j].y;
         if (dx * dx + dy * dy < minDistSq) {
           tooClose = true;
           break;
         }
       }
       if (!tooClose) {
-        reefs.push(cand);
+        survivingReefs.push(cand);
       }
     }
-    this.biogenicReefs = reefs;
+
+    this.biogenicReefs = survivingReefs;
   }
 
   onServerTick(packet) {
@@ -282,6 +324,58 @@ export class OceanRenderer {
     }
     this.observation.push(this.currEntities, this.currTickTime, packet.t);
 
+    // Detect cellular life events (Mitosis Births & Cytolysis Deaths)
+    const now = this.currTickTime;
+    if (this.prevEntities && this.prevEntities.size > 0 && this.currEntities.size > 0) {
+      // 1. Births (newly spawned entities)
+      for (const [id, org] of this.currEntities.entries()) {
+        if (!this.prevEntities.has(id)) {
+          this.birthEvents.push({
+            id,
+            x: org.x,
+            y: org.y,
+            r: org.size || 6.5,
+            hue: org.hue || 0.5,
+            startTime: now,
+            duration: 650
+          });
+          this.birthTimes.set(id, now);
+        }
+      }
+
+      // 2. Deaths (cells that died from predation or energy depletion)
+      for (const [prevId, prevOrg] of this.prevEntities.entries()) {
+        if (!this.currEntities.has(prevId)) {
+          // Micro-detritus cytolysis droplets
+          const detritus = [];
+          for (let k = 0; k < 5; k++) {
+            const angle = Math.random() * Math.PI * 2;
+            const spd = 0.35 + Math.random() * 0.75;
+            detritus.push({
+              dx: Math.cos(angle) * spd,
+              dy: Math.sin(angle) * spd,
+              ox: (Math.random() - 0.5) * (prevOrg.size || 6.5) * 0.6,
+              oy: (Math.random() - 0.5) * (prevOrg.size || 6.5) * 0.6,
+              size: 1.0 + Math.random() * 1.6
+            });
+          }
+          this.deathEvents.push({
+            id: prevId,
+            x: prevOrg.x,
+            y: prevOrg.y,
+            vx: prevOrg.vx || 0,
+            vy: prevOrg.vy || 0,
+            r: prevOrg.size || 6.5,
+            hue: prevOrg.hue || 0.5,
+            startTime: now,
+            duration: 900,
+            detritus
+          });
+          this.birthTimes.delete(prevId);
+        }
+      }
+    }
+
     if (packet.blooms) {
       this.serverBlooms = packet.blooms;
     }
@@ -313,6 +407,9 @@ export class OceanRenderer {
     this.currEntities = new Map();
     this.prevEntities = new Map();
     this.renderedEntities = new Map();
+    this.birthEvents = [];
+    this.deathEvents = [];
+    this.birthTimes.clear();
     this.lastFrameTime = null;
   }
 
@@ -524,6 +621,11 @@ export class OceanRenderer {
     // 7.2. Colony Intercellular Bonds (Multicellular Membrane Filaments)
     if (this.colonyBonds.length > 0) {
       this.renderColonyBonds(ctx, toScreenX, toScreenY, camZoom, time);
+    }
+
+    // 7.3. Life cycle transition events (Birth mitosis ripples & Death cytolysis ghosts)
+    if (this.birthEvents.length > 0 || this.deathEvents.length > 0) {
+      this.renderLifeEvents(ctx, toScreenX, toScreenY, camZoom, time);
     }
 
     // 7.5. Render Nutrient Blooms & Floating Phytomanna Spores
@@ -763,8 +865,22 @@ export class OceanRenderer {
 
   drawOrganism(ctx, x, y, r, org, heading, isSelected, time, forceDetail = false) {
     const isPiloted = this.pilotedIds && (this.pilotedIds.has(org.id) || this.pilotedIds.has(Number(org.id)));
+
+    // Budding scale bloom for newly born cells (organic mitosis emergence: 0.35 -> 1.0 over 500ms)
+    let birthScale = 1.0;
+    const bTime = this.birthTimes ? this.birthTimes.get(org.id) : null;
+    if (bTime) {
+      const age = performance.now() - bTime;
+      if (age < 500) {
+        const prog = age / 500;
+        birthScale = 0.35 + 0.65 * Math.sin(prog * Math.PI * 0.5);
+      } else {
+        this.birthTimes.delete(org.id);
+      }
+    }
+
     const pulse = Math.sin(org.phase ?? (time*0.008+org.id)) * 0.08;
-    const bodyR = Math.max(1.8, r * (1.0 + pulse));
+    const bodyR = Math.max(1.8, r * (1.0 + pulse) * birthScale);
     const hue = Math.round(org.hue * 360);
     const speed = Math.sqrt((org.vx || 0) * (org.vx || 0) + (org.vy || 0) * (org.vy || 0));
     const morph = getSpeciesMorphology(org.speciesId || 1, org.hue, org.carnivory || 0.1, org.size || 7, speed, org.anatomy);
@@ -1232,6 +1348,136 @@ export class OceanRenderer {
     }
 
     ctx.restore();
+  }
+
+  // Render cellular life cycle events: mitosis birth ripples and cytolysis death dissolution ghosts
+  renderLifeEvents(ctx, toScreenX, toScreenY, camZoom, time) {
+    const now = performance.now();
+    const w = this.camera.viewportW;
+    const h = this.camera.viewportH;
+
+    // 1. Render Birth Mitosis Ripples (expanding bioluminescent wave rings + mitosis flash)
+    for (let i = this.birthEvents.length - 1; i >= 0; i--) {
+      const b = this.birthEvents[i];
+      const elapsed = now - b.startTime;
+      if (elapsed >= b.duration) {
+        this.birthEvents.splice(i, 1);
+        continue;
+      }
+      const p = elapsed / b.duration; // 0.0 -> 1.0
+      const sx = toScreenX(b.x);
+      const sy = toScreenY(b.y);
+      const ringR = (b.r * 0.6 + p * b.r * 2.8) * camZoom;
+
+      if (sx < -ringR || sx > w + ringR || sy < -ringR || sy > h + ringR) continue;
+      if (!this.inObservationArea(sx, sy, ringR)) continue;
+
+      const hDeg = Math.round(b.hue * 360);
+      const alpha = (1.0 - p) * 0.75;
+
+      ctx.save();
+      // Expanding primary mitosis ring
+      ctx.beginPath();
+      ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
+      ctx.strokeStyle = `hsla(${hDeg}, 95%, 75%, ${alpha.toFixed(2)})`;
+      ctx.lineWidth = Math.max(1.0, (2.0 * (1.0 - p * 0.5)) * camZoom);
+      ctx.stroke();
+
+      // Soft harmonic secondary ripple
+      if (p < 0.75) {
+        const innerR = (b.r * 0.3 + p * b.r * 1.5) * camZoom;
+        const innerAlpha = (1.0 - p / 0.75) * 0.5;
+        ctx.beginPath();
+        ctx.arc(sx, sy, innerR, 0, Math.PI * 2);
+        ctx.strokeStyle = `hsla(${(hDeg + 25) % 360}, 90%, 85%, ${innerAlpha.toFixed(2)})`;
+        ctx.lineWidth = Math.max(0.8, 1.2 * camZoom);
+        ctx.stroke();
+
+        // Core nucleus flash (mitotic spark)
+        const flashAlpha = (1.0 - p / 0.45) * 0.55;
+        if (flashAlpha > 0) {
+          ctx.fillStyle = `hsla(${hDeg}, 95%, 92%, ${flashAlpha.toFixed(2)})`;
+          ctx.beginPath();
+          ctx.arc(sx, sy, b.r * 0.8 * camZoom, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Radiating daughter micro-vesicles
+      const vesicleCount = 4;
+      for (let v = 0; v < vesicleCount; v++) {
+        const vAngle = (v / vesicleCount) * Math.PI * 2 + (b.id * 0.7);
+        const vDist = (b.r * 0.8 + p * b.r * 2.2) * camZoom;
+        const vx = sx + Math.cos(vAngle) * vDist;
+        const vy = sy + Math.sin(vAngle) * vDist;
+        const vAlpha = (1.0 - p) * 0.7;
+        const vR = Math.max(0.9, (1.8 * (1.0 - p * 0.4)) * camZoom);
+
+        ctx.fillStyle = `hsla(${(hDeg + 15) % 360}, 95%, 85%, ${vAlpha.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(vx, vy, vR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    // 2. Render Death Cytolysis Ghosts (ethereal dissolving membrane + dispersing detritus droplets)
+    for (let i = this.deathEvents.length - 1; i >= 0; i--) {
+      const d = this.deathEvents[i];
+      const elapsed = now - d.startTime;
+      if (elapsed >= d.duration) {
+        this.deathEvents.splice(i, 1);
+        continue;
+      }
+      const p = elapsed / d.duration; // 0.0 -> 1.0
+      // Gentle drift along residual velocity
+      const driftX = d.x + (d.vx || 0) * (p * 18);
+      const driftY = d.y + (d.vy || 0) * (p * 18);
+      const sx = toScreenX(driftX);
+      const sy = toScreenY(driftY);
+      const ghostR = (d.r * (1.0 + p * 0.38)) * camZoom;
+
+      if (sx < -ghostR * 2 || sx > w + ghostR * 2 || sy < -ghostR * 2 || sy > h + ghostR * 2) continue;
+      if (!this.inObservationArea(sx, sy, ghostR)) continue;
+
+      const hDeg = Math.round(d.hue * 360);
+      const ghostAlpha = (1.0 - p) * 0.55;
+
+      ctx.save();
+      // Dissolving membrane outline (ethereal dashed glow)
+      ctx.beginPath();
+      ctx.arc(sx, sy, ghostR, 0, Math.PI * 2);
+      ctx.setLineDash([4 * camZoom, 3 * camZoom]);
+      ctx.strokeStyle = `hsla(${hDeg}, 75%, 65%, ${ghostAlpha.toFixed(2)})`;
+      ctx.lineWidth = Math.max(0.9, 1.4 * camZoom);
+      ctx.stroke();
+
+      // Soft fading cytoplasmic core
+      if (ghostAlpha > 0.05) {
+        ctx.fillStyle = `hsla(${hDeg}, 65%, 45%, ${(ghostAlpha * 0.25).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, ghostR * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Dispersing organic detritus micro-vesicles
+      if (d.detritus) {
+        for (let k = 0; k < d.detritus.length; k++) {
+          const drop = d.detritus[k];
+          const dropX = sx + (drop.dx * p * 24 + (drop.ox || 0)) * camZoom;
+          const dropY = sy + (drop.dy * p * 24 + (drop.oy || 0)) * camZoom;
+          const dropAlpha = (1.0 - p) * 0.72;
+          const dropR = Math.max(0.8, (drop.size * (1.0 - p * 0.35)) * camZoom);
+
+          ctx.fillStyle = `hsla(${(hDeg * 0.4 + 40) % 360}, 85%, 68%, ${dropAlpha.toFixed(2)})`;
+          ctx.beginPath();
+          ctx.arc(dropX, dropY, dropR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
   }
 
   // Render active nutrient blooms and floating phytomanna food particles
