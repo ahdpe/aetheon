@@ -355,18 +355,22 @@ class Organism {
     steerX += separationX;
     steerY += separationY;
 
-    // 2.7. Substrate Deflection (Reefs & Bio-Architecture)
+    // 2.7. Substrate Deflection & Biogenic Reef Nursery/Sanctuary
     if (grid.getSubstrate) {
       const subDensity = grid.getSubstrate(this.x, this.y);
-      if (subDensity > 0.25) {
+      if (subDensity > 0.22) {
         const gradSub = grid.getSubstrateGradient(this.x, this.y);
-        const push = (subDensity - 0.25) * 4.2;
+        const isHunter = this.carnivory > 0.35;
+        // Size scale: tiny cells navigate coral branches easily, large predators encounter barrier
+        const sizeScale = Math.max(0.2, Math.min(1.4, (this.size - 3.2) / 4.2));
+        const push = (subDensity - 0.22) * 3.8 * (isHunter ? 1.3 : 0.6);
         // Repel away from dense reef along gradient
         steerX -= gradSub.dx * push;
         steerY -= gradSub.dy * push;
-        // Mineral friction / drag inside shoals
-        this.vx *= (1.0 - Math.min(0.20, subDensity * 0.25));
-        this.vy *= (1.0 - Math.min(0.20, subDensity * 0.25));
+        // Mineral friction / drag inside shoals: heavy drag on large hunters, low on prey/juveniles
+        const drag = Math.min(0.28, subDensity * 0.25 * (isHunter ? 1.25 : 0.45) * sizeScale);
+        this.vx *= (1.0 - drag);
+        this.vy *= (1.0 - drag);
       }
     }
 

@@ -55,6 +55,7 @@ export class OceanRenderer {
     this.climate = null;
     this.vents = [];
     this.algaeIsles = [];
+    this.biogenicReefs = [];
     this.isLabMode = false;
 
     // Chemical thumbnail buffer for fluid field
@@ -195,9 +196,27 @@ export class OceanRenderer {
         data[dstPtr++] = chemAlpha;
       }
     }
-    this.hasReefs = maxSub > 50;
+    this.hasReefs = maxSub > 40;
     this.thumbCtx.putImageData(this.thumbImgData, 0, 0);
-    this.substrateCtx.putImageData(this.substrateImgData,0,0);
+    this.substrateCtx.putImageData(this.substrateImgData, 0, 0);
+
+    // Extract dynamic biogenic reef formations (calcified coral clusters)
+    const reefs = [];
+    const step = this.worldSize / 48;
+    for (let gy = 2; gy < 46; gy += 2) {
+      for (let gx = 2; gx < 46; gx += 2) {
+        const sub = this.substrateImgData.data[(gy * 48 + gx) * 4 + 3];
+        if (sub > 38) {
+          reefs.push({
+            x: (gx + 0.5) * step,
+            y: (gy + 0.5) * step,
+            density: sub / 255,
+            seed: (gx * 73 + gy * 109) % 1000
+          });
+        }
+      }
+    }
+    this.biogenicReefs = reefs;
   }
 
   onServerTick(packet) {
@@ -322,6 +341,7 @@ export class OceanRenderer {
 
     // 3.1. Deep oceanic living fluid baseline with cyclical atmospheric day/night phase
     const dayPhase = (Math.sin(time * 0.00008) + 1.0) * 0.5; // Smooth ~20-min cycle
+    this.dayPhase = dayPhase;
     const coreR = Math.round(3 + dayPhase * 5);
     const coreG = Math.round(26 + dayPhase * 18);
     const coreB = Math.round(50 + dayPhase * 28);
@@ -356,6 +376,9 @@ export class OceanRenderer {
       ctx.drawImage(this.thumbCanvas, originX, originY, wsPix, wsPix);
       ctx.globalCompositeOperation = 'source-over';
     }
+
+    // 3.22. Biogenic Living Coral Reef Formations (Staghorn corals, calcified atoll heads, polyps)
+    this.drawBiogenicReefs(ctx, toScreenX, toScreenY, camZoom, time, dayPhase);
 
     // 3.25. Living Benthic Algae Isles & Sanctuaries (Emerald phytobenthic thickets)
     ctx.globalAlpha = 1;
@@ -592,6 +615,96 @@ export class OceanRenderer {
     }
   }
 
+  // 3.22. Draw authentic Biogenic Coral Reefs (Staghorn corals, calcified atoll heads, polyps)
+  drawBiogenicReefs(ctx, toScreenX, toScreenY, camZoom, time, dayPhase) {
+    if (!this.biogenicReefs || this.biogenicReefs.length === 0) return;
+    const night = Math.max(0, 1.0 - (dayPhase ?? 0.5) * 1.3);
+
+    for (let i = 0; i < this.biogenicReefs.length; i++) {
+      const reef = this.biogenicReefs[i];
+      const sx = toScreenX(reef.x);
+      const sy = toScreenY(reef.y);
+      const baseR = (16 + reef.density * 28) * camZoom;
+
+      if (baseR < 2.0 || sx + baseR < 0 || sy + baseR < 0 || sx - baseR > this.camera.viewportW || sy - baseR > this.camera.viewportH) continue;
+
+      // 1. Calcified Coral Mound / Base shelf
+      const moundGrad = ctx.createRadialGradient(sx, sy, baseR * 0.1, sx, sy, baseR);
+      const ivoryL = Math.round(75 + reef.density * 18);
+      moundGrad.addColorStop(0, `hsla(48, 45%, ${ivoryL}%, ${(0.35 + reef.density * 0.40).toFixed(2)})`);
+      moundGrad.addColorStop(0.65, `hsla(175, 40%, 45%, ${(0.18 + reef.density * 0.25).toFixed(2)})`);
+      moundGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      ctx.fillStyle = moundGrad;
+      ctx.beginPath();
+      ctx.arc(sx, sy, baseR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Branching Coral Fans & Calcite Formations (visible when zoomed in)
+      if (baseR > 6.0) {
+        const armCount = 4 + Math.round(reef.density * 4);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        for (let a = 0; a < armCount; a++) {
+          const armAngle = (a / armCount) * Math.PI * 2 + (reef.seed * 0.05);
+          const armLen = baseR * (0.55 + 0.45 * Math.sin(a * 2.1 + reef.seed));
+          const sway = Math.sin(time * 0.0012 + a * 1.4 + reef.seed) * (baseR * 0.10);
+
+          const startX = sx + Math.cos(armAngle) * (baseR * 0.18);
+          const startY = sy + Math.sin(armAngle) * (baseR * 0.18);
+          const midX = sx + Math.cos(armAngle) * (armLen * 0.55) + Math.cos(armAngle + Math.PI * 0.5) * sway;
+          const midY = sy + Math.sin(armAngle) * (armLen * 0.55) + Math.sin(armAngle + Math.PI * 0.5) * sway;
+          const tipX = sx + Math.cos(armAngle) * armLen + Math.cos(armAngle + Math.PI * 0.5) * (sway * 1.4);
+          const tipY = sy + Math.sin(armAngle) * armLen + Math.sin(armAngle + Math.PI * 0.5) * (sway * 1.4);
+
+          // Calcite branch trunk
+          ctx.strokeStyle = `hsla(45, 60%, ${ivoryL}%, ${(0.65 + reef.density * 0.3).toFixed(2)})`;
+          ctx.lineWidth = Math.max(1.2, 2.8 * camZoom);
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.quadraticCurveTo(midX, midY, tipX, tipY);
+          ctx.stroke();
+
+          // Secondary fork branch
+          if (reef.density > 0.35) {
+            const forkAngle = armAngle + (a % 2 === 0 ? 0.45 : -0.45);
+            const forkLen = armLen * 0.45;
+            const fTipX = midX + Math.cos(forkAngle) * forkLen;
+            const fTipY = midY + Math.sin(forkAngle) * forkLen;
+            ctx.lineWidth = Math.max(0.8, 1.6 * camZoom);
+            ctx.beginPath();
+            ctx.moveTo(midX, midY);
+            ctx.lineTo(fTipX, fTipY);
+            ctx.stroke();
+
+            // Polyp node on fork tip
+            ctx.fillStyle = night > 0.25 ? 'hsla(170, 95%, 75%, 0.85)' : 'hsla(38, 90%, 75%, 0.7)';
+            ctx.beginPath();
+            ctx.arc(fTipX, fTipY, Math.max(1.0, 1.4 * camZoom), 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // 3. Living Coral Polyps at branch tips
+          const polypHue = night > 0.25 ? 172 : 36;
+          const polypAlpha = night > 0.25 ? 0.90 : 0.75;
+          ctx.fillStyle = `hsla(${polypHue}, 95%, ${night > 0.25 ? '75%' : '65%'}, ${polypAlpha})`;
+          ctx.beginPath();
+          ctx.arc(tipX, tipY, Math.max(1.2, 2.0 * camZoom), 0, Math.PI * 2);
+          ctx.fill();
+
+          if (night > 0.25) {
+            // Luminous halo around coral polyp in night mode
+            ctx.fillStyle = `hsla(${polypHue}, 90%, 80%, ${(night * 0.35).toFixed(2)})`;
+            ctx.beginPath();
+            ctx.arc(tipX, tipY, Math.max(2.5, 4.2 * camZoom), 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+    }
+  }
+
   // Render organic soft-body Aetheobiont with translucent membrane, species-specific morphotype, markings, and cilia
   renderRemains(ctx,toX,toY,zoom,forceDetail=false) {
     for(const p of this.serverRemains) {
@@ -629,37 +742,81 @@ export class OceanRenderer {
     // Skips 20+ heavy Canvas path calls, bezier ribs, gradients, and cilia.
     // (Bypassed if forceDetail = true for high-res landscape snapshots)
     // =========================================================================
+    const night = Math.max(0, 1.0 - (this.dayPhase ?? 0.5) * 1.3);
+
     if (bodyR < 4.8 && !isSelected && !isPiloted && !forceDetail) {
-      const haloR = bodyR * (isHunter ? 2.6 : 2.0);
+      const haloR = bodyR * (isHunter ? 2.6 : 2.0) * (1.0 + night * 0.4);
       const rx = bodyR * (morph.aspectX || 1.15);
       const ry = bodyR * (morph.aspectY || 0.85);
 
-      // 1. Soft glowing halo with directional flare
-      ctx.fillStyle = `hsla(${hue}, ${isHunter ? '95%' : '80%'}, ${isHunter ? '55%' : '50%'}, 0.35)`;
+      // 1. Soft glowing halo with directional flare & night bioluminescence boost
+      const haloAlpha = (isHunter ? 0.35 : 0.22) + night * 0.35;
+      ctx.fillStyle = `hsla(${hue}, ${isHunter ? '95%' : '80%'}, ${isHunter ? '55%' : '50%'}, ${haloAlpha.toFixed(2)})`;
       ctx.beginPath();
       ctx.ellipse(0, 0, haloR * 1.15, haloR * 0.9, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // 2. Trailing lively flagellum tail
-      const tailLen = bodyR * (isHunter ? 2.6 : 1.8);
-      const wave = Math.sin((time * 0.012) + org.id) * (bodyR * 0.4);
-      ctx.strokeStyle = `hsla(${hue}, 85%, 72%, 0.65)`;
-      ctx.lineWidth = Math.max(0.8, bodyR * 0.22);
-      ctx.beginPath();
-      ctx.moveTo(-rx * 0.7, 0);
-      ctx.quadraticCurveTo(-rx * 0.7 - tailLen * 0.5, wave, -rx * 0.7 - tailLen, wave * 1.4);
-      ctx.stroke();
+      // 1.5. Luminous wake trail for rapid swimmers at night
+      if (speed > 0.65 && night > 0.1) {
+        const wakeLen = speed * bodyR * 2.6;
+        ctx.strokeStyle = `hsla(${hue}, 85%, 72%, ${(night * 0.5).toFixed(2)})`;
+        ctx.lineWidth = Math.max(0.6, bodyR * 0.28);
+        ctx.beginPath();
+        ctx.moveTo(-rx * 0.7, 0);
+        ctx.lineTo(-rx * 0.7 - wakeLen, 0);
+        ctx.stroke();
+      }
 
-      // 3. Body membrane (arrowhead dart for hunter, sleek ellipse for grazer)
+      // 2. Trailing lively flagellum tail
+      if (morph.hasFlagellum) {
+        const tailLen = bodyR * (isHunter ? 2.6 : 1.8);
+        const wave = Math.sin((time * 0.012) + org.id) * (bodyR * 0.4);
+        ctx.strokeStyle = `hsla(${hue}, 85%, 72%, 0.65)`;
+        ctx.lineWidth = Math.max(0.8, bodyR * 0.22);
+        ctx.beginPath();
+        ctx.moveTo(-rx * 0.7, 0);
+        ctx.quadraticCurveTo(-rx * 0.7 - tailLen * 0.5, wave, -rx * 0.7 - tailLen, wave * 1.4);
+        ctx.stroke();
+      }
+
+      // 3. Body membrane based on archetype silhouette
       ctx.fillStyle = isHunter ? `hsla(${hue}, 92%, 46%, 0.92)` : `hsla(${hue}, 78%, 42%, 0.85)`;
       ctx.beginPath();
-      if (isHunter) {
+      if (morph.shape === 'serpent') {
+        // Sinuous slithering micro-thread
+        const sWave = Math.sin(time * 0.014 + org.id) * (ry * 0.65);
+        ctx.moveTo(rx * 1.25, 0);
+        ctx.quadraticCurveTo(0, sWave, -rx * 1.45, -sWave * 0.8);
+        ctx.quadraticCurveTo(0, sWave + ry * 0.75, rx * 1.25, 0);
+      } else if (morph.shape === 'radiolarian') {
+        // 6-pointed diamond star
+        const pts = 6;
+        for (let p = 0; p < pts * 2; p++) {
+          const ang = (p / (pts * 2)) * Math.PI * 2;
+          const rad = (p % 2 === 0) ? rx * 1.15 : rx * 0.55;
+          const px = Math.cos(ang) * rad;
+          const py = Math.sin(ang) * rad;
+          if (p === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+      } else if (morph.shape === 'medusa') {
+        // Pulsing bell dome
+        const pulseD = Math.sin(time * 0.008 + org.id) * 0.15;
+        const bW = rx * 0.95;
+        const bH = ry * (1.1 + pulseD);
+        ctx.arc(0, 0, bH, -Math.PI * 0.45, Math.PI * 0.45);
+        ctx.lineTo(-bW * 0.6, 0);
+        ctx.closePath();
+      } else if (morph.shape === 'raptor' || isHunter) {
+        // Arrowhead dart
         ctx.moveTo(rx * 1.35, 0);
         ctx.lineTo(-rx * 0.7, -ry * 1.1);
         ctx.lineTo(-rx * 0.35, 0);
         ctx.lineTo(-rx * 0.7, ry * 1.1);
         ctx.closePath();
       } else {
+        // Sleek ellipse
         ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
       }
       ctx.fill();
@@ -678,16 +835,32 @@ export class OceanRenderer {
     const ry = bodyR * morph.aspectY;
     const isHighDetail = (bodyR >= 8.5) || isSelected || isPiloted || forceDetail;
 
-    // A. Bioluminescent Halo
-    const haloR = Math.max(rx, ry) * (isHunter ? 2.4 : 2.0);
-    if (bodyR > 3.5 || isHunter) {
-      const glowGrad = ctx.createRadialGradient(0, 0, bodyR * 0.4, 0, 0, haloR);
-      glowGrad.addColorStop(0, `hsla(${hue}, 95%, ${isHunter ? '55%' : '50%'}, ${isHunter ? '0.35' : '0.22'})`);
+    // A. Bioluminescent Halo & Night Radiance
+    const haloR = Math.max(rx, ry) * (isHunter ? 2.4 : 2.0) * (1.0 + night * 0.35);
+    if (bodyR > 3.5 || isHunter || night > 0.15) {
+      const glowAlpha = (isHunter ? 0.35 : 0.22) + night * 0.35;
+      const glowGrad = ctx.createRadialGradient(0, 0, bodyR * 0.35, 0, 0, haloR);
+      glowGrad.addColorStop(0, `hsla(${hue}, 95%, ${isHunter ? '58%' : '52%'}, ${glowAlpha.toFixed(2)})`);
       glowGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = glowGrad;
       ctx.beginPath();
       ctx.arc(0, 0, haloR, 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    // A.1. Luminous Wake Trails at night or high speed
+    if (speed > 0.65 && (night > 0.1 || isHunter)) {
+      const wakeLen = speed * bodyR * 3.2;
+      const wakeGrad = ctx.createLinearGradient(0, 0, -wakeLen, 0);
+      wakeGrad.addColorStop(0, `hsla(${hue}, 90%, 75%, ${(0.2 + night * 0.45).toFixed(2)})`);
+      wakeGrad.addColorStop(1, 'transparent');
+      ctx.strokeStyle = wakeGrad;
+      ctx.lineWidth = Math.max(1.0, bodyR * 0.45);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-rx * 0.8, 0);
+      ctx.lineTo(-rx * 0.8 - wakeLen, 0);
+      ctx.stroke();
     }
 
     // B. Trailing Propulsion Flagellum (whip)
