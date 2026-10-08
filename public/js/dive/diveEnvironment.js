@@ -340,6 +340,23 @@ export class DiveEnvironment {
     this.buildCoralReefs3D(biogenicReefs, dayPhase, time);
   }
 
+  createCoralBedTexture() {
+    if (this.coralBedTexture) return this.coralBedTexture;
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createRadialGradient(32, 32, 2, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(110, 231, 183, 0.65)'); // Soft seafoam/cyan core
+    grad.addColorStop(0.35, 'rgba(45, 212, 191, 0.35)'); // Translucent turquoise
+    grad.addColorStop(0.70, 'rgba(20, 184, 166, 0.10)'); // Gentle fading halo
+    grad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');          // 100% transparent edge
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 64, 64);
+    this.coralBedTexture = new THREE.CanvasTexture(canvas);
+    return this.coralBedTexture;
+  }
+
   buildCoralReefs3D(biogenicReefs, dayPhase = 0.5, time = 0) {
     this.clearCoralReefs();
     this.coralReefsSignature = biogenicReefs.length + ':' + biogenicReefs.slice(0, 6).map(r => r.seed).join('-');
@@ -391,13 +408,13 @@ export class DiveEnvironment {
       const floorY = this.getFloorHeight(x3D, z3D);
 
       // 1. Soft glowing bio-calcite bed decal on the seafloor (matching 2D radial gradient base)
-      const bedR = 4.5 + reef.density * 8.5;
-      const bedGeo = new THREE.CircleGeometry(bedR, 24);
+      const bedR = 5.0 + reef.density * 10.0;
+      const bedGeo = new THREE.PlaneGeometry(bedR * 2, bedR * 2);
       bedGeo.rotateX(-Math.PI * 0.5);
       const bedMat = new THREE.MeshBasicMaterial({
-        color: 0x5eead4,
+        map: this.createCoralBedTexture(),
         transparent: true,
-        opacity: 0.16 + reef.density * 0.12,
+        opacity: 0.60 + reef.density * 0.25,
         blending: THREE.AdditiveBlending,
         depthWrite: false
       });
@@ -412,24 +429,24 @@ export class DiveEnvironment {
       for (let a = 0; a < armCount; a++) {
         const angJitter = Math.sin(a * 2.7 + reef.seed * 0.3) * 0.32;
         const armAngle = (a / armCount) * Math.PI * 2 + baseRot + angJitter;
-        const armHeight = (8.0 + reef.density * 15.0) * (0.68 + 0.32 * Math.sin(a * 2.1 + reef.seed * 0.17));
-        const armSpan = armHeight * (0.32 + 0.14 * Math.sin(a * 1.7 + reef.seed));
-        const armRadius = Math.max(0.20, 0.24 + reef.density * 0.16);
+        const armHeight = (9.0 + reef.density * 16.0) * (0.70 + 0.30 * Math.sin(a * 2.1 + reef.seed * 0.17));
+        const armSpan = armHeight * (0.40 + 0.16 * Math.sin(a * 1.7 + reef.seed));
+        const armRadius = Math.max(0.18, 0.22 + reef.density * 0.12);
 
         // Group rooted at (startX, floorY, startZ) on the seabed
-        const rootOffset = bedR * 0.15;
+        const rootOffset = bedR * 0.12;
         const startX = x3D + Math.cos(armAngle) * rootOffset;
         const startZ = z3D + Math.sin(armAngle) * rootOffset;
         const branchGroup = new THREE.Group();
         branchGroup.position.set(startX, floorY, startZ);
 
         // Organic curved path from (0,0,0) to tip
-        const curveSide = Math.sin(a * 1.5 + reef.seed) * 0.35;
-        const midSpan = armSpan * 0.48;
+        const curveSide = Math.sin(a * 1.6 + reef.seed) * 0.42;
+        const midSpan = armSpan * 0.46;
         const p0 = new THREE.Vector3(0, 0, 0);
         const p1 = new THREE.Vector3(
           Math.cos(armAngle + curveSide) * midSpan,
-          armHeight * 0.52,
+          armHeight * 0.50,
           Math.sin(armAngle + curveSide) * midSpan
         );
         const p2 = new THREE.Vector3(
