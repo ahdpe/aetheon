@@ -124,12 +124,47 @@ export class LineageManager {
       if (closest) return closest.id;
       // Divergence detected! Form a new species branch
       const isCarnivore = childGenome.carnivory > 0.35;
-      const hueDegree = Math.round(childGenome.hue * 360);
-      
+      const isLarge = childGenome.size > 7.0 || (childGenome.shell || 0) > 0.55;
+      const isFast = childGenome.speedMax > 2.8;
+      const isColonial = (childGenome.adhesion || 0) > 0.5;
+
+      let genus = 'Aethenella';
+      let epithet = 'elegans';
+      let commonEn = 'Oceanic Morph';
+      let commonRu = 'Океанический морф';
+
+      if (isCarnivore) {
+        genus = isFast ? 'Vibrionox' : 'Acanthostoma';
+        epithet = isLarge ? 'tyrannus' : (isFast ? 'velox' : 'atrox');
+        commonEn = isFast ? 'Crimson Dart' : (isLarge ? 'Abyssal Hunter' : 'Stalker');
+        commonRu = isFast ? 'Алый стрелочник' : (isLarge ? 'Глубоководный ловчий' : 'Хищный ловец');
+      } else if (isLarge) {
+        genus = 'Chronohelix';
+        epithet = isColonial ? 'magnifica' : 'ponderosa';
+        commonEn = isColonial ? 'Titan Weaver' : 'Calcite Goliath';
+        commonRu = isColonial ? 'Титанический ткач' : 'Кальцитовый исполин';
+      } else if (isFast) {
+        genus = 'Spirillum';
+        epithet = 'currens';
+        commonEn = 'Azure Skimmer';
+        commonRu = 'Лазурный водомер';
+      } else if (isColonial) {
+        genus = 'Synbiohelix';
+        epithet = 'catenata';
+        commonEn = 'Emerald Chain';
+        commonRu = 'Изумрудная цепочка';
+      } else {
+        genus = 'Microbiota';
+        epithet = 'aurata';
+        commonEn = 'Golden Glider';
+        commonRu = 'Золотой планктон';
+      }
+
+      const id = this.nextSpeciesId;
       const newSpecies = this.createSpecies({
-        nameLa: `Forma-${this.nextSpeciesId} ${isCarnivore ? 'carnivora' : 'phyta'}`,
-        nameEn: `${isCarnivore ? 'Predatory' : 'Vegetal'} Morph #${this.nextSpeciesId}`,
-        nameRu: `${isCarnivore ? 'Хищный' : 'Растительный'} морф #${this.nextSpeciesId}`,
+        nameLa: `${genus} ${epithet} #${id}`,
+        nameEn: `${commonEn} #${id}`,
+        nameRu: `${commonRu} #${id}`,
         ...Object.fromEntries(ANATOMY_GENES.map(k=>[k,childGenome[k]])),
         hue: childGenome.hue,
         carnivory: childGenome.carnivory,

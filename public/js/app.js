@@ -310,6 +310,8 @@ class AetheonApp {
       this.inspector.updateProfile(msg.profile);
       if (msg.profile?.id === this.inspector.selectedId) this.observatory.onProfile(msg.profile);
       if (!msg.profile) { this.inspector.close(); this.observatory.toast(this.observatory.t('cellGone')); }
+    } else if (msg.type === 'bio_scan_result') {
+      if (this.inspector) this.inspector.onBioScanResult(msg);
     } else if (msg.type === 'codex_data') {
       this.codexModal.renderData(msg.species, msg.journal, msg.dynasties, msg.meta);
       if (msg.journal && msg.journal.length > 0) {
@@ -464,6 +466,12 @@ class AetheonApp {
   sendInspect(id) {
     if (this.socket && this.isConnected) {
       this.socket.send(JSON.stringify({ type: 'inspect', id }));
+    }
+  }
+
+  sendBioScan(id) {
+    if (this.socket && this.isConnected) {
+      this.socket.send(JSON.stringify({ type: 'request_bio_scan', id }));
     }
   }
 

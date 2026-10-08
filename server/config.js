@@ -35,14 +35,16 @@ export const CONFIG = {
   PORT: parseInt(process.env.PORT || '3000', 10),
   HOST: process.env.HOST || '0.0.0.0',
   
-  // AI Observer & Storyteller
+  // AI Observer, Storyteller & Artist
   VENICE_API_KEY: process.env.VENICE_API_KEY || '',
   VENICE_API_URL: resolveVeniceUrl(),
   VENICE_DECISIONS_URL: resolveVeniceDecisionsUrl(),
+  VENICE_IMAGE_URL: 'https://api.venice.ai/api/v1/image/generate',
   VENICE_MODEL: process.env.VENICE_MODEL || 'openai-gpt-4o-mini-2024-07-18',
-  VENICE_BUDGET_LIMIT: parseInt(process.env.VENICE_BUDGET_LIMIT || '160000', 10),
-  VENICE_TEXT_CALLS_LIMIT: parseInt(process.env.VENICE_TEXT_CALLS_LIMIT || '192', 10),
-  VENICE_DECISION_CALLS_LIMIT: parseInt(process.env.VENICE_DECISION_CALLS_LIMIT || '288', 10),
+  VENICE_IMAGE_MODEL: process.env.VENICE_IMAGE_MODEL || 'venice-sd35',
+  VENICE_BUDGET_LIMIT: parseInt(process.env.VENICE_BUDGET_LIMIT || '200000', 10),
+  VENICE_TEXT_CALLS_LIMIT: parseInt(process.env.VENICE_TEXT_CALLS_LIMIT || '240', 10),
+  VENICE_DECISION_CALLS_LIMIT: parseInt(process.env.VENICE_DECISION_CALLS_LIMIT || '400', 10),
   JEV_MODEL: process.env.JEV_MODEL || 'jev-latest',
   JEV_SCREENING_INTERVAL_MS: (parseInt(process.env.JEV_SCREENING_INTERVAL_SEC || '60', 10)) * 1000,
   AI_OBSERVER_INTERVAL_MS: (parseInt(process.env.AI_OBSERVER_INTERVAL_MIN || '15', 10)) * 60 * 1000,

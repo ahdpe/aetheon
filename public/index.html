@@ -244,9 +244,23 @@
       <button class="action-btn" id="btn-track-target" data-i18n="btn_track">
         <span class="btn-icon">🎯</span> Track Cam
       </button>
+      <button class="action-btn action-btn-ai-scan" id="btn-ai-scan-target" title="Спросить ИИ-натуралиста об этой особи">
+        <span class="btn-icon">🔬</span> <span id="btn-ai-scan-label" data-i18n="btn_ai_scan">ИИ-Биосканер</span>
+      </button>
       <button class="action-btn action-btn-dive" id="btn-dive-target" data-i18n="btn_dive" title="Enter First-Person 3D Micro-Cockpit">
         <span class="btn-icon">👁️</span> <span data-i18n="btn_dive_label">Погрузиться (3D)</span>
       </button>
+    </div>
+
+    <!-- Interactive AI Bio-Scan holographic dossier -->
+    <div class="inspector-ai-card hidden" id="bio-ai-card">
+      <div class="ai-card-header">
+        <span class="ai-badge">🤖 Venice AI</span>
+        <span class="ai-specimen-moniker" id="bio-ai-moniker">Око Бездны</span>
+        <span class="ai-status-badge" id="bio-ai-status-badge">Ветеран</span>
+      </div>
+      <p class="ai-card-story" id="bio-ai-story">Сканирование хроник особи...</p>
+      <div class="ai-card-tags" id="bio-ai-tags"></div>
     </div>
   </aside>
 

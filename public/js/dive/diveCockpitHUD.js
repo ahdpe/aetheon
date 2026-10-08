@@ -612,7 +612,8 @@ export class DiveCockpitHUD {
       const dynastyBadge = (lastProf?.dynastyName || org.dynastyName) 
         ? ` • 👑 ${lastProf?.dynastyName || org.dynastyName} F${lastProf?.dynastyGen || org.dynastyGen || 1}`
         : '';
-      sub.textContent = `${commonName} • ${isRu ? 'Поколение' : 'Gen'} #${gen}${dynastyBadge}`;
+      const aiMoniker = (isMatchingProf && lastProf.aiBioScan?.name) ? ` • 🔬 ${lastProf.aiBioScan.name}` : '';
+      sub.textContent = `${commonName} • ${isRu ? 'Поколение' : 'Gen'} #${gen}${dynastyBadge}${aiMoniker}`;
     }
 
     if (trophic) {

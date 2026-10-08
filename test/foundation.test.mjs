@@ -265,10 +265,10 @@ test('observer rejects overlapping work and factual fallback does not invent kil
   assert.ok(n.journalEntries[0].contentRu.includes('0 смертельных атак'));
 });
 
-test('decision calls retain conservative reservations even when per-question usage is returned', async () => {
+test('decision calls refund actual usage when aggregate usage is returned', async () => {
   const fake=fakeVenice(), b=new VeniceBudget({file:path.join(dir,'budget-decisions.json'),key:'test',bootstrap:false,fetcher:fake.fetcher});
   await b.request('decision','https://venice.invalid/decisions',{model:'writer',questions:{one:{},two:{}}});
-  assert.equal(b.load().spent,15360);
+  assert.equal(b.load().spent,75);
 });
 
 test('historical aliases are retained in an immutable archive instead of each live checkpoint', () => {
@@ -300,3 +300,25 @@ test('corruption of a referenced archive refuses replacement of the historical w
   fs.writeFileSync(archive,'{corrupt');
   assert.throws(()=>p.loadSnapshot(e),/No valid world snapshot/);
 });
+
+test('bio-scanner produces rich specimen chronicle and caches on organism profile', async () => {
+  const e = new SimulationEngine();
+  const org = e.organisms[0];
+  assert.ok(org, 'organism exists');
+  const res = await e.handleBioScan(org.id);
+  assert.equal(res.success, true);
+  assert.ok(res.scan.name);
+  assert.ok(res.scan.bioRu);
+  assert.ok(Array.isArray(res.scan.traits));
+
+  // Verify cached on organism and profile
+  assert.equal(org.aiBioScan, res.scan);
+  const prof = e.getOrganismProfile(org.id);
+  assert.equal(prof.aiBioScan, res.scan);
+
+  // Subsequent call returns cached without recomputation
+  const cachedRes = await e.handleBioScan(org.id);
+  assert.equal(cachedRes.success, true);
+  assert.equal(cachedRes.scan, res.scan);
+});
+

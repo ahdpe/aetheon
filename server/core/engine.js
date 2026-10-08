@@ -207,15 +207,40 @@ export class SimulationEngine {
     for(let i=parents.length-1;i>0;i--) {
       const j=Math.floor(random()*(i+1));[parents[i],parents[j]]=[parents[j],parents[i]];
     }
+
+    // Biodiversity preservation: round-robin interleaving across species
+    // prevents runaway monoculture where one species statistically chokes out all minority species
+    const parentsBySpecies = new Map();
+    for (let i = 0; i < parents.length; i++) {
+      const p = parents[i];
+      if (!parentsBySpecies.has(p.speciesId)) parentsBySpecies.set(p.speciesId, []);
+      parentsBySpecies.get(p.speciesId).push(p);
+    }
+    const interleavedParents = [];
+    const speciesKeys = Array.from(parentsBySpecies.keys());
+    let round = 0, added = true;
+    while (added) {
+      added = false;
+      for (let k = 0; k < speciesKeys.length; k++) {
+        const list = parentsBySpecies.get(speciesKeys[k]);
+        if (round < list.length) {
+          interleavedParents.push(list[round]);
+          added = true;
+        }
+      }
+      round++;
+    }
+
     let activeHunters = 0;
     for (let i = 0; i < this.organisms.length; i++) {
       if (this.organisms[i].carnivory > 0.35) activeHunters++;
     }
     const blockBiogenesis = this.cataclysms && this.cataclysms.isBiogenesisBlocked();
-    const hunterSlot = (!blockBiogenesis && activeHunters < 4 && deadSet.size > 0) ? 1 : 0;
+    const hunterSlot = (!blockBiogenesis && activeHunters < 12 && deadSet.size > 0) ? 1 : 0;
     const slots = Math.max(0,this.maxOrganisms-(this.organisms.length-deadSet.size)-hunterSlot);
     const nurserySlot=slots>0&&this.nursery.ready(this)?1:0;
-    for(const org of parents.slice(0,slots-nurserySlot)) {
+    const chosenParents = interleavedParents.length > 0 ? interleavedParents : parents;
+    for(const org of chosenParents.slice(0,slots-nurserySlot)) {
           const specThresholdMult = this.cataclysms ? this.cataclysms.getSpeciationThresholdMultiplier() : 1.0;
           const mutMult = this.cataclysms ? this.cataclysms.getMutationMultiplier() : 1.0;
           const child = org.reproduce(org.speciesId, mutMult);
@@ -298,9 +323,9 @@ export class SimulationEngine {
       if (this.organisms[i].carnivory > 0.35) activeHunters++;
     }
 
-    if (!blockBiogenesis && activeHunters < 4) {
-      const neededHunters = Math.min(2, 4 - activeHunters, Math.max(0, this.maxOrganisms - this.organisms.length-nurserySlot));
-      let hunterSpecies = this.lineage.getSpecies(3); // Vibrionox vorax
+    if (!blockBiogenesis && activeHunters < 12) {
+      const neededHunters = Math.min(2, 12 - activeHunters, Math.max(0, this.maxOrganisms - this.organisms.length-nurserySlot));
+      let hunterSpecies = this.lineage.getAllSpecies().find(s => s.carnivory > 0.45 && s.population > 0) || this.lineage.getSpecies(3);
       if (!hunterSpecies) {
         hunterSpecies = this.lineage.getAllSpecies().find(s => s.carnivory > 0.45) || this.lineage.getAllSpecies()[2];
       }
@@ -344,6 +369,14 @@ export class SimulationEngine {
       }).catch(err => {
         console.error('[Engine] Observation check error:', err);
       });
+    }
+
+    // 8.2. AI Novel Species Genesis when biodiversity declines below 3 species
+    if (this.ticks % 1200 === 0 && !this.novelSpeciesGenesisBusy) {
+      const liveSpeciesCount = this.lineage.getAllSpecies().filter(s => s.population > 0).length;
+      if (liveSpeciesCount <= 2 && this.organisms.length < this.maxOrganisms) {
+        this.triggerNovelSpeciesGenesis();
+      }
     }
 
     // 8.5. Check 24-hour daily atlas cycle (every 200 ticks)
@@ -567,6 +600,9 @@ export class SimulationEngine {
     const profile = org.getDetailedProfile(species);
     profile.familyId = org.familyId;
     profile.familyName = this.history.families.get(org.familyId)?.displayName??null;
+    if (org.aiBioScan) {
+      profile.aiBioScan = org.aiBioScan;
+    }
     if (org.dynastyName && this.activeDynasties.has(org.dynastyName)) {
       const dyn = this.activeDynasties.get(org.dynastyName);
       profile.dynastyLivingCount = dyn.currentCount;
@@ -574,6 +610,93 @@ export class SimulationEngine {
       profile.dynastyMaxGen = dyn.maxGen;
     }
     return profile;
+  }
+
+  // Interactive AI Bio-Scan: requested by a spectator clicking on an organism
+  async handleBioScan(id) {
+    const org = this.organisms.find(o => o.id === id);
+    if (!org) return { success: false, error: 'Organism not found or perished' };
+    if (org.aiBioScan) return { success: true, scan: org.aiBioScan };
+    const species = this.lineage.getSpecies(org.speciesId);
+    const stats = this.getStats();
+    const scan = await this.naturalist.scanOrganismBiography(org, species, stats);
+    if (scan) {
+      org.aiBioScan = scan;
+      return { success: true, scan };
+    }
+    return { success: false, error: 'Scanner busy or offline' };
+  }
+
+  // AI-driven species genesis: introduced when living biodiversity drops below critical threshold
+  async triggerNovelSpeciesGenesis() {
+    if (this.novelSpeciesGenesisBusy) return;
+    this.novelSpeciesGenesisBusy = true;
+    try {
+      const stats = this.getStats();
+      const spec = await this.naturalist.engineerNovelSpecies(stats);
+      if (spec && spec.nameLa) {
+        const founderSpecies = this.lineage.createSpecies({
+          nameLa: spec.nameLa,
+          nameEn: spec.nameEn || spec.nameLa,
+          nameRu: spec.nameRu || spec.nameLa,
+          descriptionEn: spec.storyEn || '',
+          descriptionRu: spec.storyRu || '',
+          hue: Math.max(0, Math.min(1, spec.hue ?? 0.6)),
+          carnivory: Math.max(0, Math.min(1, spec.carnivory ?? 0.1)),
+          size: Math.max(3.0, Math.min(8.5, spec.size ?? 5.5)),
+          speedMax: Math.max(1.2, Math.min(4.5, spec.speedMax ?? 2.5)),
+          chemotaxisNutrient: 1.0,
+          adhesion: spec.trophicRole === 'colony_builder' ? 0.8 : 0.2
+        }, 0);
+        founderSpecies.aiChronicle = true;
+
+        const CX = CONFIG.CHAMBER_CENTER_X;
+        const CY = CONFIG.CHAMBER_CENTER_Y;
+        for (let i = 0; i < 2; i++) {
+          const angle = random() * Math.PI * 2;
+          const dist = 120 + random() * 250;
+          const founderOrg = new Organism(
+            CX + Math.cos(angle) * dist,
+            CY + Math.sin(angle) * dist,
+            Organism.createRandomGenome(founderSpecies.hue, founderSpecies.carnivory > 0.35),
+            1, 0, founderSpecies.id
+          );
+          founderOrg.energy = 90.0;
+          founderOrg.size = founderSpecies.size;
+          this.history.addRoot(founderOrg, this.ticks, 'ai_genesis');
+          this.organisms.push(founderOrg);
+        }
+
+        this.naturalist.addEntry({
+          type: 'species',
+          icon: spec.carnivory > 0.35 ? '⚔️' : '🧬',
+          badgeEn: 'AI Pioneer',
+          badgeRu: 'ИИ-Первопроходец',
+          speciesId: founderSpecies.id,
+          species: {
+            id: founderSpecies.id,
+            hue: founderSpecies.hue,
+            size: founderSpecies.size,
+            carnivory: founderSpecies.carnivory,
+            speedMax: founderSpecies.speedMax,
+            nameLa: founderSpecies.nameLa,
+            nameRu: founderSpecies.nameRu,
+            nameEn: founderSpecies.nameEn
+          },
+          titleEn: `🧬 AI Genesis: ${founderSpecies.nameLa}`,
+          titleRu: `🧬 ИИ-Генезис: ${founderSpecies.nameRu}`,
+          contentEn: spec.storyEn || `${founderSpecies.nameEn} introduced to replenish biodiversity.`,
+          contentRu: spec.storyRu || `Новый адаптивный морф «${founderSpecies.nameRu}» заселен в океан для восстановления биоразнообразия.`,
+          insightEn: 'AI observer detected biodiversity decline and introduced an adaptive founder lineage.',
+          insightRu: 'ИИ-наблюдатель зафиксировал спад видового разнообразия и ввел адаптивную линию первопроходцев.',
+          timestamp: Date.now()
+        });
+      }
+    } catch (err) {
+      console.warn('[Engine] Novel species genesis failed:', err.message);
+    } finally {
+      this.novelSpeciesGenesisBusy = false;
+    }
   }
 
   // Pack low-latency 10 Hz broadcast packet for clients

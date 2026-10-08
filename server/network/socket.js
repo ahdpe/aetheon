@@ -104,7 +104,7 @@ export class NetworkManager {
 
   handleClientMessage(ws, msg) {
     const now = Date.now();
-    const cooldowns = { interact: 10000, get_codex: 150, get_atlas: 2000, inspect: 500, get_family: 1000, get_tour: 2000, found_dynasty: 60000, name_lineage: 60000, dive_start: 500, get_nursery:1000, nursery_release:5000 };
+    const cooldowns = { interact: 10000, get_codex: 150, get_atlas: 2000, inspect: 500, request_bio_scan: 1000, get_family: 1000, get_tour: 2000, found_dynasty: 60000, name_lineage: 60000, dive_start: 500, get_nursery:1000, nursery_release:5000 };
     const cooldown = cooldowns[msg.type];
     if (cooldown) {
       if (now - (ws.lastActions?.get(msg.type) ?? 0) < cooldown) return;
@@ -133,6 +133,17 @@ export class NetworkManager {
         id: msg.id,
         profile
       }));
+    } else if (msg.type === 'request_bio_scan') {
+      if (!Number.isSafeInteger(msg.id) || msg.id < 1) return;
+      this.engine.handleBioScan(msg.id).then(res => {
+        ws.send(JSON.stringify({
+          type: 'bio_scan_result',
+          id: msg.id,
+          ...res
+        }));
+      }).catch(err => {
+        ws.send(JSON.stringify({ type: 'bio_scan_result', id: msg.id, success: false, error: err.message }));
+      });
     } else if (msg.type === 'get_tour') {
       const living = this.engine.organisms;
       const healthy=living.filter(o=>!o.isDead() && o.energy>50 && o.age<10000);

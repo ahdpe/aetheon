@@ -10,6 +10,15 @@ export class BioInspector {
     this.feedBtn = document.getElementById('btn-feed-target');
     this.trackBtn = document.getElementById('btn-track-target');
     this.diveBtn = document.getElementById('btn-dive-target');
+    this.scanBtn = document.getElementById('btn-ai-scan-target');
+    this.scanLabel = document.getElementById('btn-ai-scan-label');
+
+    this.aiCard = document.getElementById('bio-ai-card');
+    this.aiMoniker = document.getElementById('bio-ai-moniker');
+    this.aiStatusBadge = document.getElementById('bio-ai-status-badge');
+    this.aiStory = document.getElementById('bio-ai-story');
+    this.aiTags = document.getElementById('bio-ai-tags');
+    this.isScanning = false;
 
     this.anatomyPanel=document.createElement('div');this.anatomyPanel.className='anatomy-card';
     this.panel.querySelector('.inspector-vitals').after(this.anatomyPanel);
@@ -51,6 +60,12 @@ export class BioInspector {
       else this.startTracking();
     });
 
+    this.scanBtn?.addEventListener('click', () => {
+      if (this.selectedId) {
+        this.requestBioScan(this.selectedId);
+      }
+    });
+
     this.diveBtn?.addEventListener('click', async () => {
       if (this.selectedId) {
         if (this.renderer.pilotedIds && (this.renderer.pilotedIds.has(this.selectedId) || this.renderer.pilotedIds.has(Number(this.selectedId)))) {
@@ -80,6 +95,13 @@ export class BioInspector {
     if (this.selectedId !== organismId) this.stopTracking();
     this.selectedId = organismId;
     this.lastProfile = null;
+    this.isScanning = false;
+    if (this.scanBtn) {
+      this.scanBtn.disabled = false;
+      this.scanBtn.style.opacity = '1.0';
+    }
+    if (this.scanLabel) this.scanLabel.textContent = i18n.t('btn_ai_scan');
+    if (this.aiCard) this.aiCard.classList.add('hidden');
     this.anatomyPanel.textContent='';
     this.client.observatory?.onProfile(null);
     this.panel.classList.remove('hidden');
@@ -117,6 +139,8 @@ export class BioInspector {
     this.selectedId = null;
     this.stopTracking();
     this.lastProfile = null;
+    this.isScanning = false;
+    if (this.aiCard) this.aiCard.classList.add('hidden');
     this.anatomyPanel.textContent='';
     this.client.observatory?.onProfile(null);
     this.renderer.camera.trackedEntityId = null;
@@ -147,11 +171,68 @@ export class BioInspector {
     this.followDetails.textContent = ru ? 'Карточка' : 'Details';
     this.followStop.textContent = ru ? 'Стоп' : 'Stop';
     this.followBar.title = ru ? 'Коснитесь океана, чтобы остановить слежение' : 'Tap the ocean to stop following';
+    if (this.scanLabel && !this.isScanning) {
+      this.scanLabel.textContent = i18n.t('btn_ai_scan');
+    }
+  }
+
+  requestBioScan(id) {
+    if (!id || this.isScanning) return;
+    this.isScanning = true;
+    const isRu = i18n.getLang() === 'ru';
+    if (this.scanLabel) this.scanLabel.textContent = i18n.t('btn_ai_scan_loading');
+    if (this.scanBtn) {
+      this.scanBtn.disabled = true;
+      this.scanBtn.style.opacity = '0.65';
+    }
+
+    if (this.aiCard) {
+      this.aiCard.classList.remove('hidden');
+      if (this.aiMoniker) this.aiMoniker.textContent = isRu ? 'Хроника особи' : 'Specimen Chronicle';
+      if (this.aiStatusBadge) this.aiStatusBadge.textContent = isRu ? 'Анализ нейросетью…' : 'Neural scan…';
+      if (this.aiStory) this.aiStory.textContent = isRu 
+        ? '🔬 Venice AI считывает генетический след, трофику и манёвры клетки…' 
+        : '🔬 Venice AI is reading genetic history, trophic habits and maneuvers…';
+      if (this.aiTags) this.aiTags.innerHTML = '';
+    }
+
+    this.client.sendBioScan(id);
+  }
+
+  onBioScanResult(msg) {
+    this.isScanning = false;
+    const isRu = i18n.getLang() === 'ru';
+    if (this.scanBtn) {
+      this.scanBtn.disabled = false;
+      this.scanBtn.style.opacity = '1.0';
+    }
+    if (this.scanLabel) {
+      this.scanLabel.textContent = i18n.t('btn_ai_scan');
+    }
+
+    if (!msg || msg.id !== this.selectedId) return;
+
+    if (msg.success && msg.scan) {
+      if (this.aiCard) this.aiCard.classList.remove('hidden');
+      if (this.aiMoniker) this.aiMoniker.textContent = msg.scan.name || (isRu ? `Особь #${msg.id}` : `Specimen #${msg.id}`);
+      if (this.aiStatusBadge) this.aiStatusBadge.textContent = isRu ? (msg.scan.statusTitleRu || 'Исследовано') : (msg.scan.statusTitleEn || 'Inspected');
+      if (this.aiStory) this.aiStory.textContent = isRu ? msg.scan.bioRu : (msg.scan.bioEn || msg.scan.bioRu);
+      if (this.aiTags) {
+        const traits = Array.isArray(msg.scan.traits) ? msg.scan.traits : [];
+        this.aiTags.innerHTML = traits.map(t => `<span class="ai-tag">🏷️ ${escapeHtml(t)}</span>`).join('');
+      }
+    } else {
+      if (this.aiCard) this.aiCard.classList.remove('hidden');
+      if (this.aiStory) this.aiStory.textContent = msg.error || (isRu ? 'Скан временно недоступен.' : 'Scan temporarily unavailable.');
+    }
   }
 
   updateProfile(profile) {
     if (!profile || profile.id !== this.selectedId) return;
     this.lastProfile = profile;
+    if (profile.aiBioScan && this.aiCard && !this.isScanning) {
+      this.onBioScanResult({ id: profile.id, success: true, scan: profile.aiBioScan });
+    }
     const isRu = i18n.getLang() === 'ru';
     const labels=isRu?{elongation:'Вытянутость',shell:'Оболочка',flagella:'Жгутики',sensing:'Чувствительность'}:{elongation:'Elongation',shell:'Shell',flagella:'Flagella',sensing:'Sensing'};
     const habitats=isRu?{basin:'Внутренняя котловина',meadow:'Кольцо лугов',shoal:'Мелководный край',shadow:'Сумеречная заводь',frontier:'Внешняя отмель'}:{basin:'Inner basin',meadow:'Meadow ring',shoal:'Shallow rim',shadow:'Twilight backwater',frontier:'Outer frontier'};

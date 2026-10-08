@@ -320,10 +320,17 @@ export class OceanRenderer {
     ctx.arc(chScreenX, chScreenY, chScreenR, 0, Math.PI * 2);
     ctx.clip();
 
-    // 3.1. Deep oceanic living fluid baseline (guarantees vibrant oceanic blue from frame 1)
+    // 3.1. Deep oceanic living fluid baseline with cyclical atmospheric day/night phase
+    const dayPhase = (Math.sin(time * 0.00008) + 1.0) * 0.5; // Smooth ~20-min cycle
+    const coreR = Math.round(3 + dayPhase * 5);
+    const coreG = Math.round(26 + dayPhase * 18);
+    const coreB = Math.round(50 + dayPhase * 28);
+    const midR = Math.round(2 + dayPhase * 2);
+    const midG = Math.round(16 + dayPhase * 10);
+    const midB = Math.round(34 + dayPhase * 16);
     const fluidGrad = ctx.createRadialGradient(chScreenX, chScreenY, chScreenR * 0.05, chScreenX, chScreenY, chScreenR);
-    fluidGrad.addColorStop(0, '#042845');
-    fluidGrad.addColorStop(0.55, '#02182b');
+    fluidGrad.addColorStop(0, `rgb(${coreR}, ${coreG}, ${coreB})`);
+    fluidGrad.addColorStop(0.55, `rgb(${midR}, ${midG}, ${midB})`);
     fluidGrad.addColorStop(1.0, '#010c18');
     ctx.fillStyle = fluidGrad;
     ctx.fillRect(chScreenX - chScreenR, chScreenY - chScreenR, chScreenR * 2, chScreenR * 2);
@@ -334,7 +341,7 @@ export class OceanRenderer {
     // 3.2. Continuous living chemical substrate & reef matrix
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.globalAlpha = this.isLabMode ? 0.70 : 0.42;
+    ctx.globalAlpha = this.isLabMode ? 0.70 : (0.38 + (1.0 - dayPhase) * 0.10);
     
     const wsPix = this.worldSize * camZoom;
     const originX = toScreenX(0);
@@ -342,10 +349,10 @@ export class OceanRenderer {
 
     ctx.drawImage(this.thumbCanvas, originX, originY, wsPix, wsPix);
 
-    // Bioluminescent mineral bloom for calcified coral structures
+    // Bioluminescent mineral bloom for calcified coral structures (intensifies during deep night)
     if (this.hasReefs && !this.isLabMode) {
       ctx.globalCompositeOperation = 'screen';
-      ctx.globalAlpha = 0.12;
+      ctx.globalAlpha = 0.08 + (1.0 - dayPhase) * 0.14;
       ctx.drawImage(this.thumbCanvas, originX, originY, wsPix, wsPix);
       ctx.globalCompositeOperation = 'source-over';
     }
@@ -623,24 +630,44 @@ export class OceanRenderer {
     // (Bypassed if forceDetail = true for high-res landscape snapshots)
     // =========================================================================
     if (bodyR < 4.8 && !isSelected && !isPiloted && !forceDetail) {
-      const haloR = bodyR * (isHunter ? 2.4 : 1.9);
+      const haloR = bodyR * (isHunter ? 2.6 : 2.0);
+      const rx = bodyR * (morph.aspectX || 1.15);
+      const ry = bodyR * (morph.aspectY || 0.85);
 
-      // 1. Soft glowing halo
-      ctx.fillStyle = `hsla(${hue}, ${isHunter ? '95%' : '80%'}, ${isHunter ? '55%' : '50%'}, 0.32)`;
+      // 1. Soft glowing halo with directional flare
+      ctx.fillStyle = `hsla(${hue}, ${isHunter ? '95%' : '80%'}, ${isHunter ? '55%' : '50%'}, 0.35)`;
       ctx.beginPath();
-      ctx.arc(0, 0, haloR, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, haloR * 1.15, haloR * 0.9, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // 2. Body membrane disc
-      ctx.fillStyle = isHunter ? `hsla(${hue}, 90%, 46%, 0.88)` : `hsla(${hue}, 78%, 42%, 0.82)`;
+      // 2. Trailing lively flagellum tail
+      const tailLen = bodyR * (isHunter ? 2.6 : 1.8);
+      const wave = Math.sin((time * 0.012) + org.id) * (bodyR * 0.4);
+      ctx.strokeStyle = `hsla(${hue}, 85%, 72%, 0.65)`;
+      ctx.lineWidth = Math.max(0.8, bodyR * 0.22);
       ctx.beginPath();
-      ctx.arc(0, 0, bodyR, 0, Math.PI * 2);
+      ctx.moveTo(-rx * 0.7, 0);
+      ctx.quadraticCurveTo(-rx * 0.7 - tailLen * 0.5, wave, -rx * 0.7 - tailLen, wave * 1.4);
+      ctx.stroke();
+
+      // 3. Body membrane (arrowhead dart for hunter, sleek ellipse for grazer)
+      ctx.fillStyle = isHunter ? `hsla(${hue}, 92%, 46%, 0.92)` : `hsla(${hue}, 78%, 42%, 0.85)`;
+      ctx.beginPath();
+      if (isHunter) {
+        ctx.moveTo(rx * 1.35, 0);
+        ctx.lineTo(-rx * 0.7, -ry * 1.1);
+        ctx.lineTo(-rx * 0.35, 0);
+        ctx.lineTo(-rx * 0.7, ry * 1.1);
+        ctx.closePath();
+      } else {
+        ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+      }
       ctx.fill();
 
-      // 3. Bright nucleus
-      ctx.fillStyle = '#ffffff';
+      // 4. Bright nucleus / Eyespot
+      ctx.fillStyle = isHunter ? '#ffdddd' : '#ffffff';
       ctx.beginPath();
-      ctx.arc(0, 0, Math.max(0.8, bodyR * 0.35), 0, Math.PI * 2);
+      ctx.arc(isHunter ? rx * 0.4 : 0, 0, Math.max(0.8, bodyR * 0.32), 0, Math.PI * 2);
       ctx.fill();
 
       ctx.restore();

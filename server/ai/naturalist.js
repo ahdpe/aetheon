@@ -860,6 +860,94 @@ JSON format ONLY:
     });
   }
 
+  // Interactive AI Bio-Scanner: personal natural-history biography of an individual organism
+  async scanOrganismBiography(org, species, stats) {
+    const isHunter = org.carnivory > 0.35;
+    const fallback = {
+      name: isHunter ? 'Теневой Охотник' : 'Изумрудный Пилигрим',
+      statusTitleRu: org.generation > 5 ? `Ветеран рода F${org.generation}` : (isHunter ? 'Ловчая особь' : 'Мирный фильтратор'),
+      statusTitleEn: org.generation > 5 ? `Dynasty Veteran F${org.generation}` : (isHunter ? 'Apex Stalker' : 'Planktonic Grazer'),
+      bioRu: `Особь #${org.id} принадлежит к виду «${species?.nameRu || 'Морф'}». Прошла ${org.childrenCount || 0} циклов деления и уверенно лавирует среди океанических течений.`,
+      bioEn: `Specimen #${org.id} of "${species?.nameEn || 'Morph'}". It has completed ${org.childrenCount || 0} divisions and navigates the currents with agile ciliary pulses.`,
+      traits: [
+        isHunter ? 'Хищный радар' : 'Трофическая стойкость',
+        `Поколение F${org.generation}`,
+        org.dynastyName ? `Династия: ${org.dynastyName}` : 'Дикий штамм'
+      ]
+    };
+
+    if (!CONFIG.VENICE_API_KEY) return fallback;
+
+    try {
+      const prompt = `Field micro-scan of individual organism #${org.id} in living ocean AETHEON:
+- Species: "${species?.nameRu || 'Морф'}" (${species?.nameLa || 'Organismus'})
+- Generation: F${org.generation}
+- Role: ${isHunter ? 'Predator / Hunter (attacks neighbors with predictive lead)' : 'Grazer / Filterer (absorbs dissolved nutrients)'}
+- Size: ${Math.round(org.size * 10) / 10} μm, Speed limit: ${Math.round(org.speedMax * 10) / 10}
+- Children: ${org.childrenCount || 0}
+- Dynasty: "${org.dynastyName || 'Wild'}"
+- Ocean Epoch: "${this.epochNameRu || 'Эпоха'}"
+
+Write an engaging, 2-sentence personalized natural-history biography of THIS specific cell in David Attenborough documentary style. Describe its personal survival story, maneuvers, and character.
+JSON format ONLY:
+{
+  "name": "Poetic personal moniker for this specimen in Russian (e.g. 'Око Бездны', 'Быстрый Пилигрим', 'Алый Веретенник')",
+  "statusTitleRu": "Short status in Russian (e.g. 'Ветеран глубин', 'Опытный хищник', 'Хранитель рифа')",
+  "statusTitleEn": "Short status in English",
+  "bioRu": "2 vivid documentary sentences in Russian about this cell's journey.",
+  "bioEn": "2 vivid documentary sentences in English.",
+  "traits": ["Trait 1 in Russian", "Trait 2 in Russian", "Trait 3 in Russian"]
+}`;
+      const res = await this.queryVeniceAI({ prompt });
+      if (res && res.bioRu) {
+        return {
+          name: res.name || fallback.name,
+          statusTitleRu: res.statusTitleRu || fallback.statusTitleRu,
+          statusTitleEn: res.statusTitleEn || fallback.statusTitleEn,
+          bioRu: res.bioRu,
+          bioEn: res.bioEn || fallback.bioEn,
+          traits: Array.isArray(res.traits) && res.traits.length ? res.traits : fallback.traits
+        };
+      }
+    } catch (err) {
+      console.warn('[AI Naturalist] Bio-scan failed, using fallback:', err.message);
+    }
+    return fallback;
+  }
+
+  // AI-Engineered Novel Counter-Species: introduced when ecosystem biodiversity stagnates
+  async engineerNovelSpecies(stats) {
+    if (!CONFIG.VENICE_API_KEY) return null;
+    try {
+      const prompt = `The living ocean AETHEON needs an evolutionary breakthrough to counter biodiversity decline.
+Current state:
+- Total population: ${stats.organismCount} organisms across ${stats.speciesCount} species
+- Dominant form: "${stats.dominantSpeciesNameRu || 'Пастбищник'}" (${stats.dominantCount || 0} cells)
+- Top hunter: "${stats.topPredatorNameRu || 'None'}"
+- Habitats: ${stats.habitatSummary || 'Open Water'}
+
+Design a brand-new, exotic adaptive counter-species to diversify the ecosystem:
+JSON format ONLY:
+{
+  "nameLa": "Latin binomial name (e.g. 'Chronohelix sapphirina', 'Vibrionox flammeus')",
+  "nameEn": "English common name (e.g. 'Sapphire Leviathan', 'Ruby Dart')",
+  "nameRu": "Russian common name (e.g. 'Сапфировый левиафан', 'Рубиновый стрелочник')",
+  "trophicRole": "hunter" OR "grazer" OR "colony_builder",
+  "hue": number between 0.0 and 1.0 (choose a vivid color contrasting with green, e.g. 0.95=crimson, 0.6=sapphire, 0.75=violet, 0.12=amber),
+  "carnivory": number between 0.0 and 0.85 (0.75 for hunter, 0.05 for grazer),
+  "size": number between 3.5 and 8.5,
+  "speedMax": number between 1.2 and 4.2,
+  "storyRu": "2 sentences describing its evolutionary adaptations in Russian.",
+  "storyEn": "2 sentences in English."
+}`;
+      const res = await this.queryVeniceAI({ prompt });
+      if (res && res.nameLa && Number.isFinite(res.hue)) return res;
+    } catch (err) {
+      console.warn('[AI Naturalist] Novel species engineering failed:', err.message);
+    }
+    return null;
+  }
+
   // Venice AI HTTPS call with robust JSON extraction
   async queryVeniceAI({ prompt }) {
     if (!CONFIG.VENICE_API_KEY) return null;
