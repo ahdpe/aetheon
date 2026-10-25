@@ -51,10 +51,10 @@ export class AtlasManager {
   <circle cx="${center}" cy="${center}" r="${radius - 3}" fill="none" stroke="#38bdf8" stroke-width="0.8" stroke-dasharray="3,4" opacity="0.6"/>
   <circle cx="${center}" cy="${center}" r="${radius - 12}" fill="none" stroke="#0284c7" stroke-width="0.5" opacity="0.3"/>`;
 
-    // 1. Bio-calcite Mineral Reefs (Sampled from 128x128 grid)
+    // 1. Bio-calcite Mineral Reefs (Sampled from grid)
     if (substrate) {
       svg += `\n  <!-- Bio-Calcite Mineral Reefs & Shoals -->\n  <g class="topo-reefs" opacity="0.85">`;
-      const step = 4; // 32x32 sample points
+      const step = Math.max(6, Math.floor(gridSize / 24)); // Optimized sampling maintains fidelity while keeping payload small
       for (let gy = 0; gy < gridSize; gy += step) {
         for (let gx = 0; gx < gridSize; gx += step) {
           const idx = gy * gridSize + gx;
@@ -189,17 +189,17 @@ export class AtlasManager {
   }
 
   // Record a daily atlas entry
-  async recordDay(dayIndex, isInitial = false) {
+  async recordDay(dayIndex, isInitial = false, customData = null) {
     const stats = this.engine.getStats ? this.engine.getStats() : {};
     const svgMap = this.generateTopographicMapSvg(dayIndex);
     const dateFormatted = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    let titleEn = `Day ${dayIndex}: The Great Biosphere Expansion`;
-    let titleRu = `День ${dayIndex}: Экспансия Биосферы и Рост Рифов`;
-    let summaryEn = `A pivotal 24-hour cycle in the droplet. The population sustained ${stats.organismCount ?? 280} living entities across ${stats.speciesCount ?? 40} stabilized species. Mineral calcite precipitation covered ${stats.reefCoverage ?? 16}% of the manifold, channeling hydrothermal currents into sheltered nurseries.`;
-    let summaryRu = `Знаменательный 24-часовой цикл в микрокапле. Популяция удерживает ${stats.organismCount ?? 280} живых особей в ${stats.speciesCount ?? 40} стабилизировавшихся видах. Био-кальцитовые рифы покрыли ${stats.reefCoverage ?? 16}% дна, направляя теплые минеральные шлейфы в защищенные лагуны.`;
+    let titleEn = customData?.titleEn || customData?.atlasChronicle?.titleEn || `Day ${dayIndex}: The Great Biosphere Expansion`;
+    let titleRu = customData?.titleRu || customData?.atlasChronicle?.titleRu || `День ${dayIndex}: Экспансия Биосферы и Рост Рифов`;
+    let summaryEn = customData?.summaryEn || customData?.atlasChronicle?.summaryEn || `A pivotal 24-hour cycle in the droplet. The population sustained ${stats.organismCount ?? 280} living entities across ${stats.speciesCount ?? 40} stabilized species. Mineral calcite precipitation covered ${stats.reefCoverage ?? 16}% of the manifold, channeling hydrothermal currents into sheltered nurseries.`;
+    let summaryRu = customData?.summaryRu || customData?.atlasChronicle?.summaryRu || `Знаменательный 24-часовой цикл в микрокапле. Популяция удерживает ${stats.organismCount ?? 280} живых особей в ${stats.speciesCount ?? 40} стабилизировавшихся видах. Био-кальцитовые рифы покрыли ${stats.reefCoverage ?? 16}% дна, направляя теплые минеральные шлейфы в защищенные лагуны.`;
 
-    if (dayIndex === 1) {
+    if (dayIndex === 1 && !customData) {
       titleEn = `Day I: Genesis & The Primordial Dawn`;
       titleRu = `День I: Генезис и Первичный Рассвет`;
       summaryEn = `The microscopic droplet sparked into life around five hydrothermal mineral hearths. The first autotrophic grazers colonized the thermal plumes, initiating bio-calcite mineral excretion and giving rise to the very first multicellular superorganisms and solitary apex hunters.`;
@@ -218,6 +218,9 @@ export class AtlasManager {
       summaryEn,
       summaryRu,
       svgMap,
+      novelSpecies: customData?.novelSpecies || null,
+      worldIntervention: customData?.worldIntervention || null,
+      aiGenerated: Boolean(customData?.aiGenerated ?? customData?.novelSpecies),
       metrics: {
         population: stats.organismCount ?? 280,
         speciesCount: stats.speciesCount ?? 50,
@@ -252,8 +255,23 @@ export class AtlasManager {
     const currentDay = Math.floor(ageSeconds / 86400) + 1;
 
     if (currentDay > this.lastRecordedDay) {
-      this.recordDay(currentDay);
+      this.lastRecordedDay = currentDay;
+      if (this.engine.executeDailyEvolution) {
+        this.engine.executeDailyEvolution(currentDay);
+      } else {
+        this.recordDay(currentDay);
+      }
     }
+  }
+
+  // Lightweight summary list for initial client handshake (omits megabytes of historical SVGs)
+  getSummaries() {
+    return this.atlasEntries.map((e, idx) => {
+      // Retain full svgMap only for the very latest day
+      if (idx === 0) return e;
+      const { svgMap, ...summary } = e;
+      return summary;
+    });
   }
 
   getAllEntries() {

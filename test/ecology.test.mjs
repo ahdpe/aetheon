@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {assertStateEqual} from './helpers/stateAssert.js';
 process.env.SNAPSHOT_FILE=path.join(fs.mkdtempSync(path.join(os.tmpdir(),'aetheon-ecology-')),'world.json');
 process.env.VENICE_API_KEY='';
 const {Organism}=await import('../server/core/organism.js');
@@ -110,7 +111,7 @@ test('new plant bodies, counters, ecology epoch and future evolution survive a f
  const describe=w=>({organisms:w.organisms.map(({playerSteer,isPiloted,...o})=>o),flora:w.algae.toJSON(),epoch:w.ecologyEpoch,
     history:w.history.toJSON(),fields:['nutrients','waste','signal','substrate'].map(k=>Array.from(w.grid[k])),rng:getRandomState()});
  for(let i=0;i<210;i++) e.step();const expected=describe(e);
- const restored=new SimulationEngine();for(let i=0;i<210;i++) restored.step();assert.deepEqual(describe(restored),expected);
+ const restored=new SimulationEngine();for(let i=0;i<210;i++) restored.step();assertStateEqual(describe(restored),expected);
  }finally{Date.now=clock;}
 });
 

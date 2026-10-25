@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
+import { assertStateEqual } from './helpers/stateAssert.js';
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aetheon-test-'));
 process.env.SNAPSHOT_FILE = path.join(dir, 'world.json');
 process.env.VENICE_API_KEY = '';
@@ -38,7 +39,7 @@ test('checkpoint preserves identities, chemistry, bonds and future deterministic
     assert.equal(getRandomState(), rng);
     assert.deepEqual(restored.colonies.getSerializableData(), serialized.colonyData);
     for (let i = 0; i < 65; i++) restored.step();
-    assert.deepEqual(describe(restored), expected);
+    assertStateEqual(describe(restored), expected);
     assert.equal(new Set(restored.organisms.map(o => o.id)).size, restored.organisms.length);
   } finally { Date.now = clock; }
 });

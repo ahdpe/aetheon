@@ -53,6 +53,27 @@ const server = http.createServer((req, res) => {
       snapshotBytes:engine.persistence.lastSnapshotBytes, snapshotSaveMs:Math.round(engine.persistence.lastSaveMs??0) }));
     return;
   }
+  if (reqPath === '/api/atlas') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify(engine.atlas ? (engine.atlas.getSummaries ? engine.atlas.getSummaries() : engine.atlas.getAllEntries()) : []));
+    return;
+  }
+  if (reqPath === '/api/daily-leap') {
+    const targetDay = (engine.atlas?.lastRecordedDay || 21) + 1;
+    engine.executeDailyEvolution(targetDay).then(() => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: 'ok',
+        day: targetDay,
+        atlasEntriesCount: engine.atlas?.atlasEntries?.length,
+        latestSpecies: engine.lineage.getAllSpecies().at(-1)
+      }));
+    }).catch(err => {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    });
+    return;
+  }
   if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
   console.log('[HTTP]', req.method, reqPath);
 

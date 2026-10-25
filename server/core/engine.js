@@ -700,6 +700,193 @@ export class SimulationEngine {
     }
   }
 
+  // Autonomous Daily Evolution Demiurge: executes once per 24 hours to enrich world and species diversity
+  async executeDailyEvolution(dayNumber) {
+    if (this.dailyEvolutionBusy) return;
+    this.dailyEvolutionBusy = true;
+    try {
+      console.log(`[Engine] Initiating Daily AI Evolutionary Leap for Day ${dayNumber}...`);
+      const stats = this.getStats();
+      const leap = await this.naturalist.engineerDailyEvolution(dayNumber, stats);
+      if (!leap || !leap.novelSpecies) {
+        console.warn(`[Engine] Daily evolution returned empty blueprint for Day ${dayNumber}`);
+        this.atlas.recordDay(dayNumber);
+        return;
+      }
+
+      const CX = CONFIG.CHAMBER_CENTER_X;
+      const CY = CONFIG.CHAMBER_CENTER_Y;
+      const quadrantOffsets = {
+        'NW': { x: -440, y: -440 },
+        'NE': { x: 440, y: -440 },
+        'SW': { x: -440, y: 440 },
+        'SE': { x: 440, y: 440 },
+        'DEEP_SOUTH': { x: 0, y: 620 },
+        'NORTH_RIM': { x: 0, y: -620 },
+        'EAST_SHELF': { x: 620, y: 0 },
+        'WEST_TRENCH': { x: -620, y: 0 }
+      };
+      const offset = quadrantOffsets[leap.worldIntervention?.quadrant] || quadrantOffsets['SE'];
+      const wx = CX + offset.x + (random() - 0.5) * 80;
+      const wy = CY + offset.y + (random() - 0.5) * 80;
+
+      // 1. Execute World Intervention ("разнообразие мира")
+      const wIntervention = leap.worldIntervention || {};
+      const wType = wIntervention.type || 'fumarole';
+      if (wType === 'fumarole') {
+        const N = this.grid.size;
+        const scale = N / CONFIG.WORLD_SIZE;
+        const fx = Math.max(12, Math.min(N - 13, Math.round(wx * scale)));
+        const fy = Math.max(12, Math.min(N - 13, Math.round(wy * scale)));
+        const fumId = `fumarole_day_${dayNumber}`;
+        this.grid.ephemeralFumaroles = this.grid.ephemeralFumaroles.filter(f => f.id !== fumId);
+        this.grid.ephemeralFumaroles.push({
+          id: fumId,
+          nameRu: wIntervention.nameRu || 'Термальный очаг',
+          nameEn: wIntervention.nameEn || 'Thermal Fumarole',
+          x: fx,
+          y: fy,
+          radius: 7,
+          power: Math.max(0.6, Math.min(0.95, wIntervention.power || 0.8)),
+          hue: Math.max(0, Math.min(1, wIntervention.hue ?? 0.78)),
+          life: 0,
+          maxLife: 864000 // Sustained 24h thermal plume
+        });
+        console.log(`[Engine] World Intervention: Erupted new Fumarole «${wIntervention.nameRu}» at grid (${fx}, ${fy})`);
+      } else if (wType === 'algae_grove') {
+        if (this.algae && this.algae.makePlant) {
+          const plant = this.algae.makePlant({
+            id: this.algae.nextId++,
+            nameRu: wIntervention.nameRu || 'Водорослевая заводь',
+            nameEn: wIntervention.nameEn || 'Algal Grove',
+            x: wx,
+            y: wy,
+            baseRadius: 46 + random() * 14,
+            hue: Math.max(0, Math.min(1, wIntervention.hue ?? 0.38)),
+            frondCount: 16,
+            density: 0.95
+          });
+          this.algae.isles.push(plant);
+          console.log(`[Engine] World Intervention: Bloomed Algal Grove «${wIntervention.nameRu}» at (${Math.round(wx)}, ${Math.round(wy)})`);
+        }
+      } else if (wType === 'calcite_reef') {
+        const N = this.grid.size;
+        const scale = N / CONFIG.WORLD_SIZE;
+        const gx = Math.round(wx * scale);
+        const gy = Math.round(wy * scale);
+        const r = 10;
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
+            const d = Math.hypot(dx, dy);
+            if (d <= r) {
+              const cy = Math.max(0, Math.min(N - 1, gy + dy));
+              const cx = Math.max(0, Math.min(N - 1, gx + dx));
+              const idx = cy * N + cx;
+              this.grid.substrate[idx] = Math.min(1.0, this.grid.substrate[idx] + (1 - d / r) * 0.7);
+            }
+          }
+        }
+        console.log(`[Engine] World Intervention: Precipitated Calcite Reef Shelf «${wIntervention.nameRu}» at grid (${gx}, ${gy})`);
+      }
+
+      // 2. Execute Novel Species Genesis ("разнообразие организмов")
+      const spec = leap.novelSpecies;
+      const founderSpecies = this.lineage.createSpecies({
+        nameLa: spec.nameLa || `Aetheon-${dayNumber}`,
+        nameEn: spec.nameEn || `Pioneer Day ${dayNumber}`,
+        nameRu: spec.nameRu || `Первопроходец Дня ${dayNumber}`,
+        descriptionEn: spec.storyEn || '',
+        descriptionRu: spec.storyRu || '',
+        hue: Math.max(0, Math.min(1, spec.hue ?? 0.6)),
+        carnivory: Math.max(0, Math.min(1, spec.carnivory ?? 0.1)),
+        size: Math.max(3.0, Math.min(8.5, spec.size ?? 5.5)),
+        speedMax: Math.max(1.5, Math.min(4.5, spec.speedMax ?? 2.5)),
+        adhesion: Math.max(0, Math.min(1, spec.adhesion ?? (spec.trophicRole === 'colony_builder' ? 0.8 : 0.2))),
+        elongation: Math.max(0, Math.min(1, spec.elongation ?? 0.5)),
+        shell: Math.max(0, Math.min(1, spec.shell ?? 0.3)),
+        flagella: Math.max(0, Math.min(1, spec.flagella ?? 0.6)),
+        sensing: Math.max(0, Math.min(1, spec.sensing ?? 0.6)),
+        chemotaxisNutrient: spec.carnivory > 0.35 ? 0.2 : 1.2
+      }, 0);
+      founderSpecies.aiChronicle = true;
+      founderSpecies.genesisDay = dayNumber;
+
+      // Seed a robust founder cluster of 10 viable individuals near the world intervention
+      const clusterSize = 10;
+      for (let i = 0; i < clusterSize; i++) {
+        const angle = random() * Math.PI * 2;
+        const dist = 30 + random() * 80;
+        const orgX = Math.max(CX - CONFIG.CHAMBER_RADIUS + 50, Math.min(CX + CONFIG.CHAMBER_RADIUS - 50, wx + Math.cos(angle) * dist));
+        const orgY = Math.max(CY - CONFIG.CHAMBER_RADIUS + 50, Math.min(CY + CONFIG.CHAMBER_RADIUS - 50, wy + Math.sin(angle) * dist));
+
+        const founderOrg = new Organism(
+          orgX, orgY,
+          {
+            size: founderSpecies.size,
+            hue: founderSpecies.hue,
+            speedMax: founderSpecies.speedMax,
+            carnivory: founderSpecies.carnivory,
+            chemotaxisNutrient: founderSpecies.chemotaxisNutrient,
+            chemotaxisWaste: -0.6,
+            ciliaryFrequency: 0.25,
+            phaseCoupling: 0.4,
+            splitThreshold: founderSpecies.carnivory > 0.35 ? 170.0 : 90.0,
+            metabolismEfficiency: 1.15,
+            mutationRate: 0.05,
+            adhesion: founderSpecies.adhesion,
+            elongation: founderSpecies.elongation,
+            shell: founderSpecies.shell,
+            flagella: founderSpecies.flagella,
+            sensing: founderSpecies.sensing
+          },
+          1, 0, founderSpecies.id
+        );
+        founderOrg.energy = 150.0;
+        founderOrg.adultSize = founderSpecies.size;
+        founderOrg.size = founderSpecies.size;
+        founderOrg.maturity = 1.0;
+        this.history.addRoot(founderOrg, this.ticks, 'ai_daily_genesis');
+        this.organisms.push(founderOrg);
+      }
+      console.log(`[Engine] Species Genesis: Seeded ${clusterSize} pioneers of «${founderSpecies.nameRu}» (ID: ${founderSpecies.id})`);
+
+      // 3. Publish to Naturalist Journal
+      this.naturalist.addEntry({
+        type: 'species',
+        icon: founderSpecies.carnivory > 0.35 ? '⚔️' : (founderSpecies.adhesion > 0.6 ? '🪸' : '🧬'),
+        badgeEn: `🌅 EVOLUTIONARY LEAP • DAY ${dayNumber}`,
+        badgeRu: `🌅 ЭВОЛЮЦИОННЫЙ СКАЧОК • ДЕНЬ ${dayNumber}`,
+        speciesId: founderSpecies.id,
+        species: {
+          id: founderSpecies.id,
+          hue: founderSpecies.hue,
+          size: founderSpecies.size,
+          carnivory: founderSpecies.carnivory,
+          speedMax: founderSpecies.speedMax,
+          nameLa: founderSpecies.nameLa,
+          nameRu: founderSpecies.nameRu,
+          nameEn: founderSpecies.nameEn
+        },
+        titleEn: `🌅 Day ${dayNumber}: ${leap.atlasChronicle?.titleEn || founderSpecies.nameEn}`,
+        titleRu: `🌅 День ${dayNumber}: ${leap.atlasChronicle?.titleRu || founderSpecies.nameRu}`,
+        contentEn: `${founderSpecies.nameEn} (${founderSpecies.nameLa}): ${spec.storyEn || 'Adaptive counter-species emerged.'}\n\nGeological shift: ${wIntervention.nameEn || 'Habitat shift'} formed.`,
+        contentRu: `«${founderSpecies.nameRu}» (${founderSpecies.nameLa}): ${spec.storyRu || 'Зарожден новый адаптивный вид.'}\n\nГеографический сдвиг: возник объект «${wIntervention.nameRu || 'Новый биотоп'}».`,
+        insightEn: leap.atlasChronicle?.summaryEn || 'Autonomous evolution generated novel biodiversity.',
+        insightRu: leap.atlasChronicle?.summaryRu || 'Автономная эволюция создала новую ветвь жизни и биотоп.',
+        timestamp: Date.now()
+      });
+
+      // 4. Record Daily Atlas entry with enriched AI chronicle
+      this.atlas.recordDay(dayNumber, false, leap);
+
+    } catch (err) {
+      console.warn(`[Engine] Daily evolution failed for Day ${dayNumber}:`, err.message);
+      this.atlas.recordDay(dayNumber);
+    } finally {
+      this.dailyEvolutionBusy = false;
+    }
+  }
+
   // Pack low-latency 10 Hz broadcast packet for clients
   getBroadcastPacket() {
     const orgData = new Array(this.organisms.length * 15);

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
+import {assertStateEqual} from './helpers/stateAssert.js';
 import {RemainsManager,REMAINS_LIMIT,ORGANIC_TO_NUTRIENT} from '../public/js/shared/remains.js';
 process.env.SNAPSHOT_FILE=path.join(fs.mkdtempSync(path.join(os.tmpdir(),'aetheon-remains-test-')),'world.json');
 process.env.VENICE_API_KEY='';
@@ -97,7 +98,7 @@ test('body reserves, identities and future recycling survive a real checkpoint',
   const describe=w=>({bodies:w.remains.toJSON(),orgs:w.organisms.map(({playerSteer,isPiloted,...o})=>o),
     fields:['nutrients','waste','signal','substrate'].map(k=>Array.from(w.grid[k])),rng:getRandomState()});
   for(let i=0;i<140;i++)e.step();const expected=describe(e);
-  const restored=new SimulationEngine();for(let i=0;i<140;i++)restored.step();assert.deepEqual(describe(restored),expected);
+  const restored=new SimulationEngine();for(let i=0;i<140;i++)restored.step();assertStateEqual(describe(restored),expected);
  }finally{Date.now=clock;}
 });
 

@@ -915,37 +915,206 @@ JSON format ONLY:
     return fallback;
   }
 
-  // AI-Engineered Novel Counter-Species: introduced when ecosystem biodiversity stagnates
-  async engineerNovelSpecies(stats) {
-    if (!CONFIG.VENICE_API_KEY) return null;
-    try {
-      const prompt = `The living ocean AETHEON needs an evolutionary breakthrough to counter biodiversity decline.
-Current state:
-- Total population: ${stats.organismCount} organisms across ${stats.speciesCount} species
-- Dominant form: "${stats.dominantSpeciesNameRu || 'Пастбищник'}" (${stats.dominantCount || 0} cells)
-- Top hunter: "${stats.topPredatorNameRu || 'None'}"
-- Habitats: ${stats.habitatSummary || 'Open Water'}
+  // Autonomous AI Evolutionary Demiurge: daily leap inventing novel species, world changes, and atlas chronicle
+  async engineerDailyEvolution(dayNumber, stats = {}) {
+    if (CONFIG.VENICE_API_KEY) {
+      try {
+        const dominantName = stats.dominantSpeciesNameRu || 'Пастбищник';
+        const dominantCount = stats.dominantCount || 0;
+        const totalPop = stats.organismCount || 280;
+        const topHunter = stats.topPredatorNameRu || 'Охотники малочисленны';
 
-Design a brand-new, exotic adaptive counter-species to diversify the ecosystem:
-JSON format ONLY:
+        const prompt = `You are the Autonomous Evolutionary Demiurge and Astrobiologist observing the living microscopic ocean AETHEON.
+It is Day ${dayNumber} in the droplet biosphere.
+CURRENT ECOLOGICAL STATE:
+- Total living organisms: ${totalPop}
+- Registered species: ${stats.speciesCount || 40}
+- Dominant species: "${dominantName}" (${dominantCount} organisms, ~${Math.round((dominantCount / Math.max(1, totalPop)) * 100)}% of the ocean!)
+- Apex predator: "${topHunter}"
+- Reef coverage: ${stats.reefCoverage || 16}%
+- Living flora thickets: ${stats.algaeCount || 32}
+
+TASK FOR DAY ${dayNumber}:
+The ecosystem needs a major daily evolutionary leap to break stagnation, introduce rich biological diversity, and reshape the physical landscape ("разнообразие мира и организмов").
+1. Design a brand-new, exotic adaptive counter-species tailored to fill an unexploited ecological niche (e.g. agile reef hunter, armored detritivore, luminescent abyssal filterer, or symbiotic colonial crawler). Choose a vivid hue contrasting with green/cyan!
+2. Design a physical WORLD INTERVENTION: reshape the droplet by introducing a new geological or botanical formation in one of the quadrants (a thermal fumarole, micro-algae grove, or bio-calcite reef shelf).
+3. Write a poetic David Attenborough / Stanislaw Lem style Chronicle entry for the Daily World Atlas documenting this evolutionary breakthrough.
+
+OUTPUT STRICT VALID JSON ONLY (NO markdown formatting, NO extra commentary):
 {
-  "nameLa": "Latin binomial name (e.g. 'Chronohelix sapphirina', 'Vibrionox flammeus')",
-  "nameEn": "English common name (e.g. 'Sapphire Leviathan', 'Ruby Dart')",
-  "nameRu": "Russian common name (e.g. 'Сапфировый левиафан', 'Рубиновый стрелочник')",
-  "trophicRole": "hunter" OR "grazer" OR "colony_builder",
-  "hue": number between 0.0 and 1.0 (choose a vivid color contrasting with green, e.g. 0.95=crimson, 0.6=sapphire, 0.75=violet, 0.12=amber),
-  "carnivory": number between 0.0 and 0.85 (0.75 for hunter, 0.05 for grazer),
-  "size": number between 3.5 and 8.5,
-  "speedMax": number between 1.2 and 4.2,
-  "storyRu": "2 sentences describing its evolutionary adaptations in Russian.",
-  "storyEn": "2 sentences in English."
+  "novelSpecies": {
+    "nameRu": "Russian common name (e.g. 'Хризолитовый скат', 'Сапфировая гидра', 'Аметистовый стрелочник')",
+    "nameEn": "English common name (e.g. 'Chrysolite Ray', 'Sapphire Hydra', 'Amethyst Dart')",
+    "nameLa": "Latin binomial name (e.g. 'Chrysolithus vagans', 'Hydra sapphirina')",
+    "trophicRole": "hunter" OR "grazer" OR "scavenger" OR "reef_dweller" OR "symbiont",
+    "hue": number between 0.0 and 1.0 (contrast with green 0.35-0.55! Use vivid hues: 0.95 crimson, 0.60 sapphire, 0.78 amethyst, 0.12 amber, 0.04 vermilion),
+    "size": number between 3.2 and 8.0,
+    "speedMax": number between 1.6 and 4.2,
+    "carnivory": number between 0.0 and 0.85 (0.75 for hunter, 0.05 for grazer, 0.35 for scavenger),
+    "adhesion": number between 0.05 and 0.95,
+    "elongation": number between 0.1 and 0.95,
+    "shell": number between 0.05 and 0.85,
+    "flagella": number between 0.2 and 0.95,
+    "sensing": number between 0.2 and 0.95,
+    "storyRu": "2-3 vivid sentences in Russian in David Attenborough style about its adaptations and survival strategy.",
+    "storyEn": "2-3 vivid sentences in English."
+  },
+  "worldIntervention": {
+    "type": "fumarole" OR "algae_grove" OR "calcite_reef",
+    "nameRu": "Poetic feature name in Russian (e.g. 'Аметистовый гейзер', 'Лазурная водорослевая заводь', 'Коралловая терраса')",
+    "nameEn": "Poetic feature name in English",
+    "quadrant": "NW" OR "NE" OR "SW" OR "SE" OR "DEEP_SOUTH" OR "NORTH_RIM" OR "EAST_SHELF" OR "WEST_TRENCH",
+    "hue": number between 0.0 and 1.0,
+    "power": number between 0.6 and 0.9,
+    "storyRu": "2 sentences in Russian about how this physical formation opened up a new resource oasis.",
+    "storyEn": "2 sentences in English."
+  },
+  "atlasChronicle": {
+    "titleRu": "Chapter title in Russian (e.g. 'День ${dayNumber}: Пробуждение Аметистовых Глубин')",
+    "titleEn": "Chapter title in English",
+    "summaryRu": "3-4 sentence documentary monograph for the Daily World Atlas celebrating the evolutionary breakthrough.",
+    "summaryEn": "3-4 sentence monograph in English."
+  }
 }`;
-      const res = await this.queryVeniceAI({ prompt });
-      if (res && res.nameLa && Number.isFinite(res.hue)) return res;
-    } catch (err) {
-      console.warn('[AI Naturalist] Novel species engineering failed:', err.message);
+
+        const res = await this.queryVeniceAI({ prompt });
+        if (res && res.novelSpecies && res.novelSpecies.nameRu && res.worldIntervention && res.atlasChronicle) {
+          console.log(`[AI Naturalist] Venice AI designed Daily Evolution for Day ${dayNumber}: «${res.novelSpecies.nameRu}» & «${res.worldIntervention.nameRu}»`);
+          return {
+            ...res,
+            aiGenerated: true
+          };
+        }
+      } catch (err) {
+        console.warn(`[AI Naturalist] Day ${dayNumber} AI evolution call failed, falling back to procedural:`, err.message);
+      }
     }
-    return null;
+
+    return this.proceduralDailyEvolution(dayNumber, stats);
+  }
+
+  // Procedural fallback xenobiology archetypes ensuring evolution never stops even without AI API
+  proceduralDailyEvolution(dayNumber, stats = {}) {
+    const archetypes = [
+      {
+        novelSpecies: {
+          nameRu: 'Хризолитовый скат',
+          nameEn: 'Chrysolite Glider',
+          nameLa: 'Chrysolithus vagans',
+          trophicRole: 'hunter',
+          hue: 0.14,
+          size: 6.8,
+          speedMax: 3.4,
+          carnivory: 0.72,
+          adhesion: 0.20,
+          elongation: 0.78,
+          shell: 0.35,
+          flagella: 0.85,
+          sensing: 0.75,
+          storyRu: 'Хризолитовый скат скользит вдоль ламинарных течений, расправив широкую мембрану. Его ресничные сенсоры улавливают малейшие возмущения от проплывающих пастбищников, позволяя совершать стремительные упреждающие выпады.',
+          storyEn: 'The Chrysolite Glider sweeps along laminar ocean currents with broad lateral membrane fins, intercepting unwary grazers with predictive lunges.'
+        },
+        worldIntervention: {
+          type: 'fumarole',
+          nameRu: 'Аметистовый гидротермальный гейзер',
+          nameEn: 'Amethyst Hydrothermal Fumarole',
+          quadrant: 'SE',
+          hue: 0.78,
+          power: 0.82,
+          storyRu: 'В юго-восточном разломе дна пробился новый термальный источник. Насыщенный фиолетовыми минералами шлейф согревает придонные воды и создает богатый нутриентный оазис.',
+          storyEn: 'A fresh hydrothermal fissure erupted along the south-eastern rift, billowing warm mineral-rich plumes that nurture surrounding life.'
+        },
+        atlasChronicle: {
+          titleRu: `День ${dayNumber}: Пробуждение Аметистового Разлома`,
+          titleEn: `Day ${dayNumber}: Awakening of the Amethyst Rift`,
+          summaryRu: `Океан пережил новый виток видообразования. Прорыв Аметистового гейзера в юго-восточном секторе изменил придонную гидродинамику, дав жизнь быстрому хищнику «Хризолитовому скату». Экосистема восстанавливает утраченный баланс между пастбищными формами и активными охотниками.`,
+          summaryEn: `A decisive evolutionary leap swept across the droplet. The eruption of the Amethyst Fumarole altered benthic currents and heralded the arrival of the agile Chrysolite Glider.`
+        }
+      },
+      {
+        novelSpecies: {
+          nameRu: 'Опаловый планктер',
+          nameEn: 'Opal Pelagic Filterer',
+          nameLa: 'Opalina errans',
+          trophicRole: 'grazer',
+          hue: 0.62,
+          size: 4.2,
+          speedMax: 2.2,
+          carnivory: 0.05,
+          adhesion: 0.40,
+          elongation: 0.35,
+          shell: 0.45,
+          flagella: 0.65,
+          sensing: 0.80,
+          storyRu: 'Опаловый планктер парит в открытой толще воды, переливаясь сапфировыми искрами. Его тончайшая ресничная сеть улавливает растворенные минералы даже в самых бедных участках капли.',
+          storyEn: 'The Opal Pelagic Filterer drifts gracefully through open waters, its delicate ciliary veil harvesting dissolved nutrients even in resource-poor expanses.'
+        },
+        worldIntervention: {
+          type: 'algae_grove',
+          nameRu: 'Изумрудная водорослевая заводь',
+          nameEn: 'Emerald Phytobenthic Grove',
+          quadrant: 'NW',
+          hue: 0.38,
+          power: 0.75,
+          storyRu: 'В северо-западном секторе распустилась новая плотная водорослевая роща, предоставив убежище молодым организмам от глубоководных хищников.',
+          storyEn: 'A lush phytobenthic kelp sanctuary expanded across the north-western shallows, providing shelter for vulnerable juveniles.'
+        },
+        atlasChronicle: {
+          titleRu: `День ${dayNumber}: Сапфировый Прилив и Изумрудные Заводи`,
+          titleEn: `Day ${dayNumber}: Sapphire Drift & The Emerald Grove`,
+          summaryRu: `В северо-западных водах расцвела новая водорослевая заводь, ставшая колыбелью для сапфирового «Опалового планктера». Насыщение воды органикой открывает простор для нового поколения мирных фильтраторов.`,
+          summaryEn: `A thriving kelp meadow blossomed in the north-western shallows, nurturing the graceful Opal Pelagic Filterers.`
+        }
+      },
+      {
+        novelSpecies: {
+          nameRu: 'Рубиновый стрелочник',
+          nameEn: 'Ruby Dart Stalker',
+          nameLa: 'Vibrionox flammeus',
+          trophicRole: 'hunter',
+          hue: 0.96,
+          size: 5.8,
+          speedMax: 3.8,
+          carnivory: 0.80,
+          adhesion: 0.15,
+          elongation: 0.90,
+          shell: 0.20,
+          flagella: 0.95,
+          sensing: 0.85,
+          storyRu: 'Игловидное тело Рубинового стрелочника создано для предельных скоростей. Он рассекает водную гладь подобно огненной стреле, преследуя отбившихся от стаи пастбищников.',
+          storyEn: 'The needle-like morphology of the Ruby Dart Stalker is optimized for extreme velocity, streaking through the water column to hunt wandering grazers.'
+        },
+        worldIntervention: {
+          type: 'calcite_reef',
+          nameRu: 'Карнелиановая коралловая гряда',
+          nameEn: 'Carnelian Calcite Barrier Reef',
+          quadrant: 'SW',
+          hue: 0.92,
+          power: 0.80,
+          storyRu: 'Био-кальцитовые отложения сформировали массивную рифовую гряду на юго-западе, создав сеть укрытий и расщелин.',
+          storyEn: 'Intense biomineralization precipitated a resilient calcite barrier reef in the south-west, forming complex underwater labyrinth crevices.'
+        },
+        atlasChronicle: {
+          titleRu: `День ${dayNumber}: Рождение Карнелианового Барьера`,
+          titleEn: `Day ${dayNumber}: Genesis of the Carnelian Barrier`,
+          summaryRu: `Юго-западные воды украсились новой био-кальцитовой грядой. В ее лабиринтах обосновался смертоносный «Рубиновый стрелочник», восстанавливающий трофический баланс глубин.`,
+          summaryEn: `A majestic calcite barrier emerged in the south-west, colonized by the razor-fast Ruby Dart Stalker.`
+        }
+      }
+    ];
+
+    const idx = (dayNumber - 1) % archetypes.length;
+    const chosen = archetypes[idx];
+    return {
+      ...chosen,
+      aiGenerated: false
+    };
+  }
+
+  // Legacy novel species engineering (calls daily evolution internally)
+  async engineerNovelSpecies(stats) {
+    const leap = await this.engineerDailyEvolution(this.currentEpoch || 1, stats);
+    return leap?.novelSpecies || null;
   }
 
   // Venice AI HTTPS call with robust JSON extraction

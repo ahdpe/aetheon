@@ -141,6 +141,9 @@ export class JournalDrawer {
       this.tabFeedBtn?.classList.remove('active');
       this.timeline?.classList.add('hidden');
       this.atlasPane?.classList.remove('hidden');
+      if (this.app?.socket?.readyState === WebSocket.OPEN) {
+        this.app.socket.send(JSON.stringify({ type: 'get_atlas' }));
+      }
       this.renderAtlas();
     }
     sound.playDroplet(750);

@@ -71,12 +71,19 @@ export class NetworkManager {
         species: this.engine.lineage.getRecentSpecies(12),
         visitors: this.clients.size,
         thumbnail: Array.from(this.engine.grid.getThumbnail(48)), // 48x48 initial chemical field
-        atlas: this.engine.atlas ? this.engine.atlas.getAllEntries() : [],
+        atlas: this.engine.atlas ? (this.engine.atlas.getSummaries ? this.engine.atlas.getSummaries() : this.engine.atlas.getAllEntries()) : [],
         algae: this.engine.algae ? this.engine.algae.getBroadcastState() : [],
         remains:this.engine.remains.broadcast(), ecology:this.engine.getEcologyState()
       };
 
       ws.send(JSON.stringify(initialPayload));
+      // Immediately stream living entities on frame #0 so browser renders instantly without loading hang
+      try {
+        ws.send(JSON.stringify({
+          type: 'tick',
+          ...this.engine.getBroadcastPacket()
+        }));
+      } catch (_) {}
       this.broadcastVisitorCount();
 
       ws.on('message', (message) => {

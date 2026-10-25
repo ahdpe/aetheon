@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
+import {assertStateEqual} from './helpers/stateAssert.js';
 import {TerrainField,TERRAIN_SEED,validateTerrainState,transportChemicals} from '../public/js/shared/terrain.js';
 import {makeResourceRecharge,RESOURCE_OASES} from '../public/js/shared/habitats.js';
 process.env.VENICE_API_KEY='';
@@ -98,7 +99,7 @@ test('a real restart preserves geology and its future biological and chemical tr
   const describe=w=>({terrain:w.terrainState,organisms:w.organisms.map(({playerSteer,isPiloted,...o})=>o),
    plants:w.algae.toJSON(),bodies:w.remains.toJSON(),fields:['nutrients','waste','signal','substrate'].map(k=>Array.from(w.grid[k])),rng:getRandomState()});
   for(let i=0;i<100;i++)e.step();const expected=describe(e);
-  const restored=new SimulationEngine();for(let i=0;i<100;i++)restored.step();assert.deepEqual(describe(restored),expected);
+  const restored=new SimulationEngine();for(let i=0;i<100;i++)restored.step();assertStateEqual(describe(restored),expected);
  }finally{Date.now=clock;}
 });
 
