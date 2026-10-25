@@ -7,3 +7,4 @@ data/*.json
 test_*.js
 verify_*.js
 seafloor_texture_debug.png
+.env
