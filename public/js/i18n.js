@@ -1,5 +1,5 @@
 export const DICTIONARY = {
-  en: {
+  en: { stagnation_metric: 'Stagnation',
     organisms: 'organisms',
     species: 'species',
     gen: 'gen',
@@ -18,6 +18,8 @@ export const DICTIONARY = {
     offspring: 'Offspring',
     btn_feed: '💧 Feed (+Nutrient)',
     btn_track: '🎯 Track Cam',
+    btn_ai_scan: '🔬 AI Bio-Scan',
+    btn_ai_scan_loading: '⏳ Scanning…',
     tab_species: 'Species Codex',
     tab_journal: 'Naturalist Journal',
     codex_intro: 'Continuous catalog of all lineages that have emerged, adapted, or gone extinct since Genesis.',
@@ -51,7 +53,7 @@ export const DICTIONARY = {
     nav_journal: 'Journal',
     open_journal_feed: '▲ Open Journal',
     journal_drawer_title: 'Naturalist Journal • Evolution Feed',
-    journal_drawer_subtitle: 'Live cognitive observations streamed from Venice AI (LLaMA 3.3 70B)',
+    journal_drawer_subtitle: 'Events and discoveries from the shared living ocean',
     btn_species_catalog: '🧬 Species Codex',
     drawer_collapse: '▼ Collapse',
     live_tooltip: 'Evolution Timeline & Journal',
@@ -76,7 +78,7 @@ export const DICTIONARY = {
     atlas_metric_apex: 'Apex Hunter',
     atlas_metric_temp: 'Mean Temp',
     btn_dive: '👁️ Dive 3D',
-    btn_dive_label: 'Dive (3D)',
+    btn_dive_label: 'Dive Inside (3D)',
     dive_exit: 'Orbit (ESC)',
     chemotaxis_sensor: 'CHEMOTAXIS',
     ciliary_rhythm: 'CILIARY RHYTHM',
@@ -89,18 +91,25 @@ export const DICTIONARY = {
     stage_juvenile: 'Juvenile (Offspring)',
     stage_subadult: 'Growing Subadult',
     stage_adult: 'Mature Adult',
-    dynasty_title: 'AVATAR DYNASTY',
+    dynasty_title: 'OBSERVER DYNASTY BRANCH',
     dynasty_sub: 'Resonance active for over 30 seconds',
-    dynasty_desc: 'Your will has guided this specimen\'s evolution. Inscribe the Observer\'s name to permanently enshrine this ruling dynasty in the Species Codex:',
-    dynasty_note: 'Note: A founder dynasty can only be enshrined once per hour.',
-    dynasty_enshrine: 'Enshrine',
+    dynasty_desc: 'Your will has guided this specimen\'s development. Name your genealogical branch! Direct descendants will inherit the dynasty name (F1, F2...) and enter the Hall of Fame upon extinction.',
+    dynasty_note: 'Note: A founder dynasty can only be established once per hour.',
+    dynasty_enshrine: 'Found Branch',
     dynasty_later: 'Later',
-    founder: 'Dynasty',
-    founder_prefix: 'Founder: ',
+    founder: 'Dynasty Branch',
+    founder_prefix: 'Dynasty: ',
+    filter_dynasties: '👑 Dynasties',
+    dynasty_hall_of_fame: 'Dynasty Hall of Fame',
+    dynasty_alive: 'Active in Droplet',
+    dynasty_extinct: 'Extinct (Hall of Fame)',
+    dynasty_peak: 'Peak Population',
+    dynasty_track_btn: 'Track in Droplet',
+    dynasty_no_dynasties: 'No dynasties established yet. Pilot an organism in 3D for 30s to found one!',
     detritus_label: 'Organic Detritus',
     dynasty_placeholder: 'Observer Name...'
   },
-  ru: {
+  ru: { stagnation_metric: 'Стагнация',
     organisms: 'организмов',
     species: 'видов',
     gen: 'пок.',
@@ -119,6 +128,8 @@ export const DICTIONARY = {
     offspring: 'Потомство',
     btn_feed: '💧 Покормить (+Еда)',
     btn_track: '🎯 Следить камерой',
+    btn_ai_scan: '🔬 ИИ-Биосканер',
+    btn_ai_scan_loading: '⏳ Сканирование…',
     tab_species: 'Кодекс видов',
     tab_journal: 'Журнал натуралиста',
     codex_intro: 'Непрерывный реестр всех эволюционных линий, возникших, развившихся или угасших со времен Генезиса.',
@@ -152,7 +163,7 @@ export const DICTIONARY = {
     nav_journal: 'Журнал',
     open_journal_feed: '▲ Читать журнал',
     journal_drawer_title: 'Журнал натуралиста • Хроника эволюции',
-    journal_drawer_subtitle: 'Живые наблюдения и хроника от Venice AI (LLaMA 3.3 70B)',
+    journal_drawer_subtitle: 'Наблюдения и открытия в общем живом океане',
     btn_species_catalog: '🧬 Кодекс видов',
     drawer_collapse: '▼ Свернуть',
     live_tooltip: 'Хроника эволюции и журнал',
@@ -177,7 +188,7 @@ export const DICTIONARY = {
     atlas_metric_apex: 'Верховный хищник',
     atlas_metric_temp: 'Температура',
     btn_dive: '👁️ Погрузиться (3D)',
-    btn_dive_label: 'Погрузиться (3D)',
+    btn_dive_label: 'Погрузиться внутрь (3D)',
     dive_exit: 'Всплыть (ESC)',
     chemotaxis_sensor: 'ХЕМОТАКСИС',
     ciliary_rhythm: 'РИТМ РЕСНИЧЕК',
@@ -190,14 +201,21 @@ export const DICTIONARY = {
     stage_juvenile: 'Ювенил (детеныш)',
     stage_subadult: 'Подрастающая особь',
     stage_adult: 'Взрослая особь',
-    dynasty_title: 'РОДОСЛОВНАЯ НАБЛЮДАТЕЛЯ',
+    dynasty_title: 'ДИНАСТИЧЕСКАЯ ВЕТВЬ НАБЛЮДАТЕЛЯ',
     dynasty_sub: 'Связь с аватаром активна более 30 секунд',
-    dynasty_desc: 'Ваша воля направила эволюцию этой особи. Впишите имя Наблюдателя, чтобы навечно закрепить правящую династию в Кодексе видов:',
-    dynasty_note: 'Примечание: увековечить родословную можно не чаще 1 раза в час.',
-    dynasty_enshrine: 'Увековечить',
+    dynasty_desc: 'Ваша воля направила развитие этой клетки. Назовите свою генеалогическую ветвь! Прямые потомки унаследуют имя династии (F1, F2...) и войдут в Зал Славы.',
+    dynasty_note: 'Примечание: основать новую династию можно не чаще 1 раза в час.',
+    dynasty_enshrine: 'Основать ветвь',
     dynasty_later: 'Позже',
-    founder: 'Династия',
-    founder_prefix: 'Основатель: ',
+    founder: 'Ветвь династии',
+    founder_prefix: 'Династия: ',
+    filter_dynasties: '👑 Династии',
+    dynasty_hall_of_fame: 'Зал Славы Династий',
+    dynasty_alive: '🟢 В чаше сейчас',
+    dynasty_extinct: '🏛️ Зал Славы (Угасшая)',
+    dynasty_peak: 'Пик популяции',
+    dynasty_track_btn: '🎯 Следить в чаше',
+    dynasty_no_dynasties: 'Династии пока не основаны. Управляйте клеткой в 3D более 30 сек, чтобы основать ветвь!',
     detritus_label: 'Органический детрит',
     dynasty_placeholder: 'Имя Наблюдателя...'
   }
@@ -205,7 +223,8 @@ export const DICTIONARY = {
 
 class I18nManager {
   constructor() {
-    this.lang = localStorage.getItem('aetheon_lang') || 'en';
+    try { this.lang = localStorage.getItem('aetheon_lang') || 'en'; } catch { this.lang = 'en'; }
+    if (!DICTIONARY[this.lang]) this.lang = 'en';
   }
 
   getLang() {
@@ -215,7 +234,7 @@ class I18nManager {
   setLang(lang) {
     if (DICTIONARY[lang]) {
       this.lang = lang;
-      localStorage.setItem('aetheon_lang', lang);
+      try { localStorage.setItem('aetheon_lang', lang); } catch {}
       this.applyTranslations();
       window.dispatchEvent(new CustomEvent('aetheon-lang-changed', { detail: { lang } }));
     }

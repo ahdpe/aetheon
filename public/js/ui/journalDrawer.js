@@ -1,3 +1,4 @@
+import { escapeHtml } from './safeHtml.js';
 import { i18n } from '../i18n.js';
 import { sound } from '../audio/sound.js';
 
@@ -97,6 +98,7 @@ export class JournalDrawer {
   open() {
     if (this.isOpen) return;
     this.isOpen = true;
+    this.render();
     this.drawer?.classList.add('open');
     this.backdrop?.classList.add('open');
     this.footer?.classList.add('drawer-active');
@@ -139,6 +141,9 @@ export class JournalDrawer {
       this.tabFeedBtn?.classList.remove('active');
       this.timeline?.classList.add('hidden');
       this.atlasPane?.classList.remove('hidden');
+      if (this.app?.socket?.readyState === WebSocket.OPEN) {
+        this.app.socket.send(JSON.stringify({ type: 'get_atlas' }));
+      }
       this.renderAtlas();
     }
     sound.playDroplet(750);
@@ -246,26 +251,27 @@ export class JournalDrawer {
         }
       }
 
-      const badgeHtml = badge ? `<span class="journal-badge">${badge}</span>` : '';
+      const badgeHtml = (badge ? `<span class="journal-badge">${escapeHtml(badge)}</span>` : '') + (entry.legacyUnverified ? `<span class="journal-badge">${isRu ? 'Архив: данные не проверены' : 'Archive: unverified data'}</span>` : '');
       const insightHtml = insight ? `
         <div class="journal-insight-box">
           <span class="insight-lamp">💡</span>
           <div class="insight-body">
             <span class="insight-tag">${isRu ? 'Суть процесса:' : 'Key insight:'}</span>
-            <span class="insight-text">${insight}</span>
+            <span class="insight-text">${escapeHtml(insight)}</span>
           </div>
         </div>
       ` : '';
 
       // Contextual Visual Illustration: If news is about a species/creature, show its micro-portrait!
       let visualHtml = '';
+      const targetSpeciesId = entry.speciesId || entry.species?.id;
       if (isSpecies || entry.species) {
-        visualHtml = this.renderOrganismPortraitSvg(entry.species || entry, isRu);
+        visualHtml = this.renderOrganismPortraitSvg(entry.species || entry, isRu, targetSpeciesId);
       } else if (isCataclysm) {
         visualHtml = `
           <div class="journal-cataclysm-banner">
-            <span class="cataclysm-banner-icon">${icon}</span>
-            <span class="cataclysm-banner-text">${badge}</span>
+            <span class="cataclysm-banner-icon">${escapeHtml(icon)}</span>
+            <span class="cataclysm-banner-text">${escapeHtml(badge)}</span>
           </div>
         `;
       }
@@ -273,26 +279,43 @@ export class JournalDrawer {
       item.innerHTML = `
         <div class="journal-card-header">
           <div class="journal-icon-wrap">
-            <span class="journal-icon">${icon}</span>
+            <span class="journal-icon">${escapeHtml(icon)}</span>
           </div>
           <div class="journal-header-info">
             <div class="journal-meta-row">
               ${badgeHtml}
               <span class="journal-time">${timeStr}</span>
             </div>
-            <div class="journal-title">${title || ''}</div>
+            <div class="journal-title">${escapeHtml(title || '')}</div>
           </div>
         </div>
         ${visualHtml}
-        <div class="journal-story">${content || ''}</div>
+        <div class="journal-story">${escapeHtml(content || '')}</div>
         ${insightHtml}
       `;
+
+      // Attach click events for specimen tracking buttons in journal
+      const trackBtn = item.querySelector('.journal-track-btn:not(.disabled)');
+      if (trackBtn) {
+        trackBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const spId = parseInt(trackBtn.getAttribute('data-species-id'), 10);
+          if (spId) {
+            this.close();
+            const app = this.app || window.aetheonApp;
+            if (app && typeof app.trackSpeciesInOcean === 'function') {
+              app.trackSpeciesInOcean(spId);
+            }
+          }
+        });
+      }
+
       this.timeline.appendChild(item);
     });
   }
 
   // Generate authentic micro-anatomical SVG portrait of a specimen
-  renderOrganismPortraitSvg(species, isRu = true) {
+  renderOrganismPortraitSvg(species, isRu = true, speciesId = null) {
     if (!species) return '';
     const hue = Math.round((species.hue !== undefined ? species.hue : 0.52) * 360);
     const isHunter = (species.carnivory || 0) > 0.38;
@@ -339,6 +362,26 @@ export class JournalDrawer {
     const badgeLabel = isRu ? '🔬 МИКРО-ПОРТРЕТ ОСОБИ' : '🔬 SPECIMEN PORTRAIT';
     const dietLabel = isHunter ? (isRu ? '⚔️ Хищник' : '⚔️ Predator') : (isRu ? '🌿 Продуцент' : '🌿 Grazer');
 
+    const spId = speciesId || species.id;
+    const renderer = this.app?.renderer || window.aetheonApp?.renderer;
+    const liveCount = (renderer && renderer.currEntities && spId)
+      ? Array.from(renderer.currEntities.values()).filter(o => o.speciesId === spId).length
+      : 0;
+
+    const isAlive = liveCount > 0;
+    const statusHtml = isAlive
+      ? `<span class="journal-species-status status-alive">🟢 ${isRu ? `В океане: ${liveCount} шт.` : `In ocean: ${liveCount}`}</span>`
+      : `<span class="journal-species-status status-extinct" title="${isRu ? 'Особи этого вида погибли в ходе естественного отбора' : 'All specimens have perished in natural selection'}">💀 ${isRu ? 'Вымер в океане' : 'Extinct in ocean'}</span>`;
+
+    const trackBtnHtml = spId ? (isAlive
+      ? `<button class="journal-track-btn" data-species-id="${spId}" title="${isRu ? 'Найти и следить за особью в чаше' : 'Track specimen in ocean'}">
+           <span>🎯</span> <span>${isRu ? 'Найти в чаше' : 'Track in Ocean'}</span>
+         </button>`
+      : `<button class="journal-track-btn disabled" disabled title="${isRu ? 'Этот вид вымер и больше не присутствует в толще воды' : 'This species has gone extinct'}">
+           <span>💀</span> <span>${isRu ? 'Вид вымер' : 'Extinct'}</span>
+         </button>`
+    ) : '';
+
     return `
       <div class="journal-organism-portrait">
         <div class="portrait-lens">
@@ -366,11 +409,15 @@ export class JournalDrawer {
         </div>
         <div class="portrait-details">
           <div class="portrait-badge">${badgeLabel}</div>
-          <div class="portrait-title">${nameStr}</div>
+          <div class="portrait-title">${escapeHtml(nameStr)}</div>
           <div class="portrait-stats">
             <span>📏 Ø ${sizeFormatted} мкм</span>
             <span>⚡ ${speed} мкм/шаг</span>
             <span>${dietLabel}</span>
+          </div>
+          <div class="portrait-footer">
+            ${statusHtml}
+            ${trackBtnHtml}
           </div>
         </div>
       </div>
@@ -430,7 +477,7 @@ export class JournalDrawer {
             <span class="atlas-day-badge">${i18n.t('atlas_day_badge')} ${entry.day}</span>
             <span class="atlas-date">${entry.date || ''}</span>
           </div>
-          <h3 class="atlas-day-title">${title}</h3>
+          <h3 class="atlas-day-title">${escapeHtml(title)}</h3>
         </div>
 
         <div class="atlas-map-container">
@@ -496,7 +543,7 @@ export class JournalDrawer {
             <span class="monograph-icon">📜</span>
             <span class="monograph-author">${isRu ? 'Хроника эволюции от Venice AI' : 'Evolution Monograph by Venice AI'}</span>
           </div>
-          <div class="monograph-content">${summary}</div>
+          <div class="monograph-content">${escapeHtml(summary)}</div>
         </div>
       `;
 

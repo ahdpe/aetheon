@@ -1,5 +1,10 @@
 import { ParticleSystem } from './particles.js';
 import { getSpeciesMorphology, drawCellMembranePath, drawCellMarkings, drawFlagellum, drawAntennae } from './morphology.js';
+import { OCEAN_GEOMETRY } from '../shared/habitats.js';
+import { makeTerrainCanvas } from './terrainDrawing.js';
+import { TerrainField } from '../shared/terrain.js';
+import { ObservationBuffer, followGain, focusGeometry, insideFocus } from './observation.js';
+import { drawRemains } from './remainsDrawing.js';
 
 export class OceanRenderer {
   constructor(canvas) {
@@ -7,17 +12,20 @@ export class OceanRenderer {
     this.ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
     
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.worldSize = 1400.0;
-    this.chamber = { cx: 700.0, cy: 700.0, r: 620.0 };
+    this.worldSize = OCEAN_GEOMETRY.worldSize;
+    this.gridSize = OCEAN_GEOMETRY.gridSize;
+    this.chamber = { cx: OCEAN_GEOMETRY.cx, cy: OCEAN_GEOMETRY.cy, r: OCEAN_GEOMETRY.radius };
+    this.terrain=new TerrainField();
+    this.habitatCanvas=makeTerrainCanvas(384,this.terrain);
     
     // Camera centered on chamber
     this.camera = {
-      x: 700.0,
-      y: 700.0,
-      zoom: 1.0,
-      targetX: 700.0,
-      targetY: 700.0,
-      targetZoom: 1.0,
+      x: OCEAN_GEOMETRY.cx,
+      y: OCEAN_GEOMETRY.cy,
+      zoom: window.innerWidth < 600 ? 1.8 : 1.6,
+      targetX: OCEAN_GEOMETRY.cx,
+      targetY: OCEAN_GEOMETRY.cy,
+      targetZoom: window.innerWidth < 600 ? 1.8 : 1.6,
       viewportW: window.innerWidth,
       viewportH: window.innerHeight,
       trackedEntityId: null
@@ -28,19 +36,32 @@ export class OceanRenderer {
     this.currEntities = new Map();
     this.prevTickTime = performance.now();
     this.currTickTime = performance.now();
+    this.observation = new ObservationBuffer();
+    this.renderedEntities = new Map();
+    this.focusEnabled = true;
+    this.lastFrameTime = null;
     
     // Ambient fluid particles
-    this.particles = new ParticleSystem(1000, this.worldSize, this.chamber);
+    this.particles = new ParticleSystem(600, this.worldSize, this.chamber);
+    this.particles.terrain=this.terrain;
     
     // Interaction ripples & food particles
     this.ripples = [];
     this.foodParticles = [];
     this.serverBlooms = [];
+    this.serverRemains = [];
     this.colonyBonds = [];
     this.pilotedIds = new Set();
     this.climate = null;
     this.vents = [];
+    this.algaeIsles = [];
+    this.biogenicReefs = [];
     this.isLabMode = false;
+
+    // Life cycle transition effects (Birth & Death cellular events)
+    this.birthEvents = [];
+    this.deathEvents = [];
+    this.birthTimes = new Map();
 
     // Chemical thumbnail buffer for fluid field
     this.thumbCanvas = document.createElement('canvas');
@@ -48,6 +69,8 @@ export class OceanRenderer {
     this.thumbCanvas.height = 48;
     this.thumbCtx = this.thumbCanvas.getContext('2d');
     this.thumbImgData = this.thumbCtx.createImageData(48, 48);
+    this.substrateCanvas=document.createElement('canvas');this.substrateCanvas.width=this.substrateCanvas.height=48;
+    this.substrateCtx=this.substrateCanvas.getContext('2d');this.substrateImgData=this.substrateCtx.createImageData(48,48);
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -74,10 +97,7 @@ export class OceanRenderer {
     this.camera.viewportW = w;
     this.camera.viewportH = h;
     
-    // Default zoom adjusted for screen size
-    if (w < 600) {
-      this.camera.targetZoom = 0.85;
-    }
+    // A resize must preserve the visitor's chosen magnification.
   }
 
   setLabMode(enabled) {
@@ -154,6 +174,7 @@ export class OceanRenderer {
       const sig = rawThumb[srcPtr++];
       const sub = isRGBA ? rawThumb[srcPtr++] : 0;
       if (sub > maxSub) maxSub = sub;
+      this.substrateImgData.data[i*4+3]=sub;
 
       if (sub > 35) {
         // Bio-calcite Coral Reef & Living Mineral Architecture (Stigmergy)
@@ -180,8 +201,95 @@ export class OceanRenderer {
         data[dstPtr++] = chemAlpha;
       }
     }
-    this.hasReefs = maxSub > 50;
+    this.hasReefs = maxSub > 40;
     this.thumbCtx.putImageData(this.thumbImgData, 0, 0);
+    this.substrateCtx.putImageData(this.substrateImgData, 0, 0);
+
+    // Extract dynamic biogenic reef formations with Temporal Hysteresis
+    // Prevents abrupt jumping/reshuffling when local substrate density fluctuates
+    const step = this.worldSize / 48;
+    const minDist = step * 1.55; // ~45.2px in world coordinates
+    const minDistSq = minDist * minDist;
+    const survivingReefs = [];
+
+    // 1. Preserve existing anchored reef heads (temporal persistence & hysteresis)
+    // If an existing reef still has substrate >= 26, it stays anchored at its exact position!
+    if (this.biogenicReefs && this.biogenicReefs.length > 0) {
+      for (let i = 0; i < this.biogenicReefs.length; i++) {
+        const reef = this.biogenicReefs[i];
+        const gx = Math.max(0, Math.min(47, Math.floor(reef.x / step)));
+        const gy = Math.max(0, Math.min(47, Math.floor(reef.y / step)));
+        const sub = this.substrateImgData.data[(gy * 48 + gx) * 4 + 3];
+
+        if (sub >= 26) {
+          // Update density smoothly, but NEVER change position or seed
+          reef.sub = sub;
+          reef.density = sub / 255;
+          survivingReefs.push(reef);
+        }
+      }
+    }
+
+    // 2. Scan for candidate new reef heads (birth threshold >= 42)
+    // Candidates use deterministic hash priority so order NEVER flips due to +/- 1 density noise
+    const newCandidates = [];
+    for (let gy = 2; gy < 46; gy++) {
+      for (let gx = 2; gx < 46; gx++) {
+        const sub = this.substrateImgData.data[(gy * 48 + gx) * 4 + 3];
+        if (sub >= 42) {
+          const h1 = ((gx * 374761393 + gy * 668265263) ^ 0x5bf03635) >>> 0;
+          const h2 = ((gx * 668265263 + gy * 374761393) ^ 0x1b873593) >>> 0;
+          const jx = ((h1 % 1000) / 1000 - 0.5) * 0.95 * step;
+          const jy = ((h2 % 1000) / 1000 - 0.5) * 0.95 * step;
+          const candX = (gx + 0.5) * step + jx;
+          const candY = (gy + 0.5) * step + jy;
+
+          // Check if already covered by an existing surviving reef
+          let nearSurviving = false;
+          for (let s = 0; s < survivingReefs.length; s++) {
+            const dx = candX - survivingReefs[s].x;
+            const dy = candY - survivingReefs[s].y;
+            if (dx * dx + dy * dy < minDistSq) {
+              nearSurviving = true;
+              break;
+            }
+          }
+
+          if (!nearSurviving) {
+            newCandidates.push({
+              x: candX,
+              y: candY,
+              density: sub / 255,
+              sub,
+              seed: (h1 ^ h2) % 10000,
+              hashPriority: (h1 ^ h2) >>> 0 // Rock-solid deterministic priority
+            });
+          }
+        }
+      }
+    }
+
+    // Deterministic priority ordering for new candidates (immune to floating sub fluctuations)
+    newCandidates.sort((a, b) => b.hashPriority - a.hashPriority);
+
+    // Accept new candidate reefs that don't collide with each other
+    for (let c = 0; c < newCandidates.length; c++) {
+      const cand = newCandidates[c];
+      let tooClose = false;
+      for (let j = 0; j < survivingReefs.length; j++) {
+        const dx = cand.x - survivingReefs[j].x;
+        const dy = cand.y - survivingReefs[j].y;
+        if (dx * dx + dy * dy < minDistSq) {
+          tooClose = true;
+          break;
+        }
+      }
+      if (!tooClose) {
+        survivingReefs.push(cand);
+      }
+    }
+
+    this.biogenicReefs = survivingReefs;
   }
 
   onServerTick(packet) {
@@ -208,14 +316,70 @@ export class OceanRenderer {
           size: raw[ptr + 6],
           hue: raw[ptr + 7],
           speciesId: stride >= 9 ? raw[ptr + 8] : 1,
-          carnivory: stride >= 10 ? raw[ptr + 9] : 0.1
+          carnivory: stride >= 10 ? raw[ptr + 9] : 0.1,
+          anatomy:stride>=15?{elongation:raw[ptr+10],shell:raw[ptr+11],flagella:raw[ptr+12],sensing:raw[ptr+13]}:null,
+          phase:stride>=15?raw[ptr+14]:0
         });
+      }
+    }
+    this.observation.push(this.currEntities, this.currTickTime, packet.t);
+
+    // Detect cellular life events (Mitosis Births & Cytolysis Deaths)
+    const now = this.currTickTime;
+    if (this.prevEntities && this.prevEntities.size > 0 && this.currEntities.size > 0) {
+      // 1. Births (newly spawned entities)
+      for (const [id, org] of this.currEntities.entries()) {
+        if (!this.prevEntities.has(id)) {
+          this.birthEvents.push({
+            id,
+            x: org.x,
+            y: org.y,
+            r: org.size || 6.5,
+            hue: org.hue || 0.5,
+            startTime: now,
+            duration: 650
+          });
+          this.birthTimes.set(id, now);
+        }
+      }
+
+      // 2. Deaths (cells that died from predation or energy depletion)
+      for (const [prevId, prevOrg] of this.prevEntities.entries()) {
+        if (!this.currEntities.has(prevId)) {
+          // Micro-detritus cytolysis droplets
+          const detritus = [];
+          for (let k = 0; k < 5; k++) {
+            const angle = Math.random() * Math.PI * 2;
+            const spd = 0.35 + Math.random() * 0.75;
+            detritus.push({
+              dx: Math.cos(angle) * spd,
+              dy: Math.sin(angle) * spd,
+              ox: (Math.random() - 0.5) * (prevOrg.size || 6.5) * 0.6,
+              oy: (Math.random() - 0.5) * (prevOrg.size || 6.5) * 0.6,
+              size: 1.0 + Math.random() * 1.6
+            });
+          }
+          this.deathEvents.push({
+            id: prevId,
+            x: prevOrg.x,
+            y: prevOrg.y,
+            vx: prevOrg.vx || 0,
+            vy: prevOrg.vy || 0,
+            r: prevOrg.size || 6.5,
+            hue: prevOrg.hue || 0.5,
+            startTime: now,
+            duration: 900,
+            detritus
+          });
+          this.birthTimes.delete(prevId);
+        }
       }
     }
 
     if (packet.blooms) {
       this.serverBlooms = packet.blooms;
     }
+    if (packet.remains) this.serverRemains = packet.remains;
 
     if (packet.colonies) {
       this.colonyBonds = packet.colonies;
@@ -229,9 +393,28 @@ export class OceanRenderer {
       this.climate = packet.climate;
     }
 
+    if (packet.algae) {
+      this.algaeIsles = packet.algae;
+    }
+
     if (packet.thumbnail) {
       this.updateThumbnail(packet.thumbnail);
     }
+  }
+
+  resetStream() {
+    this.observation.clear();
+    this.currEntities = new Map();
+    this.prevEntities = new Map();
+    this.renderedEntities = new Map();
+    this.birthEvents = [];
+    this.deathEvents = [];
+    this.birthTimes.clear();
+    this.lastFrameTime = null;
+  }
+
+  inObservationArea(x, y, margin = 0) {
+    return !this.focusEnabled || insideFocus(x, y, focusGeometry(this.camera.viewportW, this.camera.viewportH), margin);
   }
 
   // Master render frame (runs at 60–120 FPS in requestAnimationFrame)
@@ -240,22 +423,28 @@ export class OceanRenderer {
     const w = this.camera.viewportW;
     const h = this.camera.viewportH;
     const dpr = this.dpr;
+    const elapsedMs = this.lastFrameTime===null ? 1000/60 : Math.max(0, Math.min(100, time-this.lastFrameTime));
+    this.lastFrameTime = time;
+    this.frameUnits = elapsedMs / (1000/60);
+    this.renderedEntities = this.observation.sample(time);
+    const currentList = Array.from(this.renderedEntities.values());
 
     // Reset transform & scale for DPR
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // 1. Camera glide & entity tracking
     if (this.camera.trackedEntityId) {
-      const tracked = this.currEntities.get(this.camera.trackedEntityId);
+      const tracked = this.renderedEntities.get(this.camera.trackedEntityId);
       if (tracked) {
         this.camera.targetX = tracked.x;
         this.camera.targetY = tracked.y;
       }
     }
 
-    this.camera.x += (this.camera.targetX - this.camera.x) * 0.08;
-    this.camera.y += (this.camera.targetY - this.camera.y) * 0.08;
-    this.camera.zoom += (this.camera.targetZoom - this.camera.zoom) * 0.08;
+    const gain = followGain(elapsedMs, this.camera.trackedEntityId ? 120 : 180);
+    this.camera.x += (this.camera.targetX - this.camera.x) * gain;
+    this.camera.y += (this.camera.targetY - this.camera.y) * gain;
+    this.camera.zoom += (this.camera.targetZoom - this.camera.zoom) * gain;
 
     // 2. Clear canvas with deep abyssal gradient
     ctx.fillStyle = '#030712';
@@ -278,18 +467,29 @@ export class OceanRenderer {
     ctx.arc(chScreenX, chScreenY, chScreenR, 0, Math.PI * 2);
     ctx.clip();
 
-    // 3.1. Deep oceanic living fluid baseline (guarantees vibrant oceanic blue from frame 1)
+    // 3.1. Deep oceanic living fluid baseline with cyclical atmospheric day/night phase
+    const dayPhase = (Math.sin(time * 0.00008) + 1.0) * 0.5; // Smooth ~20-min cycle
+    this.dayPhase = dayPhase;
+    const coreR = Math.round(3 + dayPhase * 5);
+    const coreG = Math.round(26 + dayPhase * 18);
+    const coreB = Math.round(50 + dayPhase * 28);
+    const midR = Math.round(2 + dayPhase * 2);
+    const midG = Math.round(16 + dayPhase * 10);
+    const midB = Math.round(34 + dayPhase * 16);
     const fluidGrad = ctx.createRadialGradient(chScreenX, chScreenY, chScreenR * 0.05, chScreenX, chScreenY, chScreenR);
-    fluidGrad.addColorStop(0, '#042845');
-    fluidGrad.addColorStop(0.55, '#02182b');
+    fluidGrad.addColorStop(0, `rgb(${coreR}, ${coreG}, ${coreB})`);
+    fluidGrad.addColorStop(0.55, `rgb(${midR}, ${midG}, ${midB})`);
     fluidGrad.addColorStop(1.0, '#010c18');
     ctx.fillStyle = fluidGrad;
     ctx.fillRect(chScreenX - chScreenR, chScreenY - chScreenR, chScreenR * 2, chScreenR * 2);
+    ctx.globalAlpha=0.72;
+    ctx.drawImage(this.habitatCanvas,toScreenX(0),toScreenY(0),this.worldSize*camZoom,this.worldSize*camZoom);
+    ctx.globalAlpha=1;
 
     // 3.2. Continuous living chemical substrate & reef matrix
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.globalAlpha = this.isLabMode ? 0.70 : 0.42;
+    ctx.globalAlpha = this.isLabMode ? 0.70 : (0.38 + (1.0 - dayPhase) * 0.10);
     
     const wsPix = this.worldSize * camZoom;
     const originX = toScreenX(0);
@@ -297,13 +497,20 @@ export class OceanRenderer {
 
     ctx.drawImage(this.thumbCanvas, originX, originY, wsPix, wsPix);
 
-    // Bioluminescent mineral bloom for calcified coral structures
+    // Bioluminescent mineral bloom for calcified coral structures (intensifies during deep night)
     if (this.hasReefs && !this.isLabMode) {
       ctx.globalCompositeOperation = 'screen';
-      ctx.globalAlpha = 0.12;
+      ctx.globalAlpha = 0.08 + (1.0 - dayPhase) * 0.14;
       ctx.drawImage(this.thumbCanvas, originX, originY, wsPix, wsPix);
       ctx.globalCompositeOperation = 'source-over';
     }
+
+    // 3.22. Biogenic Living Coral Reef Formations (Staghorn corals, calcified atoll heads, polyps)
+    this.drawBiogenicReefs(ctx, toScreenX, toScreenY, camZoom, time, dayPhase);
+
+    // 3.25. Living Benthic Algae Isles & Sanctuaries (Emerald phytobenthic thickets)
+    ctx.globalAlpha = 1;
+    this.drawAlgaeIsles(ctx, toScreenX, toScreenY, camZoom, time);
 
     // 3.3. Initial synchronization indicator if live entities have not yet streamed
     if (this.currEntities.size === 0) {
@@ -318,7 +525,7 @@ export class OceanRenderer {
     ctx.restore();
 
     // 4. Render Hydrothermal Vents (Modulated by Planetary Climate)
-    const ventScale = this.worldSize / 128;
+    const ventScale = this.worldSize / this.gridSize;
     for (let i = 0; i < this.vents.length; i++) {
       const vent = this.vents[i];
       const vFactor = (this.climate && this.climate.vents && this.climate.vents[i]) ? this.climate.vents[i] : 1.0;
@@ -378,26 +585,18 @@ export class OceanRenderer {
     }
 
     // 5. Ambient fluid micro-plankton
-    const currentList = Array.from(this.currEntities.values());
-    this.particles.step(currentList);
-    this.particles.draw(ctx, this.camera);
+    const detailedList=currentList.filter(o=>this.inObservationArea(toScreenX(o.x),toScreenY(o.y),o.size*camZoom));
+    this.particles.advance(elapsedMs, detailedList);
+    this.particles.draw(ctx, this.camera, this.focusEnabled ? focusGeometry(w,h) : null);
 
-    // 6. Compute interpolation factor alpha between 10 Hz ticks (clamped to prevent freezing or jumps)
-    const tickDelta = Math.max(10, Math.min(250, this.currTickTime - this.prevTickTime));
-    const elapsed = Math.max(0, time - this.currTickTime);
-    const alpha = Math.min(1.2, elapsed / tickDelta);
-
+    // Settled bodies sit under swimming cells and respect the same focus/LOD.
+    this.renderRemains(ctx,toScreenX,toScreenY,camZoom);
     // 7. Render Organisms
+    let detailed=0, peripheral=0;
     for (let i = 0; i < currentList.length; i++) {
       const curr = currentList[i];
-      const prev = this.prevEntities.get(curr.id) || curr;
-
-      // Smooth continuous interpolation without wrapping jumps
-      const ix = prev.x + (curr.x - prev.x) * alpha;
-      const iy = prev.y + (curr.y - prev.y) * alpha;
-
-      const sx = toScreenX(ix);
-      const sy = toScreenY(iy);
+      const sx = toScreenX(curr.x);
+      const sy = toScreenY(curr.y);
 
       // Cull offscreen entities
       const radius = curr.size * camZoom;
@@ -405,15 +604,28 @@ export class OceanRenderer {
         continue;
       }
 
-      const heading = Math.atan2(curr.vy, curr.vx);
+      const heading = curr.heading;
       const isSelected = this.camera.trackedEntityId === curr.id;
-
-      this.drawOrganism(ctx, sx, sy, radius, curr, heading, isSelected, time);
+      if (!isSelected && !this.inObservationArea(sx,sy,radius)) {
+        peripheral++;
+        // Peripheral life is a cheap, muted silhouette. No morphology/glow/cilia work.
+        ctx.fillStyle='rgba(110,151,153,.24)';
+        ctx.beginPath();ctx.arc(sx,sy,Math.max(1,radius*.65),0,Math.PI*2);ctx.fill();
+      } else {
+        detailed++;
+        this.drawOrganism(ctx, sx, sy, radius, curr, heading, isSelected, time);
+      }
     }
+    this.observationStats={detailed,peripheral};
 
     // 7.2. Colony Intercellular Bonds (Multicellular Membrane Filaments)
     if (this.colonyBonds.length > 0) {
       this.renderColonyBonds(ctx, toScreenX, toScreenY, camZoom, time);
+    }
+
+    // 7.3. Life cycle transition events (Birth mitosis ripples & Death cytolysis ghosts)
+    if (this.birthEvents.length > 0 || this.deathEvents.length > 0) {
+      this.renderLifeEvents(ctx, toScreenX, toScreenY, camZoom, time);
     }
 
     // 7.5. Render Nutrient Blooms & Floating Phytomanna Spores
@@ -422,8 +634,8 @@ export class OceanRenderer {
     // 8. Render Interaction Ripples
     for (let r = this.ripples.length - 1; r >= 0; r--) {
       const rip = this.ripples[r];
-      rip.r += 1.8;
-      rip.alpha -= 0.025;
+      rip.r += 1.8 * this.frameUnits;
+      rip.alpha -= 0.025 * this.frameUnits;
 
       if (rip.alpha <= 0 || rip.r >= rip.maxR) {
         this.ripples.splice(r, 1);
@@ -443,18 +655,235 @@ export class OceanRenderer {
 
     // 9. Research Lab Overlays (Telemetry tags, velocity vector arrows, sensory radii)
     if (this.isLabMode) {
-      this.drawLabEntityOverlay(ctx, currentList, toScreenX, toScreenY, alpha);
+      this.drawLabEntityOverlay(ctx, detailedList, toScreenX, toScreenY, 1);
+    }
+    if(this.focusEnabled) {
+      const f=focusGeometry(w,h),shade=ctx.createRadialGradient(f.x,f.y,f.radius*.76,f.x,f.y,f.radius*1.22);
+      shade.addColorStop(0,'rgba(2,8,16,0)');shade.addColorStop(.6,'rgba(2,8,16,.40)');shade.addColorStop(1,'rgba(2,8,16,.82)');
+      ctx.fillStyle=shade;ctx.fillRect(0,0,w,h);
+      ctx.strokeStyle='rgba(141,203,209,.13)';ctx.lineWidth=1;
+      ctx.beginPath();ctx.arc(f.x,f.y,f.radius,0,Math.PI*2);ctx.stroke();
+    }
+  }
+
+  // Draw vibrant benthic algae isles with swaying fronds, radial filaments, and oxygen bubbles
+  drawAlgaeIsles(ctx, toScreenX, toScreenY, camZoom, time) {
+    if (!this.algaeIsles || this.algaeIsles.length === 0) return;
+
+    for (let i = 0; i < this.algaeIsles.length; i++) {
+      const isle = this.algaeIsles[i];
+      const sx = toScreenX(isle.x);
+      const sy = toScreenY(isle.y);
+      const sr = isle.r * camZoom;
+
+      if (sr < 2.0 || sx+sr*1.3<0 || sy+sr*1.3<0 || sx-sr*1.3>this.camera.viewportW || sy-sr*1.3>this.camera.viewportH) continue;
+      const detailed=this.inObservationArea(sx,sy,sr);
+      if(!detailed) {
+        ctx.fillStyle='rgba(70,113,100,.18)';ctx.beginPath();ctx.arc(sx,sy,sr*.7,0,Math.PI*2);ctx.fill();continue;
+      }
+
+      const hDeg = Math.round((isle.h !== undefined ? isle.h : 0.40) * 360);
+      const density = isle.d !== undefined ? isle.d : 0.85;
+
+      // 1. Soft benthic chlorophyll bed (lush emerald halo)
+      const grad = ctx.createRadialGradient(sx, sy, sr * 0.1, sx, sy, sr * 1.25);
+      grad.addColorStop(0, `hsla(${hDeg}, 85%, 45%, ${(0.45 * density).toFixed(2)})`);
+      grad.addColorStop(0.65, `hsla(${hDeg}, 80%, 35%, ${(0.22 * density).toFixed(2)})`);
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(sx, sy, sr * 1.25, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Micro-fronds & swaying kelp filaments (visible at intermediate & high detail)
+      if (sr > 10.0) {
+        const frondCount = isle.f || 12;
+        ctx.strokeStyle = `hsla(${hDeg}, 92%, 68%, ${(0.65 * density).toFixed(2)})`;
+        ctx.lineWidth = Math.max(1.0, 1.5 * camZoom);
+        ctx.lineCap = 'round';
+
+        ctx.beginPath();
+        for (let f = 0; f < frondCount; f++) {
+          const angle = (f / frondCount) * Math.PI * 2 + (isle.id * 0.4);
+          const frondLen = sr * (0.35 + 0.65 * (isle.height??0.65)) * (0.8 + 0.2 * Math.sin(f * 1.7 + isle.id));
+          const wave = Math.sin(time * 0.003 + f * 0.8 + isle.id) * (sr * 0.22);
+
+          const cx1 = sx + Math.cos(angle) * (sr * 0.22);
+          const cy1 = sy + Math.sin(angle) * (sr * 0.22);
+
+          const midX = sx + Math.cos(angle) * (frondLen * 0.6) + Math.cos(angle + Math.PI * 0.5) * wave;
+          const midY = sy + Math.sin(angle) * (frondLen * 0.6) + Math.sin(angle + Math.PI * 0.5) * wave;
+
+          const tipX = sx + Math.cos(angle) * frondLen + Math.cos(angle + Math.PI * 0.5) * (wave * 1.5);
+          const tipY = sy + Math.sin(angle) * frondLen + Math.sin(angle + Math.PI * 0.5) * (wave * 1.5);
+
+          ctx.moveTo(cx1, cy1);
+          ctx.quadraticCurveTo(midX, midY, tipX, tipY);
+          const branching=isle.branching??0.5;
+          if(branching>0.28) for(let b=1;b<=2+Math.round(branching*2);b++) {
+            const t=b/6,bx=cx1+(tipX-cx1)*t,by=cy1+(tipY-cy1)*t;
+            const leaf=frondLen*0.2*branching;
+            for(const side of [-1,1]) {
+              ctx.moveTo(bx,by);
+              ctx.quadraticCurveTo(bx+Math.cos(angle+side*1.2)*leaf,by+Math.sin(angle+side*1.2)*leaf,
+                bx+Math.cos(angle+side*0.65)*leaf*1.4,by+Math.sin(angle+side*0.65)*leaf*1.4);
+            }
+          }
+        }
+        ctx.stroke();
+
+        // 3. Bioluminescent oxygen / spore nodes
+        ctx.fillStyle = `hsla(${hDeg+35},95%,75%,${density})`;
+        for (let s = 0; s < 4; s++) {
+          const sporeAngle = s * 1.57 + (time * 0.0006 + isle.id);
+          const sporeDist = sr * (0.35 + 0.45 * Math.sin(time * 0.002 + s));
+          const spX = sx + Math.cos(sporeAngle) * sporeDist;
+          const spY = sy + Math.sin(sporeAngle) * sporeDist;
+          ctx.beginPath();
+          ctx.arc(spX, spY, Math.max(1.0, 1.4 * camZoom), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  // 3.22. Draw authentic Biogenic Coral Reefs (Staghorn corals, calcified atoll heads, polyps)
+  drawBiogenicReefs(ctx, toScreenX, toScreenY, camZoom, time, dayPhase) {
+    if (!this.biogenicReefs || this.biogenicReefs.length === 0) return;
+    const night = Math.max(0, 1.0 - (dayPhase ?? 0.5) * 1.3);
+
+    for (let i = 0; i < this.biogenicReefs.length; i++) {
+      const reef = this.biogenicReefs[i];
+      const sx = toScreenX(reef.x);
+      const sy = toScreenY(reef.y);
+      const baseR = (16 + reef.density * 28) * camZoom;
+
+      if (baseR < 2.0 || sx + baseR < 0 || sy + baseR < 0 || sx - baseR > this.camera.viewportW || sy - baseR > this.camera.viewportH) continue;
+
+      // 1. Calcified Coral Mound / Base shelf
+      const moundGrad = ctx.createRadialGradient(sx, sy, baseR * 0.1, sx, sy, baseR);
+      const ivoryL = Math.round(75 + reef.density * 18);
+      moundGrad.addColorStop(0, `hsla(48, 45%, ${ivoryL}%, ${(0.35 + reef.density * 0.40).toFixed(2)})`);
+      moundGrad.addColorStop(0.65, `hsla(175, 40%, 45%, ${(0.18 + reef.density * 0.25).toFixed(2)})`);
+      moundGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      ctx.fillStyle = moundGrad;
+      ctx.beginPath();
+      ctx.arc(sx, sy, baseR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Branching Coral Fans & Calcite Formations (visible when zoomed in)
+      if (baseR > 6.0) {
+        const armCount = 3 + (reef.seed % 4); // 3 to 6 branches, varied per head
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        const baseRot = (reef.seed * 0.082); // Individual random orientation per head
+
+        for (let a = 0; a < armCount; a++) {
+          // Organic non-uniform angular spacing (breaks snowflake wheel symmetry)
+          const angJitter = Math.sin(a * 2.7 + reef.seed * 0.3) * 0.32;
+          const armAngle = (a / armCount) * Math.PI * 2 + baseRot + angJitter;
+          const armLen = baseR * (0.65 + 0.40 * Math.sin(a * 2.1 + reef.seed * 0.17));
+          const sway = Math.sin(time * 0.0012 + a * 1.4 + reef.seed) * (baseR * 0.10);
+
+          const startX = sx + Math.cos(armAngle) * (baseR * 0.18);
+          const startY = sy + Math.sin(armAngle) * (baseR * 0.18);
+          
+          // Organic curved branch
+          const curveSide = Math.sin(a * 1.5 + reef.seed) * 0.25;
+          const midX = sx + Math.cos(armAngle + curveSide) * (armLen * 0.52) + Math.cos(armAngle + Math.PI * 0.5) * sway;
+          const midY = sy + Math.sin(armAngle + curveSide) * (armLen * 0.52) + Math.sin(armAngle + Math.PI * 0.5) * sway;
+          const tipX = sx + Math.cos(armAngle) * armLen + Math.cos(armAngle + Math.PI * 0.5) * (sway * 1.4);
+          const tipY = sy + Math.sin(armAngle) * armLen + Math.sin(armAngle + Math.PI * 0.5) * (sway * 1.4);
+
+          // Calcite branch trunk
+          ctx.strokeStyle = `hsla(45, 55%, ${ivoryL}%, ${(0.70 + reef.density * 0.25).toFixed(2)})`;
+          ctx.lineWidth = Math.max(1.2, 2.6 * camZoom);
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.quadraticCurveTo(midX, midY, tipX, tipY);
+          ctx.stroke();
+
+          // Secondary fork branch (for denser, mature corals)
+          if (reef.density > 0.32) {
+            const forkSide = (a + reef.seed) % 2 === 0 ? 0.52 : -0.52;
+            const forkLen = armLen * (0.42 + 0.15 * Math.sin(a + reef.seed));
+            const fTipX = midX + Math.cos(armAngle + forkSide) * forkLen;
+            const fTipY = midY + Math.sin(armAngle + forkSide) * forkLen;
+            ctx.lineWidth = Math.max(0.8, 1.5 * camZoom);
+            ctx.beginPath();
+            ctx.moveTo(midX, midY);
+            ctx.lineTo(fTipX, fTipY);
+            ctx.stroke();
+
+            // Polyp node on fork tip
+            ctx.fillStyle = night > 0.25 ? 'hsla(170, 95%, 75%, 0.85)' : 'hsla(38, 90%, 75%, 0.7)';
+            ctx.beginPath();
+            ctx.arc(fTipX, fTipY, Math.max(1.0, 1.4 * camZoom), 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // 3. Living Coral Polyps at branch tips
+          const polypHue = night > 0.25 ? 172 : 36;
+          const polypAlpha = night > 0.25 ? 0.90 : 0.75;
+          ctx.fillStyle = `hsla(${polypHue}, 95%, ${night > 0.25 ? '75%' : '65%'}, ${polypAlpha})`;
+          ctx.beginPath();
+          ctx.arc(tipX, tipY, Math.max(1.2, 2.0 * camZoom), 0, Math.PI * 2);
+          ctx.fill();
+
+          if (night > 0.25) {
+            // Luminous halo around coral polyp in night mode
+            ctx.fillStyle = `hsla(${polypHue}, 90%, 80%, ${(night * 0.35).toFixed(2)})`;
+            ctx.beginPath();
+            ctx.arc(tipX, tipY, Math.max(2.5, 4.2 * camZoom), 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
     }
   }
 
   // Render organic soft-body Aetheobiont with translucent membrane, species-specific morphotype, markings, and cilia
+  renderRemains(ctx,toX,toY,zoom,forceDetail=false) {
+    for(const p of this.serverRemains) {
+      const x=toX(p.x),y=toY(p.y),r=p.size*zoom;
+      if(!forceDetail&&(x<-r*4||y<-r*4||x>this.camera.viewportW+r*4||y>this.camera.viewportH+r*4))continue;
+      drawRemains(ctx,p,x,y,r,forceDetail||this.inObservationArea(x,y,r),p.id===this.selectedRemainsId);
+    }
+  }
+
+  findRemainsAtScreenPoint(x,y) {
+    let closest=null,distance=Infinity;
+    for(const p of this.serverRemains) {
+      const s=this.worldToScreen(p.x,p.y),d=Math.hypot(x-s.x,y-s.y);
+      if(d<Math.max(18,p.size*this.camera.zoom*1.5)&&d<distance){closest=p;distance=d;}
+    }
+    return closest;
+  }
+
   drawOrganism(ctx, x, y, r, org, heading, isSelected, time, forceDetail = false) {
     const isPiloted = this.pilotedIds && (this.pilotedIds.has(org.id) || this.pilotedIds.has(Number(org.id)));
-    const pulse = Math.sin(time * 0.008 + org.id) * 0.12;
-    const bodyR = Math.max(1.8, r * (1.0 + pulse));
+
+    // Budding scale bloom for newly born cells (organic mitosis emergence: 0.35 -> 1.0 over 500ms)
+    let birthScale = 1.0;
+    const bTime = this.birthTimes ? this.birthTimes.get(org.id) : null;
+    if (bTime) {
+      const age = performance.now() - bTime;
+      if (age < 500) {
+        const prog = age / 500;
+        birthScale = 0.35 + 0.65 * Math.sin(prog * Math.PI * 0.5);
+      } else {
+        this.birthTimes.delete(org.id);
+      }
+    }
+
+    const pulse = Math.sin(org.phase ?? (time*0.008+org.id)) * 0.08;
+    const bodyR = Math.max(1.8, r * (1.0 + pulse) * birthScale);
     const hue = Math.round(org.hue * 360);
     const speed = Math.sqrt((org.vx || 0) * (org.vx || 0) + (org.vy || 0) * (org.vy || 0));
-    const morph = getSpeciesMorphology(org.speciesId || 1, org.hue, org.carnivory || 0.1, org.size || 7, speed);
+    const morph = getSpeciesMorphology(org.speciesId || 1, org.hue, org.carnivory || 0.1, org.size || 7, speed, org.anatomy);
     const isHunter = morph.isHunter;
 
     ctx.save();
@@ -467,25 +896,89 @@ export class OceanRenderer {
     // Skips 20+ heavy Canvas path calls, bezier ribs, gradients, and cilia.
     // (Bypassed if forceDetail = true for high-res landscape snapshots)
     // =========================================================================
+    const night = Math.max(0, 1.0 - (this.dayPhase ?? 0.5) * 1.3);
+
     if (bodyR < 4.8 && !isSelected && !isPiloted && !forceDetail) {
-      const haloR = bodyR * (isHunter ? 2.4 : 1.9);
+      const haloR = bodyR * (isHunter ? 2.6 : 2.0) * (1.0 + night * 0.4);
+      const rx = bodyR * (morph.aspectX || 1.15);
+      const ry = bodyR * (morph.aspectY || 0.85);
 
-      // 1. Soft glowing halo
-      ctx.fillStyle = `hsla(${hue}, ${isHunter ? '95%' : '80%'}, ${isHunter ? '55%' : '50%'}, 0.32)`;
+      // 1. Soft glowing halo with directional flare & night bioluminescence boost
+      const haloAlpha = (isHunter ? 0.35 : 0.22) + night * 0.35;
+      ctx.fillStyle = `hsla(${hue}, ${isHunter ? '95%' : '80%'}, ${isHunter ? '55%' : '50%'}, ${haloAlpha.toFixed(2)})`;
       ctx.beginPath();
-      ctx.arc(0, 0, haloR, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, haloR * 1.15, haloR * 0.9, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // 2. Body membrane disc
-      ctx.fillStyle = isHunter ? `hsla(${hue}, 90%, 46%, 0.88)` : `hsla(${hue}, 78%, 42%, 0.82)`;
+      // 1.5. Luminous wake trail for rapid swimmers at night
+      if (speed > 0.65 && night > 0.1) {
+        const wakeLen = speed * bodyR * 2.6;
+        ctx.strokeStyle = `hsla(${hue}, 85%, 72%, ${(night * 0.5).toFixed(2)})`;
+        ctx.lineWidth = Math.max(0.6, bodyR * 0.28);
+        ctx.beginPath();
+        ctx.moveTo(-rx * 0.7, 0);
+        ctx.lineTo(-rx * 0.7 - wakeLen, 0);
+        ctx.stroke();
+      }
+
+      // 2. Trailing lively flagellum tail
+      if (morph.hasFlagellum) {
+        const tailLen = bodyR * (isHunter ? 2.6 : 1.8);
+        const wave = Math.sin((time * 0.012) + org.id) * (bodyR * 0.4);
+        ctx.strokeStyle = `hsla(${hue}, 85%, 72%, 0.65)`;
+        ctx.lineWidth = Math.max(0.8, bodyR * 0.22);
+        ctx.beginPath();
+        ctx.moveTo(-rx * 0.7, 0);
+        ctx.quadraticCurveTo(-rx * 0.7 - tailLen * 0.5, wave, -rx * 0.7 - tailLen, wave * 1.4);
+        ctx.stroke();
+      }
+
+      // 3. Body membrane based on archetype silhouette
+      ctx.fillStyle = isHunter ? `hsla(${hue}, 92%, 46%, 0.92)` : `hsla(${hue}, 78%, 42%, 0.85)`;
       ctx.beginPath();
-      ctx.arc(0, 0, bodyR, 0, Math.PI * 2);
+      if (morph.shape === 'serpent') {
+        // Sinuous slithering micro-thread
+        const sWave = Math.sin(time * 0.014 + org.id) * (ry * 0.65);
+        ctx.moveTo(rx * 1.25, 0);
+        ctx.quadraticCurveTo(0, sWave, -rx * 1.45, -sWave * 0.8);
+        ctx.quadraticCurveTo(0, sWave + ry * 0.75, rx * 1.25, 0);
+      } else if (morph.shape === 'radiolarian') {
+        // 6-pointed diamond star
+        const pts = 6;
+        for (let p = 0; p < pts * 2; p++) {
+          const ang = (p / (pts * 2)) * Math.PI * 2;
+          const rad = (p % 2 === 0) ? rx * 1.15 : rx * 0.55;
+          const px = Math.cos(ang) * rad;
+          const py = Math.sin(ang) * rad;
+          if (p === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+      } else if (morph.shape === 'medusa') {
+        // Pulsing bell dome
+        const pulseD = Math.sin(time * 0.008 + org.id) * 0.15;
+        const bW = rx * 0.95;
+        const bH = ry * (1.1 + pulseD);
+        ctx.arc(0, 0, bH, -Math.PI * 0.45, Math.PI * 0.45);
+        ctx.lineTo(-bW * 0.6, 0);
+        ctx.closePath();
+      } else if (morph.shape === 'raptor' || isHunter) {
+        // Arrowhead dart
+        ctx.moveTo(rx * 1.35, 0);
+        ctx.lineTo(-rx * 0.7, -ry * 1.1);
+        ctx.lineTo(-rx * 0.35, 0);
+        ctx.lineTo(-rx * 0.7, ry * 1.1);
+        ctx.closePath();
+      } else {
+        // Sleek ellipse
+        ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+      }
       ctx.fill();
 
-      // 3. Bright nucleus
-      ctx.fillStyle = '#ffffff';
+      // 4. Bright nucleus / Eyespot
+      ctx.fillStyle = isHunter ? '#ffdddd' : '#ffffff';
       ctx.beginPath();
-      ctx.arc(0, 0, Math.max(0.8, bodyR * 0.35), 0, Math.PI * 2);
+      ctx.arc(isHunter ? rx * 0.4 : 0, 0, Math.max(0.8, bodyR * 0.32), 0, Math.PI * 2);
       ctx.fill();
 
       ctx.restore();
@@ -496,16 +989,32 @@ export class OceanRenderer {
     const ry = bodyR * morph.aspectY;
     const isHighDetail = (bodyR >= 8.5) || isSelected || isPiloted || forceDetail;
 
-    // A. Bioluminescent Halo
-    const haloR = Math.max(rx, ry) * (isHunter ? 2.4 : 2.0);
-    if (bodyR > 3.5 || isHunter) {
-      const glowGrad = ctx.createRadialGradient(0, 0, bodyR * 0.4, 0, 0, haloR);
-      glowGrad.addColorStop(0, `hsla(${hue}, 95%, ${isHunter ? '55%' : '50%'}, ${isHunter ? '0.35' : '0.22'})`);
+    // A. Bioluminescent Halo & Night Radiance
+    const haloR = Math.max(rx, ry) * (isHunter ? 2.4 : 2.0) * (1.0 + night * 0.35);
+    if (bodyR > 3.5 || isHunter || night > 0.15) {
+      const glowAlpha = (isHunter ? 0.35 : 0.22) + night * 0.35;
+      const glowGrad = ctx.createRadialGradient(0, 0, bodyR * 0.35, 0, 0, haloR);
+      glowGrad.addColorStop(0, `hsla(${hue}, 95%, ${isHunter ? '58%' : '52%'}, ${glowAlpha.toFixed(2)})`);
       glowGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = glowGrad;
       ctx.beginPath();
       ctx.arc(0, 0, haloR, 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    // A.1. Luminous Wake Trails at night or high speed
+    if (speed > 0.65 && (night > 0.1 || isHunter)) {
+      const wakeLen = speed * bodyR * 3.2;
+      const wakeGrad = ctx.createLinearGradient(0, 0, -wakeLen, 0);
+      wakeGrad.addColorStop(0, `hsla(${hue}, 90%, 75%, ${(0.2 + night * 0.45).toFixed(2)})`);
+      wakeGrad.addColorStop(1, 'transparent');
+      ctx.strokeStyle = wakeGrad;
+      ctx.lineWidth = Math.max(1.0, bodyR * 0.45);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-rx * 0.8, 0);
+      ctx.lineTo(-rx * 0.8 - wakeLen, 0);
+      ctx.stroke();
     }
 
     // B. Trailing Propulsion Flagellum (whip)
@@ -518,13 +1027,13 @@ export class OceanRenderer {
 
     // D. Beating Cilia (whipping hairs along perimeter) - Only at high detail
     if (isHighDetail && bodyR > 4.5) {
-      const ciliaCount = isHunter ? 12 : Math.min(10, Math.max(6, Math.floor(bodyR * 1.1)));
+      const ciliaCount = 4 + Math.round(morph.flagella*10);
       ctx.strokeStyle = `hsla(${hue}, 85%, 75%, 0.45)`;
       ctx.lineWidth = isHunter ? 1.3 : 1.0;
       ctx.beginPath();
       for (let c = 0; c < ciliaCount; c++) {
         const angle = (c / ciliaCount) * Math.PI * 2;
-        const wave = Math.sin(time * 0.015 + angle * 3.0 + org.id) * (bodyR * 0.3);
+        const wave = Math.sin(time * 0.007 + angle * 3.0 + org.id) * (bodyR * 0.3);
         const ciliaLen = bodyR * (isHunter ? 0.48 : 0.38) + wave;
 
         const cx1 = Math.cos(angle) * (rx * 0.95);
@@ -541,7 +1050,7 @@ export class OceanRenderer {
     // E. Translucent Viscoelastic Membrane
     ctx.fillStyle = isHunter ? `hsla(${hue}, 85%, 35%, 0.72)` : `hsla(${hue}, 75%, 35%, 0.65)`;
     ctx.strokeStyle = `hsla(${hue}, 95%, 72%, 0.90)`;
-    ctx.lineWidth = isHunter ? 1.8 : 1.3;
+    ctx.lineWidth = 1 + morph.shell * 2.4;
 
     drawCellMembranePath(ctx, morph.shape, rx, ry, time, org.id);
     ctx.fill();
@@ -722,8 +1231,8 @@ export class OceanRenderer {
 
     for (let i = 0; i < bonds.length; i++) {
       const bond = bonds[i];
-      const orgA = this.currEntities.get(bond.a);
-      const orgB = this.currEntities.get(bond.b);
+      const orgA = this.renderedEntities.get(bond.a);
+      const orgB = this.renderedEntities.get(bond.b);
       if (!orgA || !orgB) continue;
 
       const ax = toScreenX(orgA.x);
@@ -735,6 +1244,7 @@ export class OceanRenderer {
       const midX = (ax + bx) * 0.5;
       const midY = (ay + by) * 0.5;
       if (midX < -100 || midX > w + 100 || midY < -100 || midY > h + 100) continue;
+      if(!this.inObservationArea(midX,midY,30)) continue;
 
       const distToCenter = Math.hypot(midX - centerSX, midY - centerSY);
       bondData.push({ orgA, orgB, ax, ay, bx, by, midX, midY, distToCenter });
@@ -840,6 +1350,136 @@ export class OceanRenderer {
     ctx.restore();
   }
 
+  // Render cellular life cycle events: mitosis birth ripples and cytolysis death dissolution ghosts
+  renderLifeEvents(ctx, toScreenX, toScreenY, camZoom, time) {
+    const now = performance.now();
+    const w = this.camera.viewportW;
+    const h = this.camera.viewportH;
+
+    // 1. Render Birth Mitosis Ripples (expanding bioluminescent wave rings + mitosis flash)
+    for (let i = this.birthEvents.length - 1; i >= 0; i--) {
+      const b = this.birthEvents[i];
+      const elapsed = now - b.startTime;
+      if (elapsed >= b.duration) {
+        this.birthEvents.splice(i, 1);
+        continue;
+      }
+      const p = elapsed / b.duration; // 0.0 -> 1.0
+      const sx = toScreenX(b.x);
+      const sy = toScreenY(b.y);
+      const ringR = (b.r * 0.6 + p * b.r * 2.8) * camZoom;
+
+      if (sx < -ringR || sx > w + ringR || sy < -ringR || sy > h + ringR) continue;
+      if (!this.inObservationArea(sx, sy, ringR)) continue;
+
+      const hDeg = Math.round(b.hue * 360);
+      const alpha = (1.0 - p) * 0.75;
+
+      ctx.save();
+      // Expanding primary mitosis ring
+      ctx.beginPath();
+      ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
+      ctx.strokeStyle = `hsla(${hDeg}, 95%, 75%, ${alpha.toFixed(2)})`;
+      ctx.lineWidth = Math.max(1.0, (2.0 * (1.0 - p * 0.5)) * camZoom);
+      ctx.stroke();
+
+      // Soft harmonic secondary ripple
+      if (p < 0.75) {
+        const innerR = (b.r * 0.3 + p * b.r * 1.5) * camZoom;
+        const innerAlpha = (1.0 - p / 0.75) * 0.5;
+        ctx.beginPath();
+        ctx.arc(sx, sy, innerR, 0, Math.PI * 2);
+        ctx.strokeStyle = `hsla(${(hDeg + 25) % 360}, 90%, 85%, ${innerAlpha.toFixed(2)})`;
+        ctx.lineWidth = Math.max(0.8, 1.2 * camZoom);
+        ctx.stroke();
+
+        // Core nucleus flash (mitotic spark)
+        const flashAlpha = (1.0 - p / 0.45) * 0.55;
+        if (flashAlpha > 0) {
+          ctx.fillStyle = `hsla(${hDeg}, 95%, 92%, ${flashAlpha.toFixed(2)})`;
+          ctx.beginPath();
+          ctx.arc(sx, sy, b.r * 0.8 * camZoom, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Radiating daughter micro-vesicles
+      const vesicleCount = 4;
+      for (let v = 0; v < vesicleCount; v++) {
+        const vAngle = (v / vesicleCount) * Math.PI * 2 + (b.id * 0.7);
+        const vDist = (b.r * 0.8 + p * b.r * 2.2) * camZoom;
+        const vx = sx + Math.cos(vAngle) * vDist;
+        const vy = sy + Math.sin(vAngle) * vDist;
+        const vAlpha = (1.0 - p) * 0.7;
+        const vR = Math.max(0.9, (1.8 * (1.0 - p * 0.4)) * camZoom);
+
+        ctx.fillStyle = `hsla(${(hDeg + 15) % 360}, 95%, 85%, ${vAlpha.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(vx, vy, vR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    // 2. Render Death Cytolysis Ghosts (ethereal dissolving membrane + dispersing detritus droplets)
+    for (let i = this.deathEvents.length - 1; i >= 0; i--) {
+      const d = this.deathEvents[i];
+      const elapsed = now - d.startTime;
+      if (elapsed >= d.duration) {
+        this.deathEvents.splice(i, 1);
+        continue;
+      }
+      const p = elapsed / d.duration; // 0.0 -> 1.0
+      // Gentle drift along residual velocity
+      const driftX = d.x + (d.vx || 0) * (p * 18);
+      const driftY = d.y + (d.vy || 0) * (p * 18);
+      const sx = toScreenX(driftX);
+      const sy = toScreenY(driftY);
+      const ghostR = (d.r * (1.0 + p * 0.38)) * camZoom;
+
+      if (sx < -ghostR * 2 || sx > w + ghostR * 2 || sy < -ghostR * 2 || sy > h + ghostR * 2) continue;
+      if (!this.inObservationArea(sx, sy, ghostR)) continue;
+
+      const hDeg = Math.round(d.hue * 360);
+      const ghostAlpha = (1.0 - p) * 0.55;
+
+      ctx.save();
+      // Dissolving membrane outline (ethereal dashed glow)
+      ctx.beginPath();
+      ctx.arc(sx, sy, ghostR, 0, Math.PI * 2);
+      ctx.setLineDash([4 * camZoom, 3 * camZoom]);
+      ctx.strokeStyle = `hsla(${hDeg}, 75%, 65%, ${ghostAlpha.toFixed(2)})`;
+      ctx.lineWidth = Math.max(0.9, 1.4 * camZoom);
+      ctx.stroke();
+
+      // Soft fading cytoplasmic core
+      if (ghostAlpha > 0.05) {
+        ctx.fillStyle = `hsla(${hDeg}, 65%, 45%, ${(ghostAlpha * 0.25).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, ghostR * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Dispersing organic detritus micro-vesicles
+      if (d.detritus) {
+        for (let k = 0; k < d.detritus.length; k++) {
+          const drop = d.detritus[k];
+          const dropX = sx + (drop.dx * p * 24 + (drop.ox || 0)) * camZoom;
+          const dropY = sy + (drop.dy * p * 24 + (drop.oy || 0)) * camZoom;
+          const dropAlpha = (1.0 - p) * 0.72;
+          const dropR = Math.max(0.8, (drop.size * (1.0 - p * 0.35)) * camZoom);
+
+          ctx.fillStyle = `hsla(${(hDeg * 0.4 + 40) % 360}, 85%, 68%, ${dropAlpha.toFixed(2)})`;
+          ctx.beginPath();
+          ctx.arc(dropX, dropY, dropR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+  }
+
   // Render active nutrient blooms and floating phytomanna food particles
   renderFoodBlooms(ctx, toScreenX, toScreenY, camZoom, time, organisms) {
     const w = this.camera.viewportW;
@@ -851,6 +1491,7 @@ export class OceanRenderer {
       const bx = toScreenX(bloom.x);
       const by = toScreenY(bloom.y);
       const br = bloom.r * camZoom;
+      if(bx+br<0||by+br<0||bx-br>w||by-br>h||!this.inObservationArea(bx,by,br)) continue;
 
       // Soft ambient nutrient diffusion cloud or organic detritus cloud
       const isDetritus = (bloom.d === 1);
@@ -908,7 +1549,7 @@ export class OceanRenderer {
       }
 
       // Maintain floating particles around active bloom
-      if (this.foodParticles.length < 24 && Math.random() < 0.12) {
+      if (this.foodParticles.length < 24 && Math.random() < 1-Math.pow(.88,this.frameUnits)) {
         const ang = Math.random() * Math.PI * 2;
         const d = Math.random() * bloom.r * 0.65;
         this.foodParticles.push({
@@ -928,18 +1569,18 @@ export class OceanRenderer {
     // B. Drifting Nutrient Spores Physics & Drawing
     for (let i = this.foodParticles.length - 1; i >= 0; i--) {
       const p = this.foodParticles[i];
-      p.life++;
+      p.life+=this.frameUnits;
       if (p.life >= p.maxLife || p.alpha <= 0) {
         this.foodParticles.splice(i, 1);
         continue;
       }
 
       // Physics damping & fluid drift
-      p.vx *= 0.96;
-      p.vy *= 0.96;
+      p.vx *= Math.pow(.96,this.frameUnits);
+      p.vy *= Math.pow(.96,this.frameUnits);
       const drift = time * 0.0012 + p.x * 0.01;
-      p.x += p.vx + Math.cos(drift) * 0.22;
-      p.y += p.vy + Math.sin(drift) * 0.22;
+      p.x += (p.vx + Math.cos(drift) * 0.22)*this.frameUnits;
+      p.y += (p.vy + Math.sin(drift) * 0.22)*this.frameUnits;
 
       // Soft bounce on chamber boundary
       const ch = this.chamber;
@@ -983,6 +1624,7 @@ export class OceanRenderer {
       const sx = toScreenX(p.x);
       const sy = toScreenY(p.y);
       if (sx < -20 || sx > w + 20 || sy < -20 || sy > h + 20) continue;
+      if(!this.inObservationArea(sx,sy))continue;
 
       // Opacity calculation (gentle fade in and fade out)
       const lifeRatio = p.life / p.maxLife;
@@ -1213,10 +1855,10 @@ export class OceanRenderer {
     // Chamber identification badge
     ctx.fillStyle = 'rgba(0, 240, 255, 0.85)';
     ctx.font = '10px "JetBrains Mono", monospace';
-    ctx.fillText('◈ PETRI BIO-CHAMBER: Ø 1240 μm [ACTIVE MENISCUS]', cx - 135, cy - cr + 26);
+    ctx.fillText(`◈ PETRI BIO-CHAMBER: Ø ${Math.round(this.chamber.r*2)} μm [ACTIVE MENISCUS]`, cx - 135, cy - cr + 26);
 
     // 5. Hydrothermal Vents Isotherms in Lab Mode
-    const ventScale = this.worldSize / 128;
+    const ventScale = this.worldSize / this.gridSize;
     for (let v = 0; v < this.vents.length; v++) {
       const vent = this.vents[v];
       const vx = toScreenX(vent.x * ventScale);
@@ -1379,9 +2021,11 @@ export class OceanRenderer {
     const toScreenX = (wx) => (wx - this.camera.x) * this.camera.zoom + this.camera.viewportW * 0.5;
     const toScreenY = (wy) => (wy - this.camera.y) * this.camera.zoom + this.camera.viewportH * 0.5;
 
-    for (const org of this.currEntities.values()) {
+    if(!this.inObservationArea(screenX,screenY))return null;
+    for (const org of this.renderedEntities.values()) {
       const sx = toScreenX(org.x);
       const sy = toScreenY(org.y);
+      if(!this.inObservationArea(sx,sy))continue;
       const dx = screenX - sx;
       const dy = screenY - sy;
       const d2 = dx * dx + dy * dy;
@@ -1426,7 +2070,7 @@ export class OceanRenderer {
       sCtx.fillStyle = '#02040a';
       sCtx.fillRect(0, 0, targetSize, targetSize);
 
-      const ch = this.chamber || { cx: 700, cy: 700, r: 620 };
+      const ch = this.chamber || { cx: OCEAN_GEOMETRY.cx, cy: OCEAN_GEOMETRY.cy, r: OCEAN_GEOMETRY.radius };
       const pad = 12;
       const center = targetSize * 0.5;
       const destR = center - pad;
@@ -1448,13 +2092,16 @@ export class OceanRenderer {
       fluidGrad.addColorStop(1.0, '#010c18');
       sCtx.fillStyle = fluidGrad;
       sCtx.fillRect(center - destR, center - destR, destR * 2, destR * 2);
+      sCtx.globalAlpha=0.15;
+      sCtx.drawImage(this.habitatCanvas,toSnapX(0),toSnapY(0),this.worldSize*scale,this.worldSize*scale);
+      sCtx.globalAlpha=1;
 
       // 2.2. Living chemical substrate & reef matrix
       if (this.thumbCanvas) {
         sCtx.imageSmoothingEnabled = true;
         sCtx.imageSmoothingQuality = 'high';
         sCtx.globalAlpha = 0.42;
-        const wsPix = (this.worldSize || 1400) * scale;
+        const wsPix = (this.worldSize || OCEAN_GEOMETRY.worldSize) * scale;
         const originX = toSnapX(0);
         const originY = toSnapY(0);
         sCtx.drawImage(this.thumbCanvas, originX, originY, wsPix, wsPix);
@@ -1469,7 +2116,7 @@ export class OceanRenderer {
       }
 
       // 2.3. Hydrothermal Vents (Atmospheric thermal glow & bright orifice core)
-      const ventScale = (this.worldSize || 1400) / 128;
+      const ventScale = (this.worldSize || OCEAN_GEOMETRY.worldSize) / this.gridSize;
       const vents = this.vents || [];
       for (let i = 0; i < vents.length; i++) {
         const vent = vents[i];
@@ -1573,6 +2220,7 @@ export class OceanRenderer {
         sCtx.stroke();
       }
 
+      this.renderRemains(sCtx,toSnapX,toSnapY,scale,true);
       // 7. Living Organisms (Rendered via authentic drawOrganism with full morphology, flagella & halos)
       const entities = Array.from(this.currEntities.values());
       for (let i = 0; i < entities.length; i++) {

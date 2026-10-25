@@ -1,3 +1,4 @@
+import { OCEAN_GEOMETRY } from '../shared/habitats.js';
 import * as THREE from '../lib/three.module.js';
 import { getSpeciesMorphology } from '../gl/morphology.js';
 
@@ -5,15 +6,16 @@ export class DiveCreatureManager {
   constructor(scene) {
     this.scene = scene;
     this.creaturePool = new Map(); // id -> Three.js Group
+    this.dyingPool = new Map(); // id -> { group, deathTime, duration, vx, vy }
     this.bondLines = [];
-    this.maxVisibleDist = 280.0;
+    this.maxVisibleDist = 135.0; // Optimized microscopic field of view (reduces scene load by 75%)
   }
 
   update(currentEntities, playerOrgId, colonyBonds = [], time = 0, pilotedIds = null) {
     const activeIds = new Set();
     const playerOrg = currentEntities.get(playerOrgId);
-    const px = playerOrg ? playerOrg.x : 700;
-    const py = playerOrg ? playerOrg.y : 700;
+    const px = playerOrg ? playerOrg.x : OCEAN_GEOMETRY.cx;
+    const py = playerOrg ? playerOrg.y : OCEAN_GEOMETRY.cx;
 
     // 1. Update or create visible creatures
     for (const [id, org] of currentEntities.entries()) {
@@ -36,11 +38,29 @@ export class DiveCreatureManager {
 
       if (!group) {
         group = this.createCreatureMesh(org);
+        group.userData.birthTime = performance.now();
         this.creaturePool.set(id, group);
         this.scene.add(group);
       }
 
       group.visible = true;
+      const growth = (org.size || 6.5) / group.userData.initialSize;
+
+      // Newborn budding scale bloom (0.3 -> 1.0 over 500ms)
+      let birthScale = 1.0;
+      if (group.userData.birthTime) {
+        const age = performance.now() - group.userData.birthTime;
+        if (age < 500) {
+          birthScale = 0.3 + 0.7 * Math.sin((age / 500) * (Math.PI / 2));
+        } else {
+          group.userData.birthTime = null;
+        }
+      }
+      group.scale.set(growth * birthScale, growth * birthScale, growth * birthScale);
+
+      // Track last velocity for gentle death momentum
+      group.userData.lastVx = org.vx || 0;
+      group.userData.lastVy = org.vy || 0;
 
       // Anti-clipping lens fade: prevent organisms right next to the lens from blocking the viewport
       const bodyMat = group.userData.bodyMat;
@@ -49,9 +69,9 @@ export class DiveCreatureManager {
         bodyMat.opacity = Math.min(0.85, Math.max(0.08, lensDist / 14.0) * 0.85);
       }
 
-      // Convert 2D coordinates (0..1400) to 3D centered coordinates (X, Z) with Y as altitude
-      const x3d = org.x - 700;
-      const z3d = org.y - 700;
+      // Convert 2D coordinates (0..worldSize) to 3D centered coordinates (X, Z) with Y as altitude
+      const x3d = org.x - OCEAN_GEOMETRY.cx;
+      const z3d = org.y - OCEAN_GEOMETRY.cy;
       const y3d = 18.0 + Math.sin(time * 0.003 + org.id) * 3.5;
       group.position.set(x3d, y3d, z3d);
 
@@ -71,8 +91,8 @@ export class DiveCreatureManager {
         }
       }
 
-      // Animate undulating flagellum and pulse nucleus for nearby entities (< 160 units)
-      if (dist < 160.0) {
+      // Animate undulating flagellum and pulse nucleus for nearby entities (< 55 units)
+      if (dist < 55.0) {
         this.animateFlagellum(group, time, org.id);
 
         // Pulse nucleus with Kuramoto rhythm
@@ -83,22 +103,68 @@ export class DiveCreatureManager {
       }
     }
 
-    // 2. Hide entities outside player view and cleanly dispose creatures that died on server
+    // 2. Hide entities outside player view and handle dying creatures with smooth dissolution
+    const now = performance.now();
     for (const [id, group] of this.creaturePool.entries()) {
       if (!currentEntities.has(id)) {
-        // Creature has died on server: clean up from Three.js scene & GPU memory
-        this.scene.remove(group);
-        group.traverse((child) => {
+        // Creature died on server: transition to dying pool for smooth dissolution
+        const lastVx = group.userData.lastVx || 0;
+        const lastVy = group.userData.lastVy || 0;
+        this.dyingPool.set(id, {
+          group,
+          deathTime: now,
+          duration: 800,
+          vx: lastVx,
+          vy: lastVy
+        });
+        this.creaturePool.delete(id);
+      } else if (!activeIds.has(id)) {
+        // Creature is alive, but outside player's visibility range
+        group.visible = false;
+      }
+    }
+
+    // 2.5. Animate and dissolve dying creatures
+    for (const [id, item] of this.dyingPool.entries()) {
+      const elapsed = now - item.deathTime;
+      if (elapsed >= item.duration) {
+        // Dissolution complete: cleanly dispose geometry & materials from GPU memory
+        this.scene.remove(item.group);
+        item.group.traverse((child) => {
           if (child.geometry) child.geometry.dispose();
           if (child.material) {
             if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
             else child.material.dispose();
           }
         });
-        this.creaturePool.delete(id);
-      } else if (!activeIds.has(id)) {
-        // Creature is alive, but outside player's visibility range
-        group.visible = false;
+        this.dyingPool.delete(id);
+      } else {
+        const p = elapsed / item.duration; // 0.0 -> 1.0
+        const fade = Math.max(0, 1.0 - p);
+        // Expand slightly as cell membrane lyses
+        item.group.scale.multiplyScalar(1.0 + 0.003);
+        // Drift with residual velocity and gentle buoyant lift
+        item.group.position.x += item.vx * 0.05;
+        item.group.position.z += item.vy * 0.05;
+        item.group.position.y += 0.04;
+        // Fade all transparent materials
+        item.group.traverse((child) => {
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach(m => {
+                m.transparent = true;
+                if (m.userData.baseOpacity === undefined) m.userData.baseOpacity = m.opacity || 0.8;
+                m.opacity = m.userData.baseOpacity * fade;
+              });
+            } else {
+              child.material.transparent = true;
+              if (child.material.userData.baseOpacity === undefined) {
+                child.material.userData.baseOpacity = child.material.opacity || 0.8;
+              }
+              child.material.opacity = child.material.userData.baseOpacity * fade;
+            }
+          }
+        });
       }
     }
 
@@ -110,25 +176,25 @@ export class DiveCreatureManager {
     const group = new THREE.Group();
     const hue = Math.round(org.hue * 360);
     const isHunter = org.carnivory > 0.35;
-    const morph = getSpeciesMorphology(org.speciesId || 1, org.hue, org.carnivory || 0.1, org.size || 7);
+    const morph = getSpeciesMorphology(org.speciesId || 1, org.hue, org.carnivory || 0.1, org.size || 7, 1.8, org.anatomy);
     const accentHue = morph.accentHue !== undefined ? morph.accentHue : ((hue + 140) % 360);
 
     const bodyR = Math.max(2.2, (org.size || 6.5) * 0.65);
     const shape = morph.shape || (isHunter ? 'raptor' : 'ovoid');
 
-    // 1. Soft-body Outer Membrane (Species-specific distinct 3D geometries)
+    // 1. Soft-body Outer Membrane (Species-specific distinct 3D geometries strictly matching 2D silhouette)
     let bodyGeo;
     if (shape === 'bacillus') {
       // Elongated cylindrical capsule aligned along local X axis (direction of motion)
       if (THREE.CapsuleGeometry) {
-        bodyGeo = new THREE.CapsuleGeometry(bodyR * 0.55, bodyR * 1.5, 12, 16);
+        bodyGeo = new THREE.CapsuleGeometry(bodyR * 0.65, bodyR * 1.5, 14, 20);
         bodyGeo.rotateZ(Math.PI * 0.5); // Align length with X
       } else {
-        bodyGeo = new THREE.CylinderGeometry(bodyR * 0.55, bodyR * 0.55, bodyR * 1.5, 16);
+        bodyGeo = new THREE.CylinderGeometry(bodyR * 0.65, bodyR * 0.65, bodyR * 1.5, 16);
         bodyGeo.rotateZ(Math.PI * 0.5);
       }
     } else if (shape === 'vibrio') {
-      // Curved comma / crescent deformed sphere
+      // Curved comma / crescent deformed sphere matching 2D crescent bean
       bodyGeo = new THREE.SphereGeometry(bodyR, 24, 20);
       const pos = bodyGeo.attributes.position;
       for (let i = 0; i < pos.count; i++) {
@@ -138,155 +204,356 @@ export class DiveCreatureManager {
 
         // Normalize x from 0 (posterior/tail) to 1 (anterior/head)
         const t = (vx + bodyR) / (bodyR * 2.0);
-        // Lateral C-curve arch along Z
-        const curveZ = Math.sin(t * Math.PI) * (bodyR * 0.45);
-        // Taper tail
-        const taper = 0.55 + 0.65 * t;
-
-        pos.setXYZ(i, vx * 1.4, vy * 0.72 * taper, (vz * 0.75 + curveZ) * taper);
+        // Lateral C-curve arch along Z in horizontal XZ plane
+        const curveZ = Math.sin(t * Math.PI) * (bodyR * 0.55);
+        const taper = 0.48 + 0.65 * t;
+        pos.setXYZ(i, vx * 1.35, vy * 0.72 * taper, (vz * 0.75 + curveZ) * taper);
       }
       bodyGeo.computeVertexNormals();
-    } else if (shape === 'coccus') {
-      // Plump spheroid orb
-      bodyGeo = new THREE.SphereGeometry(bodyR, 20, 18);
-      bodyGeo.scale(1.05, 0.95, 1.05);
-    } else if (shape === 'raptor') {
-      // Apex hunter: streamlined armored teardrop
+    } else if (shape === 'spirillum') {
+      // Sinusoidal wavy body matching 2D S-curve
       bodyGeo = new THREE.SphereGeometry(bodyR, 24, 20);
       const pos = bodyGeo.attributes.position;
       for (let i = 0; i < pos.count; i++) {
         let vx = pos.getX(i);
         let vy = pos.getY(i);
         let vz = pos.getZ(i);
-        // Taper posterior tail, expand anterior shoulders
-        const t = (vx + bodyR) / (bodyR * 2.0);
-        const taper = 0.45 + 0.75 * t;
-        pos.setXYZ(i, vx * 1.35, vy * 0.70 * taper, vz * 0.85 * taper);
+
+        const nx = vx / bodyR; // -1 to 1
+        const waveZ = Math.sin(nx * Math.PI * 1.5) * (bodyR * 0.40);
+        pos.setXYZ(i, vx * 1.45, vy * 0.68, vz * 0.70 + waveZ);
       }
       bodyGeo.computeVertexNormals();
+    } else if (shape === 'coccus') {
+      // Plump spheroid orb
+      bodyGeo = new THREE.SphereGeometry(bodyR, 22, 20);
+      bodyGeo.scale(1.05, 0.95, 1.05);
+    } else if (shape === 'raptor') {
+      // Apex hunter: faceted predatory carapace matching 2D triangular rostrum & wide shoulders
+      bodyGeo = new THREE.SphereGeometry(bodyR, 24, 20);
+      const pos = bodyGeo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        let vx = pos.getX(i);
+        let vy = pos.getY(i);
+        let vz = pos.getZ(i);
+        const nx = vx / bodyR; // -1 to +1
+        let lateralWidth;
+        if (nx > 0.35) {
+          // Sharp forward rostrum
+          lateralWidth = 1.15 * (1.0 - (nx - 0.35) / 0.65 * 0.70);
+        } else {
+          // Tapered posterior tail
+          lateralWidth = 1.15 * (0.45 + ((nx + 1.0) / 1.35) * 0.55);
+        }
+        pos.setXYZ(i, vx * 1.35, vy * 0.70 * lateralWidth, vz * lateralWidth);
+      }
+      bodyGeo.computeVertexNormals();
+    } else if (shape === 'serpent') {
+      // Sinuous undulating micro-eel / spirochaete matching 2D
+      bodyGeo = new THREE.SphereGeometry(bodyR, 26, 20);
+      const pos = bodyGeo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        let vx = pos.getX(i);
+        let vy = pos.getY(i);
+        let vz = pos.getZ(i);
+        const nx = vx / bodyR; // -1 to 1
+        const wave = Math.sin(nx * Math.PI * 2.2) * (bodyR * 0.45);
+        const taper = 0.45 + 0.65 * (1.0 - (nx + 1.0) * 0.4);
+        pos.setXYZ(i, vx * 2.3, vy * 0.60 * taper, (vz * 0.60 + wave) * taper);
+      }
+      bodyGeo.computeVertexNormals();
+    } else if (shape === 'radiolarian') {
+      // Crystalline 6-pointed star / faceted diatom carapace matching 2D
+      bodyGeo = new THREE.IcosahedronGeometry(bodyR * 0.90, 0); // Faceted geometric core
+      bodyGeo.scale(1.15, 0.85, 1.15);
+    } else if (shape === 'medusa') {
+      // Hydrozoan umbrella bell dome matching 2D siphonophore bell
+      bodyGeo = new THREE.SphereGeometry(bodyR * 1.15, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.55);
+      bodyGeo.scale(0.95, 1.25, 0.95);
+      bodyGeo.rotateZ(-Math.PI * 0.5); // Apex facing forward along +X, opening toward -X
     } else {
-      // Ovoid / Spirillum: Streamlined oval
-      bodyGeo = new THREE.SphereGeometry(bodyR, 20, 18);
-      bodyGeo.scale(morph.aspectX || 1.30, 0.75, morph.aspectY || 0.85);
+      // Ovoid: Streamlined oval matching 2D aspect ratios
+      bodyGeo = new THREE.SphereGeometry(bodyR, 22, 20);
+      bodyGeo.scale(morph.aspectX || 1.25, 0.75, morph.aspectY || 0.85);
     }
 
-    const bodyMat = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(`hsl(${hue}, 85%, ${isHunter ? '55%' : '65%'})`),
-      emissive: new THREE.Color(`hsl(${hue}, 95%, ${isHunter ? '45%' : '35%'})`),
-      emissiveIntensity: 0.55,
+    // Material: rich bioluminescent self-luminous cell body matching 2D vibrancy
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(`hsl(${hue}, 90%, ${isHunter ? '55%' : '65%'})`),
+      emissive: new THREE.Color(`hsl(${hue}, 100%, ${isHunter ? '45%' : '38%'})`),
+      emissiveIntensity: 0.70,
       transparent: true,
-      opacity: 0.82,
-      roughness: 0.18,
-      metalness: 0.05,
-      transmission: 0.58,
-      ior: 1.34
+      opacity: 0.88,
+      roughness: 0.22,
+      metalness: 0.08
     });
 
+    if (shape === 'ovoid') {
+      bodyGeo.scale(morph.aspectX / 1.25, 1, morph.aspectY / 0.85);
+    }
     const body = new THREE.Mesh(bodyGeo, bodyMat);
     group.add(body);
     group.userData.bodyMat = bodyMat;
+
+    // Membrane Rim Outline Glow (smooth inverted-hull rim glow matching 2D microscopic outline, NO wireframe)
+    const rimMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(`hsl(${hue}, 100%, 80%)`),
+      side: THREE.BackSide,
+      transparent: true,
+      opacity: 0.42,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const rimMesh = new THREE.Mesh(bodyGeo, rimMat);
+    rimMesh.scale.set(1.06, 1.06, 1.06);
+    group.add(rimMesh);
 
     // 2. Bioluminescent Internal Nucleus
     const nucleusGeo = new THREE.SphereGeometry(bodyR * 0.35, 12, 12);
     const nucleusMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.88,
+      opacity: 0.90,
       blending: THREE.AdditiveBlending
     });
     const nucleus = new THREE.Mesh(nucleusGeo, nucleusMat);
-    nucleus.position.set(bodyR * 0.25, 0, 0);
+    nucleus.position.set(-bodyR * 0.25, 0, 0); // Positioned inside posterior, matching 2D (-rx * 0.22)
     group.add(nucleus);
     group.userData.nucleus = nucleus;
 
-    // 3. Organelles & Markings based on Phenotype / Morphology
-    if (shape === 'bacillus') {
-      // Transverse glowing rib bands around capsule body
-      const bandMat = new THREE.MeshBasicMaterial({
+    // 3. Markings strictly matching 2D morphology
+    if (morph.pattern === 'stripes') {
+      // Transverse glowing zebra bands across body (matching 2D drawCellMarkings stripes)
+      const count = morph.stripeCount || 2;
+      const stripeMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(`hsl(${accentHue}, 100%, 75%)`),
+        transparent: true,
+        opacity: 0.90,
+        blending: THREE.AdditiveBlending
+      });
+      const step = (bodyR * 1.2) / (count + 1);
+      for (let i = 1; i <= count; i++) {
+        const sx = -bodyR * 0.6 + i * step;
+        const ringGeo = new THREE.TorusGeometry(bodyR * 0.72, bodyR * 0.055, 6, 24);
+        ringGeo.rotateY(Math.PI * 0.5); // Encircle X axis
+        const ring = new THREE.Mesh(ringGeo, stripeMat);
+        ring.position.set(sx, 0, 0);
+        group.add(ring);
+      }
+    } else if (morph.pattern === 'spots') {
+      // Bioluminescent photophore spots with bright white centers (matching 2D drawCellMarkings spots)
+      const count = morph.spotCount || 4;
+      const spotHaloMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(`hsl(${accentHue}, 100%, 72%)`),
+        transparent: true,
+        opacity: 0.95,
+        blending: THREE.AdditiveBlending
+      });
+      const spotCoreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const spotR = Math.max(0.35, bodyR * 0.16);
+
+      const startX = -bodyR * 0.55;
+      const endX = bodyR * 0.55;
+      const step = (endX - startX) / (count > 1 ? count - 1 : 1);
+
+      for (let i = 0; i < count; i++) {
+        const sx = startX + i * step;
+        const sign = (i % 2 === 0 ? 1 : -1);
+        const sz = sign * bodyR * 0.58;
+        const sy = (i % 2 === 0 ? bodyR * 0.35 : -bodyR * 0.2);
+
+        const halo = new THREE.Mesh(new THREE.SphereGeometry(spotR, 6, 6), spotHaloMat);
+        halo.position.set(sx, sy, sz);
+        const core = new THREE.Mesh(new THREE.SphereGeometry(spotR * 0.45, 4, 4), spotCoreMat);
+        core.position.set(sx, sy, sz);
+        group.add(halo);
+        group.add(core);
+      }
+    } else if (morph.pattern === 'spine') {
+      // Glowing dorsal neon ridge along top +Y (matching 2D drawCellMarkings spine)
+      const spineMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(`hsl(${accentHue}, 100%, 75%)`),
+        transparent: true,
+        opacity: 0.90,
+        blending: THREE.AdditiveBlending
+      });
+      const ridgeGeo = new THREE.CylinderGeometry(bodyR * 0.05, bodyR * 0.05, bodyR * 1.5, 6);
+      ridgeGeo.rotateZ(Math.PI * 0.5); // Along X
+      const ridge = new THREE.Mesh(ridgeGeo, spineMat);
+      ridge.position.set(0, bodyR * 0.65, 0);
+      group.add(ridge);
+
+      // Bright node spheres
+      const nodeGeo = new THREE.SphereGeometry(bodyR * 0.14, 6, 6);
+      const nodeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const n1 = new THREE.Mesh(nodeGeo, nodeMat);
+      n1.position.set(bodyR * 0.2, bodyR * 0.67, 0);
+      const n2 = new THREE.Mesh(nodeGeo, nodeMat);
+      n2.position.set(-bodyR * 0.3, bodyR * 0.67, 0);
+      group.add(n1);
+      group.add(n2);
+    } else if (morph.pattern === 'twin_core') {
+      // Dual polar organelles (matching 2D drawCellMarkings twin_core)
+      const coreR = Math.max(0.5, bodyR * 0.28);
+      const coreMat = new THREE.MeshBasicMaterial({
         color: new THREE.Color(`hsl(${accentHue}, 95%, 70%)`),
         transparent: true,
         opacity: 0.85,
         blending: THREE.AdditiveBlending
       });
-      const ringGeo = new THREE.TorusGeometry(bodyR * 0.56, bodyR * 0.05, 6, 20);
-      ringGeo.rotateY(Math.PI * 0.5); // Perpendicular to X
-      const ring1 = new THREE.Mesh(ringGeo, bandMat);
-      ring1.position.set(-bodyR * 0.45, 0, 0);
-      const ring2 = new THREE.Mesh(ringGeo, bandMat);
-      ring2.position.set(bodyR * 0.35, 0, 0);
-      group.add(ring1);
-      group.add(ring2);
-    } else if (shape === 'coccus' || morph.pattern === 'spots') {
-      // Dotted surface photophore vesicles
-      const spotMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(`hsl(${accentHue}, 95%, 68%)`),
+      const nucMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+      const c1 = new THREE.Mesh(new THREE.SphereGeometry(coreR, 8, 8), coreMat);
+      c1.position.set(-bodyR * 0.40, 0, -bodyR * 0.2);
+      const nu1 = new THREE.Mesh(new THREE.SphereGeometry(coreR * 0.4, 6, 6), nucMat);
+      nu1.position.copy(c1.position);
+
+      const c2 = new THREE.Mesh(new THREE.SphereGeometry(coreR * 0.85, 8, 8), coreMat);
+      c2.position.set(bodyR * 0.35, 0, bodyR * 0.2);
+      const nu2 = new THREE.Mesh(new THREE.SphereGeometry(coreR * 0.35, 6, 6), nucMat);
+      nu2.position.copy(c2.position);
+
+      group.add(c1); group.add(nu1);
+      group.add(c2); group.add(nu2);
+    } else if (morph.pattern === 'crystal_lattice') {
+      // Radiolarian silica spicules & inner facet ring matching 2D
+      const spiculeMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(`hsl(${accentHue}, 95%, 85%)`),
         transparent: true,
-        opacity: 0.90,
+        opacity: 0.95,
         blending: THREE.AdditiveBlending
       });
-      const spotGeo = new THREE.SphereGeometry(bodyR * 0.15, 6, 6);
-      const spotOffsets = [
-        [bodyR * 0.2, bodyR * 0.55, bodyR * 0.4],
-        [bodyR * 0.2, bodyR * 0.55, -bodyR * 0.4],
-        [-bodyR * 0.3, bodyR * 0.6, 0],
-        [-bodyR * 0.2, -bodyR * 0.55, bodyR * 0.35],
-        [-bodyR * 0.2, -bodyR * 0.55, -bodyR * 0.35]
-      ];
-      for (let s = 0; s < spotOffsets.length; s++) {
-        const spot = new THREE.Mesh(spotGeo, spotMat);
-        spot.position.set(...spotOffsets[s]);
-        group.add(spot);
+      const tipMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+      // 6 radiating silica spicules in cardinal & diagonal directions
+      const spiculeLen = bodyR * 1.45;
+      const spThickness = Math.max(0.08, bodyR * 0.05);
+      for (let p = 0; p < 6; p++) {
+        const ang = (p / 6) * Math.PI * 2;
+        const spGeo = new THREE.CylinderGeometry(spThickness * 0.5, spThickness, spiculeLen, 5);
+        spGeo.translate(0, spiculeLen * 0.5, 0);
+        spGeo.rotateZ(Math.PI * 0.5);
+        spGeo.rotateY(ang);
+        const spMesh = new THREE.Mesh(spGeo, spiculeMat);
+        group.add(spMesh);
+
+        // Gleaming crystal tip node
+        const tipGeo = new THREE.SphereGeometry(spThickness * 1.8, 4, 4);
+        const tipMesh = new THREE.Mesh(tipGeo, tipMat);
+        tipMesh.position.set(Math.cos(ang) * spiculeLen, 0, Math.sin(ang) * spiculeLen);
+        group.add(tipMesh);
       }
-    } else if (!isHunter) {
-      // Grazers / Phytobionts: 2 emerald chloroplasts inside cytoplasm
-      const chloroGeo = new THREE.SphereGeometry(bodyR * 0.18, 8, 8);
-      const chloroMat = new THREE.MeshBasicMaterial({
-        color: 0x34d399,
+    } else if (morph.pattern === 'metamere_spine') {
+      // Segmented undulating nerve cord with metamere rib arches matching 2D
+      const cordMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(`hsl(${accentHue}, 95%, 80%)`),
+        transparent: true,
+        opacity: 0.95,
+        blending: THREE.AdditiveBlending
+      });
+      const nodeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+      const segs = 6;
+      const step = (bodyR * 1.8) / (segs + 1);
+      for (let s = 1; s <= segs; s++) {
+        const sx = -bodyR * 0.9 + s * step;
+        const ringGeo = new THREE.TorusGeometry(bodyR * 0.55 * (1.0 - (s / segs) * 0.4), bodyR * 0.04, 5, 16);
+        ringGeo.rotateY(Math.PI * 0.5);
+        const ringMesh = new THREE.Mesh(ringGeo, cordMat);
+        ringMesh.position.set(sx, 0, 0);
+        group.add(ringMesh);
+
+        // Glowing node sphere
+        const node = new THREE.Mesh(new THREE.SphereGeometry(bodyR * 0.12, 5, 5), nodeMat);
+        node.position.set(sx, bodyR * 0.45 * (1.0 - (s / segs) * 0.4), 0);
+        group.add(node);
+      }
+    } else if (morph.pattern === 'gastric_ring') {
+      // Central gastric cavity with radial canals & trailing margin tentacles matching 2D
+      const stomachMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(`hsl(${accentHue}, 90%, 75%)`),
         transparent: true,
         opacity: 0.85,
         blending: THREE.AdditiveBlending
       });
-      const c1 = new THREE.Mesh(chloroGeo, chloroMat);
-      c1.position.set(-bodyR * 0.3, bodyR * 0.15, bodyR * 0.25);
-      const c2 = new THREE.Mesh(chloroGeo, chloroMat);
-      c2.position.set(-bodyR * 0.3, bodyR * 0.15, -bodyR * 0.25);
-      group.add(c1);
-      group.add(c2);
+      const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+      // Stomach node
+      const stom = new THREE.Mesh(new THREE.SphereGeometry(bodyR * 0.35, 8, 8), stomachMat);
+      stom.position.set(bodyR * 0.15, 0, 0);
+      const nuc = new THREE.Mesh(new THREE.SphereGeometry(bodyR * 0.16, 6, 6), coreMat);
+      nuc.position.set(bodyR * 0.15, 0, 0);
+      group.add(stom); group.add(nuc);
+
+      // Trailing tentacles from the posterior margin
+      const tentMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(`hsl(${accentHue}, 85%, 75%)`),
+        transparent: true,
+        opacity: 0.70,
+        blending: THREE.AdditiveBlending
+      });
+      const tentLen = bodyR * 1.8;
+      for (let t = 0; t < 4; t++) {
+        const tAng = (t / 4) * Math.PI * 2;
+        const tentGeo = new THREE.CylinderGeometry(bodyR * 0.03, bodyR * 0.06, tentLen, 4);
+        tentGeo.translate(0, -tentLen * 0.5, 0);
+        tentGeo.rotateZ(Math.PI * 0.5);
+        const tentMesh = new THREE.Mesh(tentGeo, tentMat);
+        tentMesh.position.set(-bodyR * 0.5, Math.sin(tAng) * (bodyR * 0.4), Math.cos(tAng) * (bodyR * 0.4));
+        group.add(tentMesh);
+      }
+    } else {
+      // Stippled glowing granules
+      const granMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(`hsl(${accentHue}, 90%, 80%)`),
+        transparent: true,
+        opacity: 0.80,
+        blending: THREE.AdditiveBlending
+      });
+      const granGeo = new THREE.SphereGeometry(bodyR * 0.09, 5, 5);
+      for (let g = 0; g < 5; g++) {
+        const gm = new THREE.Mesh(granGeo, granMat);
+        gm.position.set(
+          -bodyR * 0.4 + g * bodyR * 0.2,
+          (Math.sin(g * 2.3) * 0.3) * bodyR,
+          (Math.cos(g * 1.9) * 0.35) * bodyR
+        );
+        group.add(gm);
+      }
     }
 
-    // 4. Raptor-Specific Weaponry (Rostrum beak, lateral pincers/mandibles, glowing crimson eyes)
+    // 4. Raptor-Specific Weaponry (Rostrum beak & Lateral hunting horns in XZ plane matching 2D!)
     if (isHunter) {
-      // Anterior Rostrum Beak
-      const rostrumGeo = new THREE.ConeGeometry(bodyR * 0.25, bodyR * 0.85, 8);
+      // Anterior Rostrum Jaw Spike
+      const rostrumGeo = new THREE.ConeGeometry(bodyR * 0.28, bodyR * 0.95, 8);
       rostrumGeo.rotateZ(-Math.PI * 0.5); // Point forward along +X
       const rostrumMat = new THREE.MeshStandardMaterial({
-        color: 0xff4757,
-        emissive: 0x8b0000,
-        roughness: 0.3
+        color: new THREE.Color(`hsl(${accentHue}, 100%, 65%)`),
+        emissive: new THREE.Color(`hsl(${accentHue}, 100%, 45%)`),
+        roughness: 0.25
       });
       const rostrum = new THREE.Mesh(rostrumGeo, rostrumMat);
       rostrum.position.set(bodyR * 1.35, 0, 0);
       group.add(rostrum);
 
-      // Lateral Predatory Mandibles on left (+Z) and right (-Z)
-      const pincerGeo = new THREE.ConeGeometry(bodyR * 0.14, bodyR * 0.65, 6);
-      pincerGeo.rotateZ(-Math.PI * 0.5); // Point forward along +X
-      const pincerMat = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        emissive: 0xff2244,
+      // Lateral Hunting Thorns (extending horizontally along +/- Z in XZ plane, exactly as seen in 2D!)
+      const thornGeo = new THREE.ConeGeometry(bodyR * 0.16, bodyR * 0.75, 6);
+      thornGeo.rotateZ(-Math.PI * 0.5);
+      const thornMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(`hsl(${accentHue}, 100%, 70%)`),
+        emissive: new THREE.Color(`hsl(${accentHue}, 100%, 45%)`),
         roughness: 0.25
       });
 
-      const pincerLeft = new THREE.Mesh(pincerGeo, pincerMat);
-      pincerLeft.position.set(bodyR * 1.1, 0, bodyR * 0.42);
-      pincerLeft.rotation.y = 0.25; // Angled slightly inward
+      const thornLeft = new THREE.Mesh(thornGeo, thornMat);
+      thornLeft.position.set(bodyR * 0.35, 0, bodyR * 0.95);
+      thornLeft.rotation.y = 0.55; // Angled forward and outward
+      group.add(thornLeft);
 
-      const pincerRight = new THREE.Mesh(pincerGeo, pincerMat);
-      pincerRight.position.set(bodyR * 1.1, 0, -bodyR * 0.42);
-      pincerRight.rotation.y = -0.25; // Angled slightly inward
-
-      group.add(pincerLeft);
-      group.add(pincerRight);
+      const thornRight = new THREE.Mesh(thornGeo, thornMat);
+      thornRight.position.set(bodyR * 0.35, 0, -bodyR * 0.95);
+      thornRight.rotation.y = -0.55; // Angled forward and outward
+      group.add(thornRight);
 
       // Crimson Photophore Eyes on lateral flanks (+Z and -Z)
       const eyeGeo = new THREE.SphereGeometry(bodyR * 0.18, 10, 10);
@@ -297,19 +564,10 @@ export class DiveCreatureManager {
       eye2.position.set(bodyR * 0.85, bodyR * 0.12, -bodyR * 0.45);
       group.add(eye1);
       group.add(eye2);
-
-      // Dorsal Predator Spines along top (+Y)
-      const spineGeo = new THREE.ConeGeometry(bodyR * 0.10, bodyR * 0.45, 5);
-      const spineMat = new THREE.MeshStandardMaterial({ color: 0xffd2d7, roughness: 0.4 });
-      for (let sp = 0; sp < 3; sp++) {
-        const spine = new THREE.Mesh(spineGeo, spineMat);
-        spine.position.set(-bodyR * 0.2 + sp * bodyR * 0.4, bodyR * 0.65, 0);
-        group.add(spine);
-      }
     }
 
-    // 4.5. Forward Sensory Antennule Whiskers for Ovoid/Spirillum
-    if (morph.hasAntennae && !isHunter) {
+    // 4.5. Forward Sensory Antennule Whiskers (in XZ horizontal plane matching 2D!)
+    if (morph.hasAntennae) {
       const antMat = new THREE.LineBasicMaterial({
         color: new THREE.Color(`hsl(${accentHue}, 95%, 75%)`),
         transparent: true,
@@ -323,11 +581,11 @@ export class DiveCreatureManager {
       });
       const tipGeo = new THREE.SphereGeometry(bodyR * 0.10, 6, 6);
 
-      // Left whisker
+      // Left whisker (forward & outward along +Z)
       const pLeft = [
-        new THREE.Vector3(bodyR * 1.1, 0, bodyR * 0.2),
-        new THREE.Vector3(bodyR * 1.6, bodyR * 0.1, bodyR * 0.5),
-        new THREE.Vector3(bodyR * 2.1, bodyR * 0.05, bodyR * 0.7)
+        new THREE.Vector3(bodyR * 1.0, 0, bodyR * 0.2),
+        new THREE.Vector3(bodyR * 1.5, 0, bodyR * 0.55),
+        new THREE.Vector3(bodyR * 2.0, 0, bodyR * 0.75)
       ];
       const gLeft = new THREE.BufferGeometry().setFromPoints(pLeft);
       group.add(new THREE.Line(gLeft, antMat));
@@ -335,11 +593,11 @@ export class DiveCreatureManager {
       tipLeft.position.copy(pLeft[2]);
       group.add(tipLeft);
 
-      // Right whisker
+      // Right whisker (forward & outward along -Z)
       const pRight = [
-        new THREE.Vector3(bodyR * 1.1, 0, -bodyR * 0.2),
-        new THREE.Vector3(bodyR * 1.6, bodyR * 0.1, -bodyR * 0.5),
-        new THREE.Vector3(bodyR * 2.1, bodyR * 0.05, -bodyR * 0.7)
+        new THREE.Vector3(bodyR * 1.0, 0, -bodyR * 0.2),
+        new THREE.Vector3(bodyR * 1.5, 0, -bodyR * 0.55),
+        new THREE.Vector3(bodyR * 2.0, 0, -bodyR * 0.75)
       ];
       const gRight = new THREE.BufferGeometry().setFromPoints(pRight);
       group.add(new THREE.Line(gRight, antMat));
@@ -349,7 +607,7 @@ export class DiveCreatureManager {
     }
 
     // 5. Trailing Propulsion Flagellum (Whip Line along -X local axis)
-    if (morph.hasFlagellum || isHunter) {
+    if (morph.hasFlagellum) {
       const pointsCount = 14;
       const flagGeo = new THREE.BufferGeometry();
       const positions = new Float32Array(pointsCount * 3);
@@ -410,6 +668,7 @@ export class DiveCreatureManager {
     group.add(crown);
     group.userData.pilotCrown = crown;
 
+    group.userData.initialSize = org.size || 6.5;
     group.userData.bodyR = bodyR;
     group.userData.morph = morph;
 
@@ -467,12 +726,12 @@ export class DiveCreatureManager {
         this.bondLines.push(lineMesh);
       }
 
-      const ax = orgA.x - 700;
-      const az = orgA.y - 700;
+      const ax = orgA.x - OCEAN_GEOMETRY.cx;
+      const az = orgA.y - OCEAN_GEOMETRY.cy;
       const ay = 30.0 + Math.sin(time * 0.003 + orgA.id) * 4.5;
 
-      const bx = orgB.x - 700;
-      const bz = orgB.y - 700;
+      const bx = orgB.x - OCEAN_GEOMETRY.cx;
+      const bz = orgB.y - OCEAN_GEOMETRY.cy;
       const by = 30.0 + Math.sin(time * 0.003 + orgB.id) * 4.5;
 
       const posAttr = lineMesh.geometry.attributes.position;
@@ -497,6 +756,18 @@ export class DiveCreatureManager {
       });
     }
     this.creaturePool.clear();
+
+    for (const item of this.dyingPool.values()) {
+      this.scene.remove(item.group);
+      item.group.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+          else child.material.dispose();
+        }
+      });
+    }
+    this.dyingPool.clear();
 
     for (const line of this.bondLines) {
       this.scene.remove(line);

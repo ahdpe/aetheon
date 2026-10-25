@@ -185,17 +185,17 @@ export class DiveCockpitHUD {
         localStorage.setItem('aetheon_observer_name', name);
         localStorage.setItem('aetheon_last_dynasty_time', Date.now().toString());
         try {
-          const myDynasties = JSON.parse(localStorage.getItem('aetheon_my_dynasty_species') || '[]');
-          if (!myDynasties.includes(org.speciesId)) {
-            myDynasties.push(org.speciesId);
-            localStorage.setItem('aetheon_my_dynasty_species', JSON.stringify(myDynasties));
+          const myDynasties = JSON.parse(localStorage.getItem('aetheon_my_dynasty_names') || '[]');
+          if (!myDynasties.includes(name)) {
+            myDynasties.push(name);
+            localStorage.setItem('aetheon_my_dynasty_names', JSON.stringify(myDynasties));
           }
         } catch (_) {}
-        this.engine.app?.sendLineageFounder?.(org.speciesId, name);
+        this.engine.app?.sendFoundDynasty?.(org.id, name, org.speciesId);
         modal?.classList.add('hidden');
         this.showCinematicEvent(
-          i18n.getLang() === 'ru' ? '👑 ДИНАСТИЯ ОСНОВАНА' : '👑 DYNASTY FOUNDED',
-          i18n.getLang() === 'ru' ? `Наблюдатель «${name}» внесен в Кодекс` : `Observer "${name}" enshrined in Codex`,
+          i18n.getLang() === 'ru' ? '👑 ВЕТВЬ ДИНАСТИИ ОСНОВАНА' : '👑 DYNASTY BRANCH FOUNDED',
+          i18n.getLang() === 'ru' ? `Основатель: «${name}» • Поколение F1` : `Founder: "${name}" • Generation F1`,
           '#f59e0b'
         );
       }
@@ -472,17 +472,15 @@ export class DiveCockpitHUD {
     const modal = document.getElementById('dive-dynasty-modal');
     if (!modal || !org) return;
 
-    // Check 1: If species already has a founder recorded in codex
-    const app = this.engine.app;
-    const sp = app?.codexModal?.allSpecies?.find(s => s.id === org.speciesId);
-    if (sp && sp.founderName) {
-      return; // Already has an enshrined founder
+    // Check 1: If this specimen already belongs to an established dynasty branch
+    if (org.dynastyName) {
+      return; // Already has an established branch dynasty
     }
 
     // Check 2: If user entered an organism of their own previously designated dynasty
     try {
-      const myDynasties = JSON.parse(localStorage.getItem('aetheon_my_dynasty_species') || '[]');
-      if (myDynasties.includes(org.speciesId)) {
+      const myDynasties = JSON.parse(localStorage.getItem('aetheon_my_dynasty_names') || '[]');
+      if (org.dynastyName && myDynasties.includes(org.dynastyName)) {
         return; // User already founded this dynasty!
       }
     } catch (_) {}
@@ -610,7 +608,10 @@ export class DiveCockpitHUD {
 
     if (title) title.textContent = latinName;
     if (sub) {
-      sub.textContent = `${commonName} • ${isRu ? 'Поколение' : 'Gen'} #${gen}`;
+      const dynastyBadge = (lastProf?.dynastyName || org.dynastyName) 
+        ? ` • 👑 ${lastProf?.dynastyName || org.dynastyName} F${lastProf?.dynastyGen || org.dynastyGen || 1}`
+        : '';
+      sub.textContent = `${commonName} • ${isRu ? 'Поколение' : 'Gen'} #${gen}${dynastyBadge}`;
     }
 
     if (trophic) {
@@ -691,5 +692,22 @@ export class DiveCockpitHUD {
     if (!el) return;
     el.className = 'dive-event-overlay flash-mitosis';
     setTimeout(() => { el.className = 'dive-event-overlay'; }, 600);
+  }
+
+  showFeedCooldownNotice(text) {
+    let el = document.getElementById('dive-feed-notice');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'dive-feed-notice';
+      el.className = 'dive-feed-notice';
+      this.container?.appendChild(el);
+    }
+    el.textContent = text;
+    el.classList.remove('fade-out');
+    void el.offsetWidth;
+    if (this.feedNoticeTimer) clearTimeout(this.feedNoticeTimer);
+    this.feedNoticeTimer = setTimeout(() => {
+      el?.classList.add('fade-out');
+    }, 1200);
   }
 }

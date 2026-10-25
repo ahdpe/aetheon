@@ -2,3 +2,8 @@ node_modules/
 .DS_Store
 *.tmp
 data/*.tmp
+*.png
+data/*.json
+test_*.js
+verify_*.js
+seafloor_texture_debug.png

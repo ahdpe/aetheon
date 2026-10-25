@@ -23,6 +23,12 @@ export class InputController {
     this.pinchStartZoom = 1.0;
     this.pinchAnchorWorld = { x: 700.0, y: 700.0 };
 
+    // 30-second feeding cooldown & subtle hint tooltip
+    this.lastFeedTime = 0;
+    this.feedCooldownMs = 30000;
+    this.cooldownHintEl = null;
+    this.cooldownHintTimer = null;
+
     this.setupListeners();
   }
 
@@ -290,6 +296,19 @@ export class InputController {
       return;
     }
 
+    // 30-second feeding cooldown check
+    const now = Date.now();
+    const elapsed = now - this.lastFeedTime;
+    if (elapsed < this.feedCooldownMs) {
+      const remainingSec = Math.ceil((this.feedCooldownMs - elapsed) / 1000);
+      this.showFeedCooldownHint(screenX, screenY, remainingSec);
+      this.renderer.addRipple(worldPt.x, worldPt.y, 'rgba(245, 158, 11, 0.20)', 18);
+      sound.playDroplet(420);
+      return;
+    }
+
+    this.lastFeedTime = now;
+
     // Clamp near-edge drops smoothly inward to (ch.r - 45) so food lands in open swimming waters
     let wx = worldPt.x;
     let wy = worldPt.y;
@@ -307,5 +326,40 @@ export class InputController {
 
     // Audio chirp
     sound.playDroplet(650 + Math.random() * 200);
+  }
+
+  showFeedCooldownHint(screenX, screenY, remainingSec) {
+    if (this.cooldownHintTimer) {
+      clearTimeout(this.cooldownHintTimer);
+    }
+    if (!this.cooldownHintEl) {
+      this.cooldownHintEl = document.createElement('div');
+      this.cooldownHintEl.className = 'feed-cooldown-hint';
+      document.body.appendChild(this.cooldownHintEl);
+    }
+
+    const isRu = (i18n.getLang() === 'ru');
+    this.cooldownHintEl.textContent = isRu 
+      ? `Подкормка: еще ${remainingSec} сек` 
+      : `Feeding ready in ${remainingSec}s`;
+
+    // Position subtly near pointer, staying within viewport
+    const pad = 14;
+    let posX = screenX + 14;
+    let posY = screenY - 26;
+    if (posX + 180 > window.innerWidth) posX = screenX - 180;
+    if (posY < pad) posY = screenY + 20;
+
+    this.cooldownHintEl.style.left = `${posX}px`;
+    this.cooldownHintEl.style.top = `${posY}px`;
+    this.cooldownHintEl.classList.remove('fade-out');
+    // Force DOM reflow to restart animation smoothly
+    void this.cooldownHintEl.offsetWidth;
+
+    this.cooldownHintTimer = setTimeout(() => {
+      if (this.cooldownHintEl) {
+        this.cooldownHintEl.classList.add('fade-out');
+      }
+    }, 1100);
   }
 }

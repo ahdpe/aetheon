@@ -99,8 +99,8 @@ export class DiveFoodManager {
     core.scale.set(radius * 1.3, radius * 1.3, 1.0);
     group.add(core);
 
-    // 3. Volumetric Nutrient Point Light
-    const light = new THREE.PointLight(isDetritus ? 0xf59e0b : 0xa3e635, 2.2, radius * 3.5, 1.2);
+    // 3. Volumetric Nutrient Point Light (localized to immediate bloom cluster)
+    const light = new THREE.PointLight(isDetritus ? 0xf59e0b : 0xa3e635, 1.4, radius * 1.5, 1.5);
     group.add(light);
 
     // 4. Drifting Phytomanna Crystals / Sparkling Flakes inside bloom

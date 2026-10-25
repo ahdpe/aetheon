@@ -1,12 +1,13 @@
 {
   "name": "aetheon-ocean",
   "version": "1.0.0",
-  "description": "AETHEON: The Autocatalytic Ocean — 24/7 Autonomous Deep-Time Morphogenetic Biome",
+  "description": "AETHEON: The Autocatalytic Ocean \u2014 24/7 Autonomous Deep-Time Morphogenetic Biome",
   "main": "server/server.js",
   "type": "module",
   "scripts": {
     "start": "node server/server.js",
-    "dev": "node --watch server/server.js"
+    "dev": "node --watch server/server.js",
+    "test": "node --test --test-concurrency=1 --max-old-space-size=2048 test/*.test.mjs"
   },
   "keywords": [
     "artificial-life",

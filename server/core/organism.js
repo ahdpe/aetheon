@@ -48,6 +48,11 @@ export class Organism {
     this.isAvatarLineage = false;
     this.pilotedTicks = 0;
     this.panicTicks = 0;
+    
+    // Genealogical Dynasty Branch (Variant 1: individual specimen lineage)
+    this.dynastyName = null;
+    this.dynastyGen = 0;
+    this.founderId = null;
   }
 
   static createRandomGenome(seedHue = null, forcePredator = null) {
@@ -245,7 +250,7 @@ export class Organism {
         if (other.carnivory > 0.35 && other.size > this.size * 1.1 && d < nearestPredatorDist) {
           nearestPredatorDist = d;
           nearestPredator = { dx, dy, d };
-        } else if (this.carnivory > 0.35 && other.size < this.size * 0.9 && d < nearestPreyDist) {
+        } else if (this.carnivory > 0.35 && (other.carnivory <= 0.35 || other.size < this.size * 0.85) && other.size <= this.size * 1.18 && d < nearestPreyDist) {
           nearestPreyDist = d;
           nearestPrey = { dx, dy, d };
         }
@@ -262,20 +267,23 @@ export class Organism {
       }
     }
 
-    // Apply fleeing force if predator is near (amplified sensory awareness & panic steering)
-    const fleeThreshold = Math.max(52.0, this.size * 6.5);
+    // Apply fleeing force if predator is near
+    const fleeThreshold = Math.max(38.0, this.size * 4.8);
     if (nearestPredator && nearestPredator.d < fleeThreshold) {
       isFleeing = true;
       const urgency = 1.0 - (nearestPredator.d / fleeThreshold);
-      const fleeForce = 3.5 + urgency * 3.5; // up to 7.0 force for close threats
+      const fleeForce = 2.8 + urgency * 2.5; // up to 5.3
       steerX -= (nearestPredator.dx / nearestPredator.d) * fleeForce;
       steerY -= (nearestPredator.dy / nearestPredator.d) * fleeForce;
     }
 
-    // Apply pursuit force if prey is near
-    if (nearestPrey && nearestPrey.d < this.size * 4.5) {
-      steerX += (nearestPrey.dx / nearestPrey.d) * 2.8;
-      steerY += (nearestPrey.dy / nearestPrey.d) * 2.8;
+    // Apply pursuit force if prey is near (active hunting lunge)
+    const huntThreshold = Math.max(55.0, this.size * 8.0);
+    if (nearestPrey && nearestPrey.d < huntThreshold) {
+      const huntUrgency = 1.0 - (nearestPrey.d / huntThreshold);
+      const huntForce = 4.2 + huntUrgency * 3.5; // up to 7.7 pursuit force!
+      steerX += (nearestPrey.dx / nearestPrey.d) * huntForce;
+      steerY += (nearestPrey.dy / nearestPrey.d) * huntForce;
     }
 
     // Add separation force
@@ -367,6 +375,13 @@ export class Organism {
       this.phase += 0.04;
     }
 
+    // Predatory hunting sprint: predator surges forward during pursuit
+    const isHunting = this.carnivory > 0.35 && nearestPrey && nearestPrey.d < huntThreshold;
+    if (isHunting) {
+      speedMultiplier += 0.85;
+      this.phase += 0.06;
+    }
+
     if (isLuredToFood && !isDetritusTarget && foodLureDist < 260 && !isPiloted) {
       // Vigorous rush towards user-dropped food!
       const sprintFactor = Math.pow(1.0 - foodLureDist / 260, 0.75) * 1.15;
@@ -408,13 +423,13 @@ export class Organism {
 
     // 3. Metabolism & Feeding
     const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-    const predatorPenalty = this.carnivory > 0.35 ? (1.5 + this.carnivory * 0.8) : 1.0;
+    const predatorPenalty = this.carnivory > 0.35 ? (1.2 + this.carnivory * 0.3) : 1.0;
     const metabolicCost = ((CONFIG.BASE_METABOLIC_RATE * (this.size * 0.12) + (currentSpeed * currentSpeed) * 0.02) * predatorPenalty) / this.genome.metabolismEfficiency;
     this.energy -= metabolicCost;
 
-    // Graze nutrients from the chemical substrate
-    if (this.carnivory < 0.6) {
-      const intakeLimit = (1.0 - this.carnivory) * (this.size * 0.22);
+    // Graze nutrients from the chemical substrate (grazers or hungry carnivores)
+    if (this.carnivory < 0.72 || this.energy < 40.0) {
+      const intakeLimit = Math.max(0.08, (1.0 - this.carnivory * 0.7)) * (this.size * 0.22);
       const consumed = grid.consumeAndExcrete(
         this.x, 
         this.y, 
@@ -449,7 +464,7 @@ export class Organism {
   }
 
   // Predation interaction: check if this organism can hunt or bite 'prey'
-  attemptPredation(prey, grid) {
+  attemptPredation(prey, grid, algaeManager = null) {
     if (this.carnivory < 0.35 || prey === this) return false;
     // Don't attack other apex hunters unless noticeably larger
     if (prey.carnivory > 0.35 && prey.size >= this.size * 0.85) return false;
@@ -458,17 +473,26 @@ export class Organism {
 
     const dx = prey.x - this.x;
     const dy = prey.y - this.y;
-    const contactDist = (this.size + prey.size) * 0.75;
+    const contactDist = (this.size + prey.size) * 0.95;
 
     if (dx * dx + dy * dy <= contactDist * contactDist) {
-      // 1. Reef shelter evasion: small organisms hide in mineral crevices / coral caverns
+      // 1. Algae Sanctuary / Kelp Thicket Evasion: 35% evasion chance if inside algae grove
+      if (algaeManager && algaeManager.isInsideShelter) {
+        const shelter = algaeManager.isInsideShelter(prey.x, prey.y);
+        if (shelter && Math.random() < 0.35) {
+          this.vx *= 0.7;
+          this.vy *= 0.7;
+          return false;
+        }
+      }
+
+      // 2. Reef shelter evasion: 25% evasion chance if inside reef crevice
       if (grid && grid.getSubstrate) {
         const preySub = grid.getSubstrate(prey.x, prey.y);
         if (preySub > 0.20 && this.size > prey.size * 1.2) {
-          // 65% chance the prey slips into a reef crevice
-          if (Math.random() < 0.65) {
-            this.vx *= 0.6;
-            this.vy *= 0.6;
+          if (Math.random() < 0.25) {
+            this.vx *= 0.75;
+            this.vy *= 0.75;
             return false;
           }
         }
@@ -480,30 +504,33 @@ export class Organism {
         prey.energy -= bite;
         this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 0.7);
         const d = Math.hypot(dx, dy) || 1.0;
-        prey.vx += (dx / d) * 4.5;
-        prey.vy += (dy / d) * 4.5;
+        prey.vx += (dx / d) * 3.5;
+        prey.vy += (dy / d) * 3.5;
         prey.panicTicks = 30;
         return { killed: false, preyId: prey.id };
       }
 
-      // Check if prey can be swallowed whole: only if predator is colossal (>2.2x prey) OR prey is depleted (< 22 energy)
-      const canSwallowWhole = (this.size > prey.size * 2.2) || (prey.energy < 22.0);
+      // Check if prey can be swallowed whole: if hunter is 25% larger, or prey is wounded (<48 energy), or 40% fatal grab
+      const canSwallowWhole = (this.size > prey.size * 1.25) || (prey.energy < 48.0) || (Math.random() < 0.40);
 
       if (canSwallowWhole) {
         // Full ingestion / kill!
-        const gainedEnergy = Math.max(30.0, prey.energy * 0.45);
+        const gainedEnergy = Math.max(35.0, prey.energy * 0.75);
         this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + gainedEnergy);
         this.kills++;
         grid.consumeAndExcrete(this.x, this.y, 0, 0.8, 0.4);
         if (grid.depositSubstrate) {
           grid.depositSubstrate(prey.x, prey.y, 0.05 * (prey.size / 8), prey.size * 0.9);
         }
+        // Hunter gains forward momentum from the kill
+        this.vx *= 1.1;
+        this.vy *= 1.1;
         return { killed: true, preyId: prey.id };
       } else {
-        // Predatory strike & bite: tears away vital energy without insta-killing healthy organisms
-        const bite = Math.min(prey.energy * 0.38, 38.0);
+        // Predatory strike & substantial bite
+        const bite = Math.min(prey.energy * 0.60, 55.0);
         prey.energy -= bite;
-        this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 0.7);
+        this.energy = Math.min(CONFIG.MAX_ORGANISM_ENERGY, this.energy + bite * 0.85);
 
         // If bite depleted remaining energy, prey perishes
         if (prey.energy <= 0.0) {
@@ -515,15 +542,15 @@ export class Organism {
           return { killed: true, preyId: prey.id };
         }
 
-        // Prey survives bite: triggers evasive sprint & alarm discharge!
+        // Prey survives bite: triggers startle sprint & alarm discharge
         const d = Math.hypot(dx, dy) || 1.0;
-        prey.vx += (dx / d) * 5.2;
-        prey.vy += (dy / d) * 5.2;
+        prey.vx += (dx / d) * 2.8;
+        prey.vy += (dy / d) * 2.8;
         prey.panicTicks = 25;
 
-        // Hunter experiences jaw recoil / handling delay
-        this.vx *= 0.4;
-        this.vy *= 0.4;
+        // Hunter experiences slight jaw recoil
+        this.vx *= 0.75;
+        this.vy *= 0.75;
 
         // Discharge defensive chemical alarm cloud in water
         if (grid.injectSignal) {
@@ -572,10 +599,17 @@ export class Organism {
       speciesId
     );
 
-    // Epigenetic inheritance: if parent was actively steered/piloted by a visitor
-    if (this.isAvatarLineage || this.pilotedTicks > 120) {
+    // Epigenetic inheritance: if parent was actively steered/piloted by a visitor or belongs to an avatar lineage
+    if (this.isAvatarLineage || this.pilotedTicks > 120 || this.dynastyName) {
       child.isAvatarLineage = true;
       child.genome.metabolismEfficiency = Math.min(1.8, child.genome.metabolismEfficiency * 1.12);
+    }
+
+    // Dynasty Branch Inheritance: direct offspring inherit dynasty and increment generation
+    if (this.dynastyName) {
+      child.dynastyName = this.dynastyName;
+      child.dynastyGen = (this.dynastyGen || 1) + 1;
+      child.founderId = this.founderId || this.id;
     }
     child.energy = this.energy * 0.95;
     return child;
@@ -656,7 +690,10 @@ export class Organism {
       adultSize: Math.round((this.adultSize || this.size) * 10) / 10,
       maturity: Math.round((this.maturity !== undefined ? this.maturity : 1.0) * 100),
       isAvatarLineage: Boolean(this.isAvatarLineage),
-      founderName: species ? (species.founderName || null) : null,
+      dynastyName: this.dynastyName || null,
+      dynastyGen: this.dynastyGen || 0,
+      founderId: this.founderId || null,
+      founderName: this.dynastyName || (species ? (species.founderName || null) : null),
       speed: Math.round(Math.sqrt(this.vx * this.vx + this.vy * this.vy) * 10) / 10,
       hue: this.hue,
       carnivory: Math.round(this.carnivory * 100),

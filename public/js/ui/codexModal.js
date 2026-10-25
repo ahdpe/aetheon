@@ -19,10 +19,12 @@ export class CodexModal {
     this.countGrazer = document.getElementById('count-grazer');
     this.countFilter = document.getElementById('count-filter');
     this.countExtinct = document.getElementById('count-extinct');
+    this.countDynasties = document.getElementById('count-dynasties');
 
     this.currentFilter = 'all';
     this.searchQuery = '';
     this.allSpecies = [];
+    this.allDynasties = [];
     this.activeSpecies = [];
     this.animFrameId = null;
 
@@ -112,9 +114,9 @@ export class CodexModal {
     }
   }
 
-  renderData(speciesList) {
-    if (!speciesList) return;
-    this.allSpecies = speciesList;
+  renderData(speciesList, journalEntries = null, dynasties = null) {
+    if (speciesList) this.allSpecies = speciesList;
+    if (dynasties) this.allDynasties = dynasties;
     this.updateFilterCounts();
     this.applyFilterAndRender();
   }
@@ -128,6 +130,7 @@ export class CodexModal {
     const filter = this.allSpecies.filter(isFilter).length;
     const grazer = this.allSpecies.filter(s => s.carnivory <= 0.35 && !isFilter(s)).length;
     const extinct = this.allSpecies.filter(s => s.extinctTime !== null || s.population === 0).length;
+    const dynastiesCount = (this.allDynasties || []).length;
 
     if (this.countAll) this.countAll.textContent = total;
     if (this.countAlive) this.countAlive.textContent = alive;
@@ -135,11 +138,19 @@ export class CodexModal {
     if (this.countGrazer) this.countGrazer.textContent = grazer;
     if (this.countFilter) this.countFilter.textContent = filter;
     if (this.countExtinct) this.countExtinct.textContent = extinct;
+    if (this.countDynasties) this.countDynasties.textContent = dynastiesCount;
   }
 
   applyFilterAndRender() {
     if (!this.speciesGrid || !this.allSpecies) return;
     const isRu = i18n.getLang() === 'ru';
+
+    // If dynasties filter is active, delegate to renderDynasties
+    if (this.currentFilter === 'dynasties') {
+      this.renderDynasties();
+      return;
+    }
+
     const isFilterSp = (s) => (s.carnivory <= 0.35 && s.carnivory < 0.1 && (s.size || 3.5) > 4.0);
 
     // 1. Filter by category
@@ -287,6 +298,109 @@ export class CodexModal {
 
     // Render microscope canvases for filtered species
     this.renderCanvasFrames(performance.now());
+  }
+
+  renderDynasties() {
+    if (!this.speciesGrid) return;
+    const isRu = i18n.getLang() === 'ru';
+    this.speciesGrid.innerHTML = '';
+
+    let list = this.allDynasties || [];
+    if (this.searchQuery && this.searchQuery.trim().length > 0) {
+      const q = this.searchQuery.toLowerCase().trim();
+      list = list.filter(d => 
+        (d.name && d.name.toLowerCase().includes(q)) || 
+        (d.speciesNameRu && d.speciesNameRu.toLowerCase().includes(q)) ||
+        (d.speciesNameEn && d.speciesNameEn.toLowerCase().includes(q)) ||
+        (d.speciesNameLa && d.speciesNameLa.toLowerCase().includes(q))
+      );
+    }
+
+    if (list.length === 0) {
+      this.speciesGrid.innerHTML = `
+        <div class="codex-empty-state">
+          <span class="empty-emoji">👑</span>
+          <p class="empty-title">${isRu ? 'Династии пока не основаны' : 'No dynasties established yet'}</p>
+          <span class="empty-desc">${isRu ? 'Войдите в режим 3D-погружения и управляйте клеткой более 30 сек, чтобы основать свою семейную ветвь!' : 'Enter 3D dive mode and pilot an organism for 30s to found your lineage branch!'}</span>
+        </div>
+      `;
+      return;
+    }
+
+    // Sort: active dynasties first (by currentCount desc), then extinct (by maxGen desc, peakCount desc)
+    const sorted = [...list].sort((a, b) => {
+      if (a.isExtinct !== b.isExtinct) return a.isExtinct ? 1 : -1;
+      if (!a.isExtinct && a.currentCount !== b.currentCount) return b.currentCount - a.currentCount;
+      if (a.maxGen !== b.maxGen) return b.maxGen - a.maxGen;
+      return b.peakCount - a.peakCount;
+    });
+
+    sorted.forEach(dyn => {
+      const card = document.createElement('div');
+      const isAlive = !dyn.isExtinct && dyn.currentCount > 0;
+      card.className = `species-card ${!isAlive ? 'extinct' : ''} dynasty-card`;
+      const hDeg = Math.round((dyn.hue || 0.5) * 360);
+      const spName = isRu ? (dyn.speciesNameRu || dyn.speciesNameLa) : (dyn.speciesNameEn || dyn.speciesNameLa);
+      const lifetimeMins = Math.max(1, Math.round(((dyn.extinctAt || Date.now()) - dyn.foundedAt) / 60000));
+
+      card.innerHTML = `
+        <div class="species-visual-container" style="display:flex;align-items:center;justify-content:center;background:radial-gradient(circle, hsla(${hDeg}, 80%, 40%, 0.25) 0%, transparent 70%);">
+          <div style="font-size: 3.5rem; text-shadow: 0 0 20px hsla(${hDeg}, 90%, 60%, 0.6); user-select: none;">👑</div>
+          <div class="species-diet-badge ${isAlive ? 'grazer' : 'filter'}" style="top: 8px; left: 8px;">
+            ${isAlive ? '🟢 ' + (isRu ? 'В ЧАШЕ' : 'ACTIVE') : '🏛️ ' + (isRu ? 'ЗАЛ СЛАВЫ' : 'HALL OF FAME')}
+          </div>
+          ${!isAlive ? `<div class="species-extinct-tag">${isRu ? 'ВЫМЕРШАЯ ВЕТВЬ' : 'EXTINCT BRANCH'}</div>` : ''}
+        </div>
+        <div class="species-card-content">
+          <div class="species-card-head">
+            <span class="species-badge-dot" style="background: hsl(${hDeg}, 90%, 60%); box-shadow: 0 0 10px hsl(${hDeg}, 90%, 60%);"></span>
+            <div class="species-title-wrap">
+              <h3 class="card-title" style="color: #fbbf24; font-size: 1.25rem;">👑 ${dyn.name}</h3>
+              <div class="card-common">${spName} (${dyn.speciesNameLa})</div>
+            </div>
+          </div>
+
+          <div class="species-traits-row">
+            <span class="trait-chip" title="${isRu ? 'Поколение ветви' : 'Branch Generation'}">🧬 F${dyn.maxGen || 1}</span>
+            <span class="trait-chip" title="${isRu ? 'Пик численности' : 'Peak Population'}">📈 ${dyn.peakCount || 1} ${isRu ? 'особ.' : 'peak'}</span>
+            <span class="trait-chip" title="${isRu ? 'Время существования' : 'Branch Lifetime'}">⏱️ ${lifetimeMins} ${isRu ? 'мин.' : 'min'}</span>
+          </div>
+
+          <div class="card-desc" style="font-style: italic; color: rgba(255,255,255,0.75);">
+            ${isAlive 
+              ? (isRu ? `Живая генеалогическая ветвь. В чаше сейчас ${dyn.currentCount} потомков Наблюдателя.` : `Active genealogical branch. Currently ${dyn.currentCount} living descendants in the droplet.`)
+              : (isRu ? `Династия завершила свой эволюционный цикл и навечно вписана в Летопись Зала Славы.` : `Dynasty has completed its evolutionary cycle and is permanently enshrined in the Hall of Fame.`)}
+          </div>
+
+          <div class="card-stats">
+            <span class="species-status-pill ${isAlive ? 'status-alive' : 'status-extinct'}">
+              ${isAlive ? `🟢 ${dyn.currentCount} ${isRu ? 'в чаше' : 'active'}` : `🏛️ ${isRu ? 'В Зале Славы' : 'Hall of Fame'}`}
+            </span>
+          </div>
+
+          ${isAlive ? `
+            <div class="species-actions-row">
+              <button class="species-track-btn dynasty-track-btn" data-dynasty-name="${dyn.name}">
+                🎯 ${isRu ? 'Найти и следить' : 'Track in Ocean'}
+              </button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+
+      if (isAlive) {
+        const trackBtn = card.querySelector('.dynasty-track-btn');
+        trackBtn?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (this.client && typeof this.client.sendTrackDynasty === 'function') {
+            this.client.sendTrackDynasty(dyn.name);
+          }
+          this.close();
+        });
+      }
+
+      this.speciesGrid.appendChild(card);
+    });
   }
 
   renderCanvasFrames(time) {

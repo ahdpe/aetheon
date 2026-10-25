@@ -61,7 +61,7 @@ export class DiveEngine {
     });
 
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.25;
 
@@ -199,6 +199,20 @@ export class DiveEngine {
     const org = this.app.renderer.currEntities.get(this.trackedId);
     if (!org) return;
 
+    // 30-second feeding cooldown
+    const now = Date.now();
+    const elapsed = now - (this.lastFeedTime || 0);
+    const cooldownMs = 30000;
+    if (elapsed < cooldownMs) {
+      const remainingSec = Math.ceil((cooldownMs - elapsed) / 1000);
+      const isRu = (window.i18n?.getLang?.() === 'ru');
+      const msg = isRu ? `Подкормка: еще ${remainingSec} сек` : `Feeding ready in ${remainingSec}s`;
+      this.hud?.showFeedCooldownNotice?.(msg);
+      sound.playDroplet(420);
+      return;
+    }
+
+    this.lastFeedTime = now;
     const dropDist = 45;
     const fx = org.x + Math.cos(this.currentHeading) * dropDist;
     const fy = org.y + Math.sin(this.currentHeading) * dropDist;

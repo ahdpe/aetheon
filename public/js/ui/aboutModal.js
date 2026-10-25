@@ -1186,25 +1186,25 @@ export class AboutModal {
             <div class="feature-card" style="border-left: 3px solid #10b981;">
               <div style="font-weight: 700; color: #10b981; font-size: 0.85rem; margin-bottom: 0.25rem;">ДЕНЬ 1 — 3</div>
               <div class="feature-title" style="font-size: 1rem;">Первичный Рассвет</div>
-              <p class="feature-desc">Свободное пастбище у пяти минеральных жерл. Зарождение первых быстрых хищников и стабилизация стартовых видов.</p>
+              <p class="feature-desc">Формирование базовой экосистемы: свободный выпас у 5 минеральных жерл, зарождение быстрых хищников и стабилизация стартовых видов.</p>
             </div>
 
             <div class="feature-card" style="border-left: 3px solid #06b6d4;">
               <div style="font-weight: 700; color: #06b6d4; font-size: 0.85rem; margin-bottom: 0.25rem;">НЕДЕЛЯ 1</div>
-              <div class="feature-title" style="font-size: 1rem;">Рифовый Архипелаг</div>
-              <p class="feature-desc">Некро-минерализация формирует первые устойчивые барьеры из био-кальцита. Капля разделяется на автономные лагуны с уникальными условиями.</p>
+              <div class="feature-title" style="font-size: 1rem;">Донный Рельеф и Заросли</div>
+              <p class="feature-desc">Био-кальцит образует 3D-рельеф дна. Разрастаются живые рощи водорослей, служащие пастбищами и защитными убежищами от хищников.</p>
             </div>
 
             <div class="feature-card" style="border-left: 3px solid #8b5cf6;">
               <div style="font-weight: 700; color: #8b5cf6; font-size: 0.85rem; margin-bottom: 0.25rem;">НЕДЕЛЯ 2 — 3</div>
-              <div class="feature-title" style="font-size: 1rem;">Эра Многоклеточных</div>
-              <p class="feature-desc">Появление генов сцепления. Составные 20–60-клеточные гиганты вытесняют одиночек и устанавливают доминирование над открытыми водами.</p>
+              <div class="feature-title" style="font-size: 1rem;">Межклеточные Связи и Родословные</div>
+              <p class="feature-desc">Включение генов сцепления: клетки объединяются в симбиотические цепочки, делящиеся энергией. Наблюдатели основывают выживающие династии.</p>
             </div>
 
             <div class="feature-card" style="border-left: 3px solid #f59e0b;">
               <div style="font-weight: 700; color: #f59e0b; font-size: 0.85rem; margin-bottom: 0.25rem;">МЕСЯЦ 1+</div>
-              <div class="feature-title" style="font-size: 1rem;">Великие Планетарные Эпохи</div>
-              <p class="feature-desc">Глубокие катаклизмы: токсичные закисления, циклы оледенения, формирование древних окаменелых городов-мегалитов в толще воды.</p>
+              <div class="feature-title" style="font-size: 1rem;">Великие Эпохи и Катаклизмы</div>
+              <p class="feature-desc">Циклы вымираний и кембрийской радиации. Смена доминирующих видов, адаптация к экстремальным условиям и летопись древних родов.</p>
             </div>
           </div>
         </div>
@@ -1286,25 +1286,25 @@ export class AboutModal {
             <div class="feature-card" style="border-left: 3px solid #10b981;">
               <div style="font-weight: 700; color: #10b981; font-size: 0.85rem; margin-bottom: 0.25rem;">DAYS 1 — 3</div>
               <div class="feature-title" style="font-size: 1rem;">The Primordial Dawn</div>
-              <p class="feature-desc">Unfettered grazing around five mineral hearths. Emergence of apex hunters and foundational speciation.</p>
+              <p class="feature-desc">Foundational ecosystem assembly: free grazing around 5 hydrothermal vents, emergence of apex predators, and stabilization of pioneer species.</p>
             </div>
 
             <div class="feature-card" style="border-left: 3px solid #06b6d4;">
               <div style="font-weight: 700; color: #06b6d4; font-size: 0.85rem; margin-bottom: 0.25rem;">WEEK 1</div>
-              <div class="feature-title" style="font-size: 1rem;">The Calcite Archipelago</div>
-              <p class="feature-desc">Necro-mineralization builds living stone barriers. The droplet fractures into discrete lagoons fostering isolated speciation.</p>
+              <div class="feature-title" style="font-size: 1rem;">Benthic Topography & Sanctuaries</div>
+              <p class="feature-desc">Bio-calcite creates dynamic 3D seabed topography. Phytobenthic algae groves take root, providing natural grazing grounds and predator shelters.</p>
             </div>
 
             <div class="feature-card" style="border-left: 3px solid #8b5cf6;">
               <div style="font-weight: 700; color: #8b5cf6; font-size: 0.85rem; margin-bottom: 0.25rem;">WEEKS 2 — 3</div>
-              <div class="feature-title" style="font-size: 1rem;">Age of Multicellularity</div>
-              <p class="feature-desc">Adhesive clades assemble 20–60-cell superorganisms. Solitary species face intense pressure from cooperative leviathans.</p>
+              <div class="feature-title" style="font-size: 1rem;">Intercellular Bonds & Dynasties</div>
+              <p class="feature-desc">Adhesion gene activation: cells form symbiotic multicellular chains sharing energy. Observers establish lasting genealogical dynasties across generations.</p>
             </div>
 
             <div class="feature-card" style="border-left: 3px solid #f59e0b;">
               <div style="font-weight: 700; color: #f59e0b; font-size: 0.85rem; margin-bottom: 0.25rem;">MONTH 1+</div>
-              <div class="feature-title" style="font-size: 1rem;">Planetary Climatic Epochs</div>
-              <p class="feature-desc">Global phase shifts: toxic bloom bottlenecks, glacial crystallization cycles, and fossilized coral megaliths across the fluid manifold.</p>
+              <div class="feature-title" style="font-size: 1rem;">Great Epochs & Extinctions</div>
+              <p class="feature-desc">Cycles of mass extinction and Cambrian radiation. Turnover of dominant species, adaptation to extreme shifts, and the chronicle of legendary lost lineages.</p>
             </div>
           </div>
         </div>

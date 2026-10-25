@@ -1,3 +1,5 @@
+import {TERRAIN_SEED} from '../../public/js/shared/terrain.js';
+import { random } from './random.js';
 import { CONFIG } from '../config.js';
 import { ChemicalGrid } from './chemicalGrid.js';
 import { SpatialHash } from './spatialHash.js';
@@ -9,6 +11,11 @@ import { AtlasManager } from './atlasManager.js';
 import { AINaturalist } from '../ai/naturalist.js';
 import { PersistenceManager } from './persistence.js';
 import { CataclysmManager } from './cataclysmManager.js';
+import { AlgaeManager } from './algaeManager.js';
+import { FamilyHistory } from './familyHistory.js';
+import { Nursery } from './nursery.js';
+import { Geography } from './geography.js';
+import { RemainsManager, ORGANIC_TO_NUTRIENT } from '../../public/js/shared/remains.js';
 
 export class SimulationEngine {
   constructor() {
@@ -23,9 +30,14 @@ export class SimulationEngine {
     this.climate = new ClimateEngine();
     this.naturalist = new AINaturalist(this.lineage);
     this.persistence = new PersistenceManager();
+    this.history = new FamilyHistory();
+    this.nursery = new Nursery();
     this.colonies = new ColonyManager();
     this.atlas = new AtlasManager(this);
     this.cataclysms = new CataclysmManager(this);
+    this.algae = new AlgaeManager();
+    this.geography = new Geography(this.grid);
+    this.remains = new RemainsManager();
     
     // Active visitor-created nutrient blooms
     this.nutrientBlooms = [];
@@ -38,6 +50,9 @@ export class SimulationEngine {
     // Scratch buffer for spatial queries
     this.neighborScratch = [];
     this.eventsBuffer = []; // Broadcast events (births, deaths, predation strikes)
+
+    // True genealogical lineages (Variant 1: branch dynasties)
+    this.activeDynasties = new Map(); // name -> dynasty metadata
 
     // Dynamic metrics window for AI Naturalist observations
     this.recentWindow = {
@@ -55,21 +70,12 @@ export class SimulationEngine {
     const restored = this.persistence.loadSnapshot(this);
     if (!restored) {
       this.seedPrimordialFauna();
-    } else {
-      // Ensure all restored organisms are strictly inside the circular chamber
-      const CX = CONFIG.CHAMBER_CENTER_X;
-      const CY = CONFIG.CHAMBER_CENTER_Y;
-      const maxR = CONFIG.CHAMBER_RADIUS - 15.0;
-      for (let i = 0; i < this.organisms.length; i++) {
-        const o = this.organisms[i];
-        const dist = Math.hypot(o.x - CX, o.y - CY);
-        if (dist > maxR) {
-          const ang = Math.atan2(o.y - CY, o.x - CX);
-          o.x = CX + Math.cos(ang) * (maxR - 20);
-          o.y = CY + Math.sin(ang) * (maxR - 20);
-        }
-      }
     }
+    this.ecologyEpoch ??= { version:1, startedAtTick:this.ticks, startedAt:Date.now(), initializedAnatomy:false };
+    if (!restored) this.remains.startedAtTick = this.ticks;
+    this.history.synchronize(this.organisms, this.ticks, { initial: true });
+    this.terrainState??={version:1,seed:TERRAIN_SEED,startedAtTick:this.ticks};
+    this.geography.init(this);
     if (this.atlas) {
       this.atlas.init();
     }
@@ -83,8 +89,8 @@ export class SimulationEngine {
     
     for (let i = 0; i < 280; i++) {
       const vent = vents[i % vents.length];
-      const angle = Math.random() * Math.PI * 2;
-      const dist = Math.random() * 60 + 5;
+      const angle = random() * Math.PI * 2;
+      const dist = random() * 60 + 5;
       
       const wx = vent.x * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + Math.cos(angle) * dist;
       const wy = vent.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + Math.sin(angle) * dist;
@@ -100,14 +106,18 @@ export class SimulationEngine {
   step() {
     this.ticks++;
 
-    // 0. Advance active visitor nutrient blooms and detritus clouds
+    // 0. Finite carcasses settle in place and return only their remaining reserve.
+    this.remains.step(this.grid);
+    // Legacy nine-second detritus clouds are allowed to finish once. New deaths
+    // create persistent bodies; legacy clouds no longer inject independent food.
     for (let b = this.nutrientBlooms.length - 1; b >= 0; b--) {
       const bloom = this.nutrientBlooms[b];
       bloom.age++;
-      if (bloom.age % 4 === 0) {
-        this.grid.injectDrop(bloom.x, bloom.y, bloom.isDetritus ? 0.2 : 0.4, bloom.radius);
+      if (!bloom.isDetritus && bloom.age % 4 === 0) {
+        this.grid.injectDrop(bloom.x, bloom.y, 0.4, bloom.radius);
       }
       if (bloom.age >= bloom.maxAge || bloom.energy <= 0) {
+        if(bloom.isDetritus && bloom.energy>0) this.grid.depositNutrients(bloom.x,bloom.y,bloom.energy*ORGANIC_TO_NUTRIENT,bloom.radius);
         this.nutrientBlooms.splice(b, 1);
       }
     }
@@ -131,7 +141,13 @@ export class SimulationEngine {
       this.spatialHash.insert(this.organisms[i]);
     }
 
+    // 2.5. Update Benthic Algae Isles & Sanctuaries
+    if (this.algae) {
+      this.algae.update(this);
+    }
+
     const newChildren = [];
+    const eligibleParents = [];
     const deadSet = new Set();
     this.eventsBuffer.length = 0;
 
@@ -140,25 +156,26 @@ export class SimulationEngine {
       const org = this.organisms[i];
       if (deadSet.has(org.id)) continue;
 
-      // Query nearby neighbors for phase coupling & predation
-      this.spatialHash.query(org.x, org.y, org.size * 3.5, this.neighborScratch);
+      // Query nearby neighbors for phase coupling & predation (predators have wider sensory horizon)
+      const queryRadius = org.carnivory > 0.35 
+        ? Math.max(55.0, org.size * 8.0) 
+        : Math.max(38.0, org.size * 5.0);
+      const senseRadius = queryRadius * org.body.senseRadius;
+      this.spatialHash.query(org.x, org.y, senseRadius, this.neighborScratch);
       
       // Step organism physics, metabolism, and food sensing (with climate constraints)
-      org.step(this.grid, this.neighborScratch, this.nutrientBlooms, effRadius, tempFactor);
+      org.step(this.grid, this.neighborScratch, this.nutrientBlooms, effRadius, tempFactor, this.remains);
+
+      if (org.isDead()) { deadSet.add(org.id); this.handleOrganismDeath(org,false); continue; }
 
       // Predation checks (carnivores attack smaller neighbors)
-      // Predation checks (carnivores attack neighbors)
       if (org.carnivory > 0.35) {
         for (let n = 0; n < this.neighborScratch.length; n++) {
           const prey = this.neighborScratch[n];
           if (!deadSet.has(prey.id)) {
-            // Piloted defense: if human is piloting prey, it evades fatal one-shots!
-            if (prey.isPiloted && Math.random() < 0.70) {
-              continue; // 70% evasion chance while piloted!
-            }
-            const strike = org.attemptPredation(prey, this.grid);
+            const strike = org.attemptPredation(prey, this.grid, this.algae);
             if (strike) {
-              this.recentWindow.kills++;
+              if (strike.killed) this.recentWindow.kills++;
               if (strike.killed) {
                 deadSet.add(prey.id);
                 this.handleOrganismDeath(prey, true);
@@ -176,38 +193,75 @@ export class SimulationEngine {
         }
       }
 
-      // Check for cell division (Mitosis)
-      if (org.canReproduce()) {
-        let allowMitosis = false;
-        if ((this.organisms.length + newChildren.length) < this.maxOrganisms) {
-          allowMitosis = true;
-        } else if (this.organisms.length >= this.maxOrganisms && Math.random() < 0.25) {
-          // Turnover: cull an old or depleted organism to maintain generational turnover
-          for (let k = 0; k < this.organisms.length; k++) {
-            const cand = this.organisms[k];
-            const isCandPiloted = cand.playerSteer && cand.playerSteer.ticks > 0;
-            if (!deadSet.has(cand.id) && cand !== org && !isCandPiloted && (cand.age > 4000 || cand.energy < 30)) {
-              deadSet.add(cand.id);
-              this.handleOrganismDeath(cand, false);
-              allowMitosis = true;
-              break;
-            }
-          }
-        }
+      if (org.canReproduce()) eligibleParents.push(org);
 
-        if (allowMitosis) {
+      // Natural death check
+      if (org.isDead()) {
+        deadSet.add(org.id);
+        this.handleOrganismDeath(org, false);
+      }
+    }
+
+    // 4. Allocate only real vacant slots, fairly among surviving parents.
+    const parents = eligibleParents.filter(o => !deadSet.has(o.id) && !o.isDead() && o.canReproduce());
+    for(let i=parents.length-1;i>0;i--) {
+      const j=Math.floor(random()*(i+1));[parents[i],parents[j]]=[parents[j],parents[i]];
+    }
+
+    // Biodiversity preservation: round-robin interleaving across species
+    // prevents runaway monoculture where one species statistically chokes out all minority species
+    const parentsBySpecies = new Map();
+    for (let i = 0; i < parents.length; i++) {
+      const p = parents[i];
+      if (!parentsBySpecies.has(p.speciesId)) parentsBySpecies.set(p.speciesId, []);
+      parentsBySpecies.get(p.speciesId).push(p);
+    }
+    const interleavedParents = [];
+    const speciesKeys = Array.from(parentsBySpecies.keys());
+    let round = 0, added = true;
+    while (added) {
+      added = false;
+      for (let k = 0; k < speciesKeys.length; k++) {
+        const list = parentsBySpecies.get(speciesKeys[k]);
+        if (round < list.length) {
+          interleavedParents.push(list[round]);
+          added = true;
+        }
+      }
+      round++;
+    }
+
+    let activeHunters = 0;
+    for (let i = 0; i < this.organisms.length; i++) {
+      if (this.organisms[i].carnivory > 0.35) activeHunters++;
+    }
+    const blockBiogenesis = this.cataclysms && this.cataclysms.isBiogenesisBlocked();
+    const hunterSlot = (!blockBiogenesis && activeHunters < 12 && deadSet.size > 0) ? 1 : 0;
+    const slots = Math.max(0,this.maxOrganisms-(this.organisms.length-deadSet.size)-hunterSlot);
+    const nurserySlot=slots>0&&this.nursery.ready(this)?1:0;
+    const chosenParents = interleavedParents.length > 0 ? interleavedParents : parents;
+    for(const org of chosenParents.slice(0,slots-nurserySlot)) {
           const specThresholdMult = this.cataclysms ? this.cataclysms.getSpeciationThresholdMultiplier() : 1.0;
           const mutMult = this.cataclysms ? this.cataclysms.getMutationMultiplier() : 1.0;
-          const childSpeciesId = this.lineage.evaluateSpeciation(org.genome, org.speciesId, specThresholdMult);
-          if (childSpeciesId !== org.speciesId) {
+          const child = org.reproduce(org.speciesId, mutMult);
+          const nextSpeciesBefore = this.lineage.nextSpeciesId;
+          const childSpeciesId = this.lineage.evaluateSpeciation(child.genome, org.speciesId, specThresholdMult);
+          child.speciesId = childSpeciesId;
+          this.history.recordBirth(org, child, this.ticks);
+          this.lineage.recordBirth(childSpeciesId);
+          const targetSpecies = this.lineage.getSpecies(childSpeciesId);
+          const isRevival = Boolean(targetSpecies && targetSpecies.extinctTime !== null && targetSpecies.id !== org.speciesId);
+          if (this.lineage.nextSpeciesId > nextSpeciesBefore || isRevival) {
             this.recentWindow.speciations++;
             if (this.cataclysms) this.cataclysms.onSpeciation();
           }
           this.recentWindow.births++;
-          const child = org.reproduce(childSpeciesId, mutMult);
+
           newChildren.push(child);
           this.eventsBuffer.push({
             type: 'birth',
+            id: child.id,
+            parentId: org.id,
             x: child.x,
             y: child.y,
             speciesId: child.speciesId
@@ -219,20 +273,12 @@ export class SimulationEngine {
           if (bondingAffinity > 0.65 && org.carnivory < 0.40) {
             this.colonies.formBond(org, child);
           }
-        }
-      }
-
-      // Natural death check
-      if (org.isDead()) {
-        deadSet.add(org.id);
-        this.handleOrganismDeath(org, false);
-      }
     }
 
     // 3.5. Colony Bond Physics: spring forces, alignment, shared metabolism
     const orgsById = new Map();
     for (let i = 0; i < this.organisms.length; i++) {
-      orgsById.set(this.organisms[i].id, this.organisms[i]);
+      if(!deadSet.has(this.organisms[i].id)) orgsById.set(this.organisms[i].id, this.organisms[i]);
     }
     this.colonies.applyBondPhysics(orgsById);
 
@@ -255,30 +301,31 @@ export class SimulationEngine {
     }
 
     // 6. Spontaneous Biogenesis (if population dips too low, vents nucleate fresh life)
-    const blockBiogenesis = this.cataclysms && this.cataclysms.isBiogenesisBlocked();
     if (!blockBiogenesis && this.organisms.length < CONFIG.MIN_ORGANISMS) {
-      const needed = CONFIG.MIN_ORGANISMS - this.organisms.length;
+      const needed = Math.min(CONFIG.MIN_ORGANISMS-this.organisms.length,Math.max(0,this.maxOrganisms-this.organisms.length-nurserySlot));
       const vents = this.grid.vents;
       const speciesList = this.lineage.getAllSpecies();
       for (let k = 0; k < needed; k++) {
-        const vent = vents[Math.floor(Math.random() * vents.length)];
-        const wx = vent.x * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 40;
-        const wy = vent.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (Math.random() - 0.5) * 40;
-        const isHunter = Math.random() < 0.15;
-        const sp = isHunter ? (speciesList[2] || speciesList[0]) : speciesList[Math.floor(Math.random() * 2)];
-        this.organisms.push(new Organism(wx, wy, Organism.createRandomGenome(sp.hue, isHunter), 1, 0, sp.id));
+        const vent = vents[Math.floor(random() * vents.length)];
+        const wx = vent.x * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (random() - 0.5) * 40;
+        const wy = vent.y * (CONFIG.WORLD_SIZE / CONFIG.GRID_SIZE) + (random() - 0.5) * 40;
+        const isHunter = random() < 0.15;
+        const sp = isHunter ? (speciesList[2] || speciesList[0]) : speciesList[Math.floor(random() * 2)];
+        const newborn = new Organism(wx, wy, Organism.createRandomGenome(sp.hue, isHunter), 1, 0, sp.id);
+        this.history.addRoot(newborn, this.ticks, 'biogenesis');
+        this.organisms.push(newborn);
       }
     }
 
     // 6.5. Natural Ecological Balance: prevent total hunter extinction without vent-camping
-    let activeHunters = 0;
+    activeHunters = 0;
     for (let i = 0; i < this.organisms.length; i++) {
       if (this.organisms[i].carnivory > 0.35) activeHunters++;
     }
 
-    if (!blockBiogenesis && activeHunters < 4) {
-      const neededHunters = Math.min(2, 4 - activeHunters);
-      let hunterSpecies = this.lineage.getSpecies(3); // Vibrionox vorax
+    if (!blockBiogenesis && activeHunters < 12) {
+      const neededHunters = Math.min(2, 12 - activeHunters, Math.max(0, this.maxOrganisms - this.organisms.length-nurserySlot));
+      let hunterSpecies = this.lineage.getAllSpecies().find(s => s.carnivory > 0.45 && s.population > 0) || this.lineage.getSpecies(3);
       if (!hunterSpecies) {
         hunterSpecies = this.lineage.getAllSpecies().find(s => s.carnivory > 0.45) || this.lineage.getAllSpecies()[2];
       }
@@ -287,38 +334,59 @@ export class SimulationEngine {
       const CY = CONFIG.CHAMBER_CENTER_Y;
       for (let h = 0; h < neededHunters; h++) {
         // Disperse in pelagic open water AWAY from hydrothermal vents to allow grazers to thrive
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 180 + Math.random() * 220;
+        const angle = random() * Math.PI * 2;
+        const dist = 180 + random() * 220;
         const wx = CX + Math.cos(angle) * dist;
         const wy = CY + Math.sin(angle) * dist;
         const org = new Organism(wx, wy, Organism.createRandomGenome(hunterSpecies.hue, true), 1, 0, hunterSpecies.id);
         org.maturity = 0.55;
         org.size = org.adultSize * (0.38 + 0.62 * org.maturity);
         org.energy = 75.0; // Moderate energy; must hunt actively to grow & reproduce
+        this.history.addRoot(org, this.ticks, 'biogenesis');
         this.organisms.push(org);
       }
     }
 
-    // 7. Update lineage statistics every 5 seconds (50 ticks)
+    // 7. Update lineage and dynasty statistics
+    if (this.ticks % 20 === 0) {
+      this.updateDynasties();
+      this.history.synchronize(this.organisms, this.ticks);
+    }
     if (this.ticks % 50 === 0) {
       this.lineage.updatePopulations(this.organisms);
+      if (this.grid.updateTerrainFromLife) {
+        this.grid.updateTerrainFromLife(this.algae);
+      }
     }
 
     // 8. Trigger AI observations check
     if (this.ticks % 100 === 0) {
-      this.naturalist.checkObservation(this.getStats()).then(observed => {
+      const capturedStats = this.getStats();
+      this.naturalist.checkObservation(capturedStats).then(observed => {
         if (observed) {
-          this.resetRecentWindow();
+          this.resetRecentWindow(capturedStats);
         }
       }).catch(err => {
         console.error('[Engine] Observation check error:', err);
       });
     }
 
+    // 8.2. AI Novel Species Genesis when biodiversity declines below 3 species
+    if (this.ticks % 1200 === 0 && !this.novelSpeciesGenesisBusy) {
+      const liveSpeciesCount = this.lineage.getAllSpecies().filter(s => s.population > 0).length;
+      if (liveSpeciesCount <= 2 && this.organisms.length < this.maxOrganisms) {
+        this.triggerNovelSpeciesGenesis();
+      }
+    }
+
     // 8.5. Check 24-hour daily atlas cycle (every 200 ticks)
     if (this.ticks % 200 === 0 && this.atlas) {
       this.atlas.checkDailyCycle();
     }
+
+    // Introductions use a real vacant slot after ordinary life and reproduction.
+    this.nursery.process(this);
+    this.geography.step(this);
 
     // 9. Periodic persistence autosave (every 10 mins)
     if (this.ticks % (CONFIG.TICK_RATE_HZ * 60 * 10) === 0) {
@@ -328,7 +396,11 @@ export class SimulationEngine {
 
   // Handle external visitor perturbation (dropping nutrients, stirring water)
   injectInteraction(type, x, y, options = {}) {
+    if (![x, y].every(Number.isFinite)) return { success: false, reason: 'invalid_coordinates' };
     if (type === 'nutrient_drop') {
+      const now = Date.now();
+      if (now - (this.lastVisitorFeed ?? 0) < 5000) return { success: false, reason: 'world_cooldown' };
+      if (this.nutrientBlooms.filter(b => !b.isDetritus).length >= 8) return { success: false, reason: 'world_quota' };
       const CX = CONFIG.CHAMBER_CENTER_X;
       const CY = CONFIG.CHAMBER_CENTER_Y;
       const R = CONFIG.CHAMBER_RADIUS;
@@ -359,18 +431,17 @@ export class SimulationEngine {
         maxAge: 350,   // ~35 seconds active lifespan
         age: 0
       };
+      this.lastVisitorFeed = now;
       this.nutrientBlooms.push(bloom);
       this.grid.injectDrop(dropX, dropY, 4.5, 95);
       return { success: true, type: 'nutrient_drop', x: dropX, y: dropY, bloom };
-    } else if (type === 'thermal_burst') {
-      this.grid.injectDrop(x, y, 4.0, 110);
-      return { success: true, type: 'thermal_burst', x, y };
     }
     return { success: false };
   }
 
   // Handle visitor first-person ciliary steering impulse with active throttle (thrust)
-  applySteer(orgId, steerX, steerY, thrust = 1.0) {
+  applySteer(orgId, steerX, steerY, thrust = 1.0, clientId = null) {
+    if (!clientId || this.pilotedMap.get(orgId) !== clientId || ![steerX, steerY, thrust].every(Number.isFinite)) return false;
     for (let i = 0; i < this.organisms.length; i++) {
       const o = this.organisms[i];
       if (o.id === orgId) {
@@ -413,7 +484,7 @@ export class SimulationEngine {
     this.pilotedMap.set(numId, clientId);
     this.clientPilotMap.set(clientId, numId);
     o.isPiloted = true;
-    o.energy = Math.max(o.energy, 95.0); // Vitality boost for pilot immersion
+
     o.playerSteer = { x: 0, y: 0, ticks: 100 };
     return true;
   }
@@ -466,6 +537,22 @@ export class SimulationEngine {
       }
     }
 
+    const geo = this.geography ? this.geography.broadcast() : null;
+    let habitatSummary = '';
+    if (geo?.regions) {
+      habitatSummary = geo.regions.map(r => `${r.nameRu || r.id}: ${r.cells} кл.`).join(', ');
+    }
+
+    let topDynastyName = null;
+    let topDynastyGen = 0;
+    for (let i = 0; i < this.organisms.length; i++) {
+      const o = this.organisms[i];
+      if (o.dynastyName && o.dynastyGen > topDynastyGen) {
+        topDynastyGen = o.dynastyGen;
+        topDynastyName = o.dynastyName;
+      }
+    }
+
     return {
       organismCount: this.organisms.length,
       speciesCount: liveSpecies.length,
@@ -477,6 +564,7 @@ export class SimulationEngine {
       epochNameEn: this.naturalist.epochNameEn,
       epochNameRu: this.naturalist.epochNameRu,
       ticks: this.ticks,
+      observedAt: Date.now(),
       recentKills: this.recentWindow.kills,
       recentBirths: this.recentWindow.births,
       recentSpeciations: this.recentWindow.speciations,
@@ -486,16 +574,22 @@ export class SimulationEngine {
       topPredatorNameRu: apexHunterSpecies ? (apexHunterSpecies.nameRu || apexHunterSpecies.nameLa) : null,
       topPredatorNameEn: apexHunterSpecies ? (apexHunterSpecies.nameEn || apexHunterSpecies.nameLa) : null,
       reefCoverage: this.grid.getReefCoverage ? this.grid.getReefCoverage() : 0,
+      habitatSummary,
+      activeDynastiesCount: this.activeDynasties ? this.activeDynasties.size : 0,
+      topDynastyName,
+      topDynastyGen,
+      cataclysmPhase: this.cataclysms?.phase || 'stable',
       ...this.colonies.getStats(),
       ...this.climate.getStats()
     };
   }
 
-  resetRecentWindow() {
-    this.recentWindow.kills = 0;
-    this.recentWindow.births = 0;
-    this.recentWindow.speciations = 0;
-    this.recentWindow.windowStartTime = Date.now();
+  resetRecentWindow(observed = null) {
+    // Events occurring while the asynchronous narrator is working belong to the next window.
+    this.recentWindow.kills = observed ? Math.max(0, this.recentWindow.kills - observed.recentKills) : 0;
+    this.recentWindow.births = observed ? Math.max(0, this.recentWindow.births - observed.recentBirths) : 0;
+    this.recentWindow.speciations = observed ? Math.max(0, this.recentWindow.speciations - observed.recentSpeciations) : 0;
+    this.recentWindow.windowStartTime = observed?.observedAt ?? Date.now();
   }
 
   // Find an organism by ID for detailed profile inspection
@@ -503,25 +597,314 @@ export class SimulationEngine {
     const org = this.organisms.find(o => o.id === id);
     if (!org) return null;
     const species = this.lineage.getSpecies(org.speciesId);
-    return org.getDetailedProfile(species);
+    const profile = org.getDetailedProfile(species);
+    profile.familyId = org.familyId;
+    profile.familyName = this.history.families.get(org.familyId)?.displayName??null;
+    if (org.aiBioScan) {
+      profile.aiBioScan = org.aiBioScan;
+    }
+    if (org.dynastyName && this.activeDynasties.has(org.dynastyName)) {
+      const dyn = this.activeDynasties.get(org.dynastyName);
+      profile.dynastyLivingCount = dyn.currentCount;
+      profile.dynastyPeakCount = dyn.peakCount;
+      profile.dynastyMaxGen = dyn.maxGen;
+    }
+    return profile;
+  }
+
+  // Interactive AI Bio-Scan: requested by a spectator clicking on an organism
+  async handleBioScan(id) {
+    const org = this.organisms.find(o => o.id === id);
+    if (!org) return { success: false, error: 'Organism not found or perished' };
+    if (org.aiBioScan) return { success: true, scan: org.aiBioScan };
+    const species = this.lineage.getSpecies(org.speciesId);
+    const stats = this.getStats();
+    const scan = await this.naturalist.scanOrganismBiography(org, species, stats);
+    if (scan) {
+      org.aiBioScan = scan;
+      return { success: true, scan };
+    }
+    return { success: false, error: 'Scanner busy or offline' };
+  }
+
+  // AI-driven species genesis: introduced when living biodiversity drops below critical threshold
+  async triggerNovelSpeciesGenesis() {
+    if (this.novelSpeciesGenesisBusy) return;
+    this.novelSpeciesGenesisBusy = true;
+    try {
+      const stats = this.getStats();
+      const spec = await this.naturalist.engineerNovelSpecies(stats);
+      if (spec && spec.nameLa) {
+        const founderSpecies = this.lineage.createSpecies({
+          nameLa: spec.nameLa,
+          nameEn: spec.nameEn || spec.nameLa,
+          nameRu: spec.nameRu || spec.nameLa,
+          descriptionEn: spec.storyEn || '',
+          descriptionRu: spec.storyRu || '',
+          hue: Math.max(0, Math.min(1, spec.hue ?? 0.6)),
+          carnivory: Math.max(0, Math.min(1, spec.carnivory ?? 0.1)),
+          size: Math.max(3.0, Math.min(8.5, spec.size ?? 5.5)),
+          speedMax: Math.max(1.2, Math.min(4.5, spec.speedMax ?? 2.5)),
+          chemotaxisNutrient: 1.0,
+          adhesion: spec.trophicRole === 'colony_builder' ? 0.8 : 0.2
+        }, 0);
+        founderSpecies.aiChronicle = true;
+
+        const CX = CONFIG.CHAMBER_CENTER_X;
+        const CY = CONFIG.CHAMBER_CENTER_Y;
+        const clusterSize = 6; // Viable pioneer cluster (prevents instant extinction)
+        for (let i = 0; i < clusterSize; i++) {
+          const angle = random() * Math.PI * 2;
+          const dist = 100 + random() * 260;
+          const founderOrg = new Organism(
+            CX + Math.cos(angle) * dist,
+            CY + Math.sin(angle) * dist,
+            Organism.createRandomGenome(founderSpecies.hue, founderSpecies.carnivory > 0.35),
+            1, 0, founderSpecies.id
+          );
+          founderOrg.energy = 140.0;
+          founderOrg.size = founderSpecies.size;
+          this.history.addRoot(founderOrg, this.ticks, 'ai_genesis');
+          this.organisms.push(founderOrg);
+        }
+
+        this.naturalist.addEntry({
+          type: 'species',
+          icon: spec.carnivory > 0.35 ? '⚔️' : '🧬',
+          badgeEn: 'AI Pioneer',
+          badgeRu: 'ИИ-Первопроходец',
+          speciesId: founderSpecies.id,
+          species: {
+            id: founderSpecies.id,
+            hue: founderSpecies.hue,
+            size: founderSpecies.size,
+            carnivory: founderSpecies.carnivory,
+            speedMax: founderSpecies.speedMax,
+            nameLa: founderSpecies.nameLa,
+            nameRu: founderSpecies.nameRu,
+            nameEn: founderSpecies.nameEn
+          },
+          titleEn: `🧬 AI Genesis: ${founderSpecies.nameLa}`,
+          titleRu: `🧬 ИИ-Генезис: ${founderSpecies.nameRu}`,
+          contentEn: spec.storyEn || `${founderSpecies.nameEn} introduced to replenish biodiversity.`,
+          contentRu: spec.storyRu || `Новый адаптивный морф «${founderSpecies.nameRu}» заселен в океан для восстановления биоразнообразия.`,
+          insightEn: 'AI observer detected biodiversity decline and introduced an adaptive founder lineage.',
+          insightRu: 'ИИ-наблюдатель зафиксировал спад видового разнообразия и ввел адаптивную линию первопроходцев.',
+          timestamp: Date.now()
+        });
+      }
+    } catch (err) {
+      console.warn('[Engine] Novel species genesis failed:', err.message);
+    } finally {
+      this.novelSpeciesGenesisBusy = false;
+    }
+  }
+
+  // Autonomous Daily Evolution Demiurge: executes once per 24 hours to enrich world and species diversity
+  async executeDailyEvolution(dayNumber) {
+    if (this.dailyEvolutionBusy) return;
+    this.dailyEvolutionBusy = true;
+    try {
+      console.log(`[Engine] Initiating Daily AI Evolutionary Leap for Day ${dayNumber}...`);
+      const stats = this.getStats();
+      const leap = await this.naturalist.engineerDailyEvolution(dayNumber, stats);
+      if (!leap || !leap.novelSpecies) {
+        console.warn(`[Engine] Daily evolution returned empty blueprint for Day ${dayNumber}`);
+        this.atlas.recordDay(dayNumber);
+        return;
+      }
+
+      const CX = CONFIG.CHAMBER_CENTER_X;
+      const CY = CONFIG.CHAMBER_CENTER_Y;
+      const quadrantOffsets = {
+        'NW': { x: -440, y: -440 },
+        'NE': { x: 440, y: -440 },
+        'SW': { x: -440, y: 440 },
+        'SE': { x: 440, y: 440 },
+        'DEEP_SOUTH': { x: 0, y: 620 },
+        'NORTH_RIM': { x: 0, y: -620 },
+        'EAST_SHELF': { x: 620, y: 0 },
+        'WEST_TRENCH': { x: -620, y: 0 }
+      };
+      const offset = quadrantOffsets[leap.worldIntervention?.quadrant] || quadrantOffsets['SE'];
+      const wx = CX + offset.x + (random() - 0.5) * 80;
+      const wy = CY + offset.y + (random() - 0.5) * 80;
+
+      // 1. Execute World Intervention ("разнообразие мира")
+      const wIntervention = leap.worldIntervention || {};
+      const wType = wIntervention.type || 'fumarole';
+      if (wType === 'fumarole') {
+        const N = this.grid.size;
+        const scale = N / CONFIG.WORLD_SIZE;
+        const fx = Math.max(12, Math.min(N - 13, Math.round(wx * scale)));
+        const fy = Math.max(12, Math.min(N - 13, Math.round(wy * scale)));
+        const fumId = `fumarole_day_${dayNumber}`;
+        this.grid.ephemeralFumaroles = this.grid.ephemeralFumaroles.filter(f => f.id !== fumId);
+        this.grid.ephemeralFumaroles.push({
+          id: fumId,
+          nameRu: wIntervention.nameRu || 'Термальный очаг',
+          nameEn: wIntervention.nameEn || 'Thermal Fumarole',
+          x: fx,
+          y: fy,
+          radius: 7,
+          power: Math.max(0.6, Math.min(0.95, wIntervention.power || 0.8)),
+          hue: Math.max(0, Math.min(1, wIntervention.hue ?? 0.78)),
+          life: 0,
+          maxLife: 864000 // Sustained 24h thermal plume
+        });
+        console.log(`[Engine] World Intervention: Erupted new Fumarole «${wIntervention.nameRu}» at grid (${fx}, ${fy})`);
+      } else if (wType === 'algae_grove') {
+        if (this.algae && this.algae.makePlant) {
+          const plant = this.algae.makePlant({
+            id: this.algae.nextId++,
+            nameRu: wIntervention.nameRu || 'Водорослевая заводь',
+            nameEn: wIntervention.nameEn || 'Algal Grove',
+            x: wx,
+            y: wy,
+            baseRadius: 46 + random() * 14,
+            hue: Math.max(0, Math.min(1, wIntervention.hue ?? 0.38)),
+            frondCount: 16,
+            density: 0.95
+          });
+          this.algae.isles.push(plant);
+          console.log(`[Engine] World Intervention: Bloomed Algal Grove «${wIntervention.nameRu}» at (${Math.round(wx)}, ${Math.round(wy)})`);
+        }
+      } else if (wType === 'calcite_reef') {
+        const N = this.grid.size;
+        const scale = N / CONFIG.WORLD_SIZE;
+        const gx = Math.round(wx * scale);
+        const gy = Math.round(wy * scale);
+        const r = 10;
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
+            const d = Math.hypot(dx, dy);
+            if (d <= r) {
+              const cy = Math.max(0, Math.min(N - 1, gy + dy));
+              const cx = Math.max(0, Math.min(N - 1, gx + dx));
+              const idx = cy * N + cx;
+              this.grid.substrate[idx] = Math.min(1.0, this.grid.substrate[idx] + (1 - d / r) * 0.7);
+            }
+          }
+        }
+        console.log(`[Engine] World Intervention: Precipitated Calcite Reef Shelf «${wIntervention.nameRu}» at grid (${gx}, ${gy})`);
+      }
+
+      // 2. Execute Novel Species Genesis ("разнообразие организмов")
+      const spec = leap.novelSpecies;
+      const founderSpecies = this.lineage.createSpecies({
+        nameLa: spec.nameLa || `Aetheon-${dayNumber}`,
+        nameEn: spec.nameEn || `Pioneer Day ${dayNumber}`,
+        nameRu: spec.nameRu || `Первопроходец Дня ${dayNumber}`,
+        descriptionEn: spec.storyEn || '',
+        descriptionRu: spec.storyRu || '',
+        hue: Math.max(0, Math.min(1, spec.hue ?? 0.6)),
+        carnivory: Math.max(0, Math.min(1, spec.carnivory ?? 0.1)),
+        size: Math.max(3.0, Math.min(8.5, spec.size ?? 5.5)),
+        speedMax: Math.max(1.5, Math.min(4.5, spec.speedMax ?? 2.5)),
+        adhesion: Math.max(0, Math.min(1, spec.adhesion ?? (spec.trophicRole === 'colony_builder' ? 0.8 : 0.2))),
+        elongation: Math.max(0, Math.min(1, spec.elongation ?? 0.5)),
+        shell: Math.max(0, Math.min(1, spec.shell ?? 0.3)),
+        flagella: Math.max(0, Math.min(1, spec.flagella ?? 0.6)),
+        sensing: Math.max(0, Math.min(1, spec.sensing ?? 0.6)),
+        chemotaxisNutrient: spec.carnivory > 0.35 ? 0.2 : 1.2
+      }, 0);
+      founderSpecies.aiChronicle = true;
+      founderSpecies.genesisDay = dayNumber;
+
+      // Seed a robust founder cluster of 10 viable individuals near the world intervention
+      const clusterSize = 10;
+      for (let i = 0; i < clusterSize; i++) {
+        const angle = random() * Math.PI * 2;
+        const dist = 30 + random() * 80;
+        const orgX = Math.max(CX - CONFIG.CHAMBER_RADIUS + 50, Math.min(CX + CONFIG.CHAMBER_RADIUS - 50, wx + Math.cos(angle) * dist));
+        const orgY = Math.max(CY - CONFIG.CHAMBER_RADIUS + 50, Math.min(CY + CONFIG.CHAMBER_RADIUS - 50, wy + Math.sin(angle) * dist));
+
+        const founderOrg = new Organism(
+          orgX, orgY,
+          {
+            size: founderSpecies.size,
+            hue: founderSpecies.hue,
+            speedMax: founderSpecies.speedMax,
+            carnivory: founderSpecies.carnivory,
+            chemotaxisNutrient: founderSpecies.chemotaxisNutrient,
+            chemotaxisWaste: -0.6,
+            ciliaryFrequency: 0.25,
+            phaseCoupling: 0.4,
+            splitThreshold: founderSpecies.carnivory > 0.35 ? 170.0 : 90.0,
+            metabolismEfficiency: 1.15,
+            mutationRate: 0.05,
+            adhesion: founderSpecies.adhesion,
+            elongation: founderSpecies.elongation,
+            shell: founderSpecies.shell,
+            flagella: founderSpecies.flagella,
+            sensing: founderSpecies.sensing
+          },
+          1, 0, founderSpecies.id
+        );
+        founderOrg.energy = 150.0;
+        founderOrg.adultSize = founderSpecies.size;
+        founderOrg.size = founderSpecies.size;
+        founderOrg.maturity = 1.0;
+        this.history.addRoot(founderOrg, this.ticks, 'ai_daily_genesis');
+        this.organisms.push(founderOrg);
+      }
+      console.log(`[Engine] Species Genesis: Seeded ${clusterSize} pioneers of «${founderSpecies.nameRu}» (ID: ${founderSpecies.id})`);
+
+      // 3. Publish to Naturalist Journal
+      this.naturalist.addEntry({
+        type: 'species',
+        icon: founderSpecies.carnivory > 0.35 ? '⚔️' : (founderSpecies.adhesion > 0.6 ? '🪸' : '🧬'),
+        badgeEn: `🌅 EVOLUTIONARY LEAP • DAY ${dayNumber}`,
+        badgeRu: `🌅 ЭВОЛЮЦИОННЫЙ СКАЧОК • ДЕНЬ ${dayNumber}`,
+        speciesId: founderSpecies.id,
+        species: {
+          id: founderSpecies.id,
+          hue: founderSpecies.hue,
+          size: founderSpecies.size,
+          carnivory: founderSpecies.carnivory,
+          speedMax: founderSpecies.speedMax,
+          nameLa: founderSpecies.nameLa,
+          nameRu: founderSpecies.nameRu,
+          nameEn: founderSpecies.nameEn
+        },
+        titleEn: `🌅 Day ${dayNumber}: ${leap.atlasChronicle?.titleEn || founderSpecies.nameEn}`,
+        titleRu: `🌅 День ${dayNumber}: ${leap.atlasChronicle?.titleRu || founderSpecies.nameRu}`,
+        contentEn: `${founderSpecies.nameEn} (${founderSpecies.nameLa}): ${spec.storyEn || 'Adaptive counter-species emerged.'}\n\nGeological shift: ${wIntervention.nameEn || 'Habitat shift'} formed.`,
+        contentRu: `«${founderSpecies.nameRu}» (${founderSpecies.nameLa}): ${spec.storyRu || 'Зарожден новый адаптивный вид.'}\n\nГеографический сдвиг: возник объект «${wIntervention.nameRu || 'Новый биотоп'}».`,
+        insightEn: leap.atlasChronicle?.summaryEn || 'Autonomous evolution generated novel biodiversity.',
+        insightRu: leap.atlasChronicle?.summaryRu || 'Автономная эволюция создала новую ветвь жизни и биотоп.',
+        timestamp: Date.now()
+      });
+
+      // 4. Record Daily Atlas entry with enriched AI chronicle
+      this.atlas.recordDay(dayNumber, false, leap);
+
+    } catch (err) {
+      console.warn(`[Engine] Daily evolution failed for Day ${dayNumber}:`, err.message);
+      this.atlas.recordDay(dayNumber);
+    } finally {
+      this.dailyEvolutionBusy = false;
+    }
   }
 
   // Pack low-latency 10 Hz broadcast packet for clients
   getBroadcastPacket() {
-    const orgData = new Float32Array(this.organisms.length * 10);
+    const orgData = new Array(this.organisms.length * 15);
     let ptr = 0;
     for (let i = 0; i < this.organisms.length; i++) {
       const o = this.organisms[i];
       orgData[ptr++] = o.id;
-      orgData[ptr++] = o.x;
-      orgData[ptr++] = o.y;
-      orgData[ptr++] = o.vx;
-      orgData[ptr++] = o.vy;
-      orgData[ptr++] = o.energy;
-      orgData[ptr++] = o.size;
-      orgData[ptr++] = o.hue;
+      orgData[ptr++] = Math.round(o.x * 10) / 10;
+      orgData[ptr++] = Math.round(o.y * 10) / 10;
+      orgData[ptr++] = Math.round(o.vx * 100) / 100;
+      orgData[ptr++] = Math.round(o.vy * 100) / 100;
+      orgData[ptr++] = Math.round(o.energy * 1) / 1;
+      orgData[ptr++] = Math.round(o.size * 10) / 10;
+      orgData[ptr++] = Math.round(o.hue * 100) / 100;
       orgData[ptr++] = o.speciesId;
-      orgData[ptr++] = o.carnivory;
+      orgData[ptr++] = Math.round(o.carnivory * 100) / 100;
+      for (const key of ['elongation','shell','flagella','sensing']) orgData[ptr++] = Math.round(o.body[key]*100)/100;
+      orgData[ptr++] = Math.round(o.phase*100)/100;
     }
 
     return {
@@ -538,54 +921,138 @@ export class SimulationEngine {
         d: b.isDetritus ? 1 : 0,
         h: b.hue !== undefined ? Math.round(b.hue * 100) / 100 : undefined
       })),
+      remains: this.ticks%20===0 ? this.remains.broadcast():undefined,
       colonies: this.colonies.getBondPairs(),
       climate: this.climate.getBroadcastState(),
       pilots: this.getPilotedIds(),
       vents: (this.ticks % 20 === 0 && this.grid.getVentsState) ? this.grid.getVentsState() : undefined,
+      ecology: this.ticks%20===0 ? this.getEcologyState():undefined,
+      geography: this.ticks%20===0 ? this.geography.broadcast():undefined,
+      algae: (this.ticks % 20 === 0 && this.algae) ? this.algae.getBroadcastState() : undefined,
       cataclysm: this.cataclysms ? this.cataclysms.getBroadcastState() : undefined,
       lazarus: this.cataclysms ? this.cataclysms.getLazarusIds() : undefined
     };
   }
 
-  // Handle organism demise: release chemical nutrients, deposit bio-calcite reef substrate, and form organic detritus
-  handleOrganismDeath(org, isPredation = false, forceDetritus = false) {
-    // 1. Dissolve organism mass into nutrients
-    this.grid.injectDrop(org.x, org.y, org.size * 0.25, org.size * 1.5);
+  getEcologyState() {
+    return {epoch:this.ecologyEpoch,plants:this.algae.isles.length,floraBirths:this.algae.totals.births,floraDeaths:this.algae.totals.deaths,
+      biomass:Math.round(this.algae.isles.reduce((sum,p)=>sum+p.biomass,0)),remains:this.remains.getStats()};
+  }
 
-    // 2. Necro-calcification: deposit structural bio-calcite into substrate (bone reefs)
+  // Every animal death leaves a bounded, finite reserve. No instantaneous organic
+  // injection or probabilistic second food cloud is added on top of that reserve.
+  handleOrganismDeath(org, isPredation = false) {
+    if (org.necromassRecorded) return;
+    this.history.recordDeath(org, this.ticks, isPredation ? 'predation' : 'energy_or_age');
+    this.remains.add(org, this.ticks, this.grid, isPredation ? 'predation':'energy_or_age');
+    // Mineral substrate is a separate structural channel, not edible organic energy.
     if (this.grid.depositSubstrate) {
       this.grid.depositSubstrate(org.x, org.y, 0.12 * (org.size / 8), org.size * 1.5);
     }
 
-    // 3. Detritus cloud: dead cells leave scavengeable necromass for grazers
-    // Throttled: only adult organisms (maturity >= 0.7, size >= 4.0) with bounded probability or predation or forced test
-    const shouldSpawn = forceDetritus || (org.maturity >= 0.7 && org.size >= 4.0 && (isPredation ? Math.random() < 0.45 : Math.random() < 0.25));
-    if (shouldSpawn) {
-      this.spawnDetritusBloom(org.x, org.y, org.size, org.hue, org.energy);
+  }
+
+  foundDynasty(orgId, founderName) {
+    const cleanName = String(founderName || '').trim().slice(0, 32);
+    if (!cleanName || /[<>\x00-\x1f]/.test(cleanName) || this.activeDynasties.has(cleanName)) return null;
+    const org = this.organisms.find(o => o.id === orgId);
+    if (!org) return null;
+    if (org.dynastyName) {
+      // Specimen already belongs to a dynasty
+      return null;
+    }
+
+    org.dynastyName = cleanName;
+    org.dynastyGen = 1;
+    org.founderId = org.id;
+    org.isAvatarLineage = true;
+
+    const species = this.lineage.getSpecies(org.speciesId);
+    const dynasty = {
+      name: cleanName,
+      founderOrgId: org.id,
+      speciesId: org.speciesId,
+      speciesNameLa: species ? species.nameLa : 'Aetheobiont',
+      speciesNameRu: species ? species.nameRu : 'Эфиробионт',
+      speciesNameEn: species ? species.nameEn : 'Aetheobiont',
+      hue: org.hue,
+      foundedAt: Date.now(),
+      peakCount: 1,
+      currentCount: 1,
+      maxGen: 1,
+      isExtinct: false,
+      extinctAt: null
+    };
+    this.activeDynasties.set(cleanName, dynasty);
+
+    if (this.naturalist) {
+      this.naturalist.recordFounderDynasty(dynasty.speciesNameRu, dynasty.speciesNameEn, cleanName, org.hue);
+    }
+    console.log(`[Dynasty] Observer established lineage branch "${cleanName}" on specimen #${org.id} (${dynasty.speciesNameLa})`);
+    return dynasty;
+  }
+
+  updateDynasties() {
+    if (this.activeDynasties.size === 0) return;
+    const counts = new Map();
+    const maxGens = new Map();
+
+    for (let i = 0; i < this.organisms.length; i++) {
+      const dName = this.organisms[i].dynastyName;
+      if (dName) {
+        counts.set(dName, (counts.get(dName) || 0) + 1);
+        const curGen = this.organisms[i].dynastyGen || 1;
+        if (curGen > (maxGens.get(dName) || 1)) {
+          maxGens.set(dName, curGen);
+        }
+      }
+    }
+
+    for (const [name, dynasty] of this.activeDynasties.entries()) {
+      if (dynasty.isExtinct) continue;
+      const count = counts.get(name) || 0;
+      dynasty.currentCount = count;
+      const mg = maxGens.get(name) || dynasty.maxGen;
+      if (mg > dynasty.maxGen) dynasty.maxGen = mg;
+      if (count > dynasty.peakCount) dynasty.peakCount = count;
+
+      if (count === 0) {
+        dynasty.isExtinct = true;
+        dynasty.extinctAt = Date.now();
+        const lifetimeMins = Math.max(1, Math.round((dynasty.extinctAt - dynasty.foundedAt) / 60000));
+        if (this.naturalist && this.naturalist.recordDynastyExtinction) {
+          this.naturalist.recordDynastyExtinction(
+            dynasty.name,
+            dynasty.speciesNameRu,
+            dynasty.speciesNameEn,
+            dynasty.maxGen,
+            dynasty.peakCount,
+            lifetimeMins,
+            dynasty.hue
+          );
+        }
+        console.log(`[Dynasty] Lineage branch "${name}" became extinct after ${dynasty.maxGen} generations (peak: ${dynasty.peakCount} members, ${lifetimeMins} mins). Enshrined in Hall of Fame.`);
+      }
     }
   }
 
-  spawnDetritusBloom(x, y, size, hue, energyRemaining) {
-    const detritusBlooms = this.nutrientBlooms.filter(b => b.isDetritus);
-    if (detritusBlooms.length >= 8) {
-      const oldestDetritusIdx = this.nutrientBlooms.findIndex(b => b.isDetritus);
-      if (oldestDetritusIdx >= 0) {
-        this.nutrientBlooms.splice(oldestDetritusIdx, 1);
+  getAllDynasties() {
+    return Array.from(this.activeDynasties.values());
+  }
+
+  getSerializableDynasties() {
+    return Array.from(this.activeDynasties.values());
+  }
+
+  restoreDynasties(dynastyList) {
+    if (!Array.isArray(dynastyList)) return;
+    this.activeDynasties.clear();
+    for (const d of dynastyList) {
+      if (d && d.name) {
+        this.activeDynasties.set(d.name, d);
       }
     }
-    const detritusEnergy = Math.max(15.0, Math.min(60.0, (energyRemaining || 20) * 0.4 + size * 4));
-    const bloom = {
-      id: this.nextBloomId++,
-      x,
-      y,
-      energy: detritusEnergy,
-      radius: Math.max(10, Math.min(22, size * 1.6)),
-      maxAge: 90, // ~9 seconds
-      age: 0,
-      isDetritus: true,
-      hue: hue !== undefined ? hue : 0.12
-    };
-    this.nutrientBlooms.push(bloom);
+    console.log(`[Dynasty] Restored ${this.activeDynasties.size} dynasty lineages.`);
   }
 
   nameSpeciesFounder(speciesId, founderName) {

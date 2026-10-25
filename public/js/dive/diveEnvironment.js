@@ -1,10 +1,15 @@
 import * as THREE from '../lib/three.module.js';
+import { OCEAN_GEOMETRY } from '../shared/habitats.js';
+import {TerrainField} from '../shared/terrain.js';
+import {makeTerrainCanvas} from '../gl/terrainDrawing.js';
 
 export class DiveEnvironment {
-  constructor(scene, worldSize = 1400, chamberRadius = 620) {
+  constructor(scene, worldSize = OCEAN_GEOMETRY.worldSize, chamberRadius = OCEAN_GEOMETRY.radius) {
     this.scene = scene;
     this.worldSize = worldSize;
     this.chamberRadius = chamberRadius;
+    this.terrain=new TerrainField();
+    this.reliefCanvas=makeTerrainCanvas(512,this.terrain);
 
     this.plumeParticles = [];
     this.marineSnow = null;
@@ -31,14 +36,27 @@ export class DiveEnvironment {
     this.targetFogColor = new THREE.Color(0x0a2d48);
     this.currentAmbColor = new THREE.Color(0x16466b);
     this.targetAmbColor = new THREE.Color(0x16466b);
+
+    // Dynamic Phytobenthic Algae Sanctuaries
+    this.algaeIsles = [];
+    this.algaeFrondsGroup = null;
+    this.algaeFrondMeshes = [];
+    this.algaeBubbles = null;
+
+    // Dynamic 3D Biogenic Coral Reefs & Sanctuaries
+    this.biogenicReefs = [];
+    this.coralReefsGroup = new THREE.Group();
+    this.scene.add(this.coralReefsGroup);
+    this.coralReefMeshes = [];
+    this.coralReefsSignature = '';
   }
 
   build(rawVents = []) {
     if (!rawVents || rawVents.length === 0) {
       // Symmetrically arranged canonical vents in a regular pentagon (matches server chemicalGrid.js)
       this.vents = [];
-      const cx = 64;
-      const cy = 64;
+      const cx = OCEAN_GEOMETRY.gridSize / 2;
+      const cy = OCEAN_GEOMETRY.gridSize / 2;
       const dist = 32;
       const hues = [0.12, 0.52, 0.95, 0.38, 0.78];
       for (let i = 0; i < 5; i++) {
@@ -64,19 +82,19 @@ export class DiveEnvironment {
   }
 
   calculateVentCoordinates() {
-    const ventScale = this.worldSize / 128; // 10.9375
+    const ventScale = this.worldSize / OCEAN_GEOMETRY.gridSize; // 10.9375
     const ventColors = [0xf59e0b, 0x06b6d4, 0xf43f5e, 0x10b981, 0x8b5cf6]; // Amber, Cyan, Rose, Emerald, Violet
     const ventAtmosphere = [0x3b1c04, 0x06283b, 0x380518, 0x052e16, 0x240e45];
 
     this.ventPositions3D = [];
     for (let i = 0; i < this.vents.length; i++) {
       const v = this.vents[i];
-      // Convert server grid coordinate (0..128) to 3D centered coordinate (-700..700)
-      const worldX = (v.x !== undefined ? v.x : 64) * ventScale;
-      const worldY = (v.y !== undefined ? v.y : 64) * ventScale;
+      // Convert server grid coordinate (0..gridSize) to 3D centered coordinate (centered world)
+      const worldX = (v.x !== undefined ? v.x : OCEAN_GEOMETRY.gridSize / 2) * ventScale;
+      const worldY = (v.y !== undefined ? v.y : OCEAN_GEOMETRY.gridSize / 2) * ventScale;
 
-      const x3d = worldX - 700;
-      const z3d = worldY - 700;
+      const x3d = worldX - OCEAN_GEOMETRY.cx;
+      const z3d = worldY - OCEAN_GEOMETRY.cy;
       const color = ventColors[i % ventColors.length];
       const atmoColor = ventAtmosphere[i % ventAtmosphere.length];
 
@@ -92,8 +110,8 @@ export class DiveEnvironment {
   }
 
   setupLightingAndFog() {
-    // 1. Crystal-clear Deep Oceanic Fog (Pristine within 140 units, smooth atmospheric depth fade 140 to 320 units)
-    this.scene.fog = new THREE.Fog(0x020d1a, 140, 320);
+    // 1. Crystal-clear Deep Oceanic Fog (Pristine within 60 units, smooth atmospheric depth fade 60 to 140 units)
+    this.scene.fog = new THREE.Fog(0x020d1a, 60, 140);
     this.scene.background = new THREE.Color(0x020d1a);
 
     // 2. Ambient Bioluminescent Glow (Deep oceanic abyssal ambiance)
@@ -125,7 +143,7 @@ export class DiveEnvironment {
     dome.scale.set(1.0, 0.12, 1.0); // Gentle liquid meniscus curve overhead
     this.scene.add(dome);
 
-    // 2. Laboratory Petri Dish Glass Cylinder Boundary (radius 620)
+    // 2. Laboratory Petri Dish Glass Cylinder Boundary
     const wallGeo = new THREE.CylinderGeometry(this.chamberRadius, this.chamberRadius, 85, 64, 1, true);
     const wallMat = new THREE.MeshBasicMaterial({
       color: 0x00f0ff,
@@ -153,7 +171,7 @@ export class DiveEnvironment {
 
   setupSeafloor() {
     // 3D Bio-Calcite Reef Floor on XZ plane
-    const gridSegs = 72;
+    const gridSegs = 96;
     const planeGeo = new THREE.PlaneGeometry(this.worldSize, this.worldSize, gridSegs, gridSegs);
     // Rotate to lie flat on XZ plane: X is horizontal, Z is depth, Y is altitude
     planeGeo.rotateX(-Math.PI * 0.5);
@@ -167,23 +185,7 @@ export class DiveEnvironment {
       const vz = pos.getZ(i);
       const distFromCenter = Math.hypot(vx, vz);
 
-      let elevation = -16.0;
-      if (distFromCenter < this.chamberRadius) {
-        // Natural undulating seabed
-        elevation += Math.sin(vx * 0.015) * Math.cos(vz * 0.015) * 3.2;
-        elevation += Math.sin(vx * 0.035 + vz * 0.03) * 1.8;
-
-        // Elevated vent mounds beneath each hydrothermal chimney (peaks at Y = -9.5)
-        for (let v = 0; v < this.ventPositions3D.length; v++) {
-          const vent = this.ventPositions3D[v];
-          const vdist = Math.hypot(vx - vent.x, vz - vent.z);
-          if (vdist < 110) {
-            elevation += Math.cos((vdist / 110) * (Math.PI * 0.5)) * 6.5;
-          }
-        }
-      } else {
-        elevation -= 22.0; // Shelf drops off outside petri chamber
-      }
+      const elevation=distFromCenter<this.chamberRadius?this.terrain.sample(vx+this.worldSize/2,vz+this.worldSize/2).floorHeight:-42;
 
       this.baseElevations[i] = elevation;
       pos.setY(i, elevation);
@@ -207,6 +209,16 @@ export class DiveEnvironment {
     this.scene.add(this.terrainMesh);
   }
 
+  // Sample the displayed floor, so settled bodies remain above its relief.
+  getFloorHeight(x,z) {
+    const segments=this.planeGeo.parameters.widthSegments,span=this.worldSize;
+    const gx=Math.max(0,Math.min(segments-.00001,(x/span+.5)*segments));
+    const gy=Math.max(0,Math.min(segments-.00001,(z/span+.5)*segments));
+    const ix=Math.floor(gx),iy=Math.floor(gy),fx=gx-ix,fy=gy-iy,w=segments+1,pos=this.planeGeo.attributes.position;
+    const a=pos.getY(iy*w+ix),b=pos.getY(iy*w+ix+1),c=pos.getY((iy+1)*w+ix),d=pos.getY((iy+1)*w+ix+1);
+    return (a*(1-fx)+b*fx)*(1-fy)+(c*(1-fx)+d*fx)*fy;
+  }
+
   // Dynamically carve real 3D coral reef ridges from live substrate field
   updateTerrainMeshHeights(thumbCanvas) {
     if (!thumbCanvas || !this.planeGeo || !this.baseElevations) return;
@@ -228,8 +240,8 @@ export class DiveEnvironment {
         let elev = this.baseElevations[i];
 
         if (distFromCenter < this.chamberRadius) {
-          const gx = Math.max(0, Math.min(w - 1, Math.round(((vx + halfSize) / this.worldSize) * (w - 1))));
-          const gy = Math.max(0, Math.min(h - 1, Math.round(((vz + halfSize) / this.worldSize) * (h - 1))));
+          const gx = Math.max(0, Math.min(w - 1, Math.round(((vx + halfSize) / this.worldSize) * w)));
+          const gy = Math.max(0, Math.min(h - 1, Math.round(((vz + halfSize) / this.worldSize) * h)));
           const pIdx = (gy * w + gx) * 4;
 
           // Alpha channel is substrate bio-calcite (0..255)
@@ -261,8 +273,394 @@ export class DiveEnvironment {
     }
   }
 
+  updateAlgae(rawAlgae) {
+    if (!rawAlgae || !Array.isArray(rawAlgae)) return;
+    const changed = this.algaeIsles.map(p=>p.id).join(',') !== rawAlgae.map(p=>p.id).join(',');
+    this.algaeIsles = rawAlgae;
+    if (!this.algaeFrondsGroup) {
+      this.algaeFrondsGroup = new THREE.Group();
+      this.scene.add(this.algaeFrondsGroup);
+      this.setupAlgaeFronds();
+      this.setupAlgaeBubbles();
+    } else if(changed) this.setupAlgaeFronds();
+    if(this.algaeBubbles) {
+      this.algaeBubbles.mesh.visible=rawAlgae.length>0;
+      for(let i=0;i<this.algaeBubbles.velocities.length && rawAlgae.length;i++) {
+        const p=rawAlgae[i%rawAlgae.length],v=this.algaeBubbles.velocities[i];
+        v.centerX=p.x-OCEAN_GEOMETRY.cx;v.centerZ=p.y-OCEAN_GEOMETRY.cy;v.isleRadius=p.r*0.75;
+      }
+    }
+    const byId=new Map(rawAlgae.map(p=>[p.id,p]));
+    for(const f of this.algaeFrondMeshes) {
+      const p=byId.get(f.isleId);
+      if(p) {const scale=p.r/f.initialRadius;f.mesh.scale.set(scale,Math.max(0.15,p.d),scale);f.mesh.material.opacity=0.3+0.55*p.d;}
+    }
+  }
+
+  clearCoralReefs() {
+    if (!this.coralReefsGroup) return;
+    while (this.coralReefsGroup.children.length > 0) {
+      const child = this.coralReefsGroup.children[0];
+      this.coralReefsGroup.remove(child);
+      child.traverse(obj => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+          else obj.material.dispose();
+        }
+      });
+    }
+    this.coralReefMeshes = [];
+    this.coralReefsSignature = '';
+  }
+
+  updateBiogenicReefs(biogenicReefs, dayPhase = 0.5, time = 0) {
+    if (!biogenicReefs || !Array.isArray(biogenicReefs) || biogenicReefs.length === 0) {
+      if (this.coralReefMeshes.length > 0) {
+        this.clearCoralReefs();
+      }
+      return;
+    }
+
+    const sig = biogenicReefs.length + ':' + biogenicReefs.slice(0, 6).map(r => r.seed).join('-');
+    if (sig === this.coralReefsSignature) {
+      // Modulate polyp night glow emission intensity smoothly
+      const night = Math.max(0, 1.0 - dayPhase * 1.3);
+      for (let i = 0; i < this.coralReefMeshes.length; i++) {
+        const item = this.coralReefMeshes[i];
+        if (item.polyp && item.polyp.material) {
+          item.polyp.material.emissiveIntensity = 1.0 + night * 0.8;
+        }
+      }
+      return;
+    }
+
+    this.coralReefsSignature = sig;
+    this.biogenicReefs = biogenicReefs;
+    this.buildCoralReefs3D(biogenicReefs, dayPhase, time);
+  }
+
+  createCoralBedTexture() {
+    if (this.coralBedTexture) return this.coralBedTexture;
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createRadialGradient(32, 32, 2, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(110, 231, 183, 0.65)'); // Soft seafoam/cyan core
+    grad.addColorStop(0.35, 'rgba(45, 212, 191, 0.35)'); // Translucent turquoise
+    grad.addColorStop(0.70, 'rgba(20, 184, 166, 0.10)'); // Gentle fading halo
+    grad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');          // 100% transparent edge
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 64, 64);
+    this.coralBedTexture = new THREE.CanvasTexture(canvas);
+    return this.coralBedTexture;
+  }
+
+  buildCoralReefs3D(biogenicReefs, dayPhase = 0.5, time = 0) {
+    this.clearCoralReefs();
+    this.coralReefsSignature = biogenicReefs.length + ':' + biogenicReefs.slice(0, 6).map(r => r.seed).join('-');
+
+    const night = Math.max(0, 1.0 - (dayPhase ?? 0.5) * 1.3);
+
+    // Ethereal translucent milky ivory-cyan tendril material matching 2D
+    const branchMat = new THREE.MeshStandardMaterial({
+      color: 0xecfdf5,       // Pale translucent milky ivory-cyan
+      emissive: 0x2dd4bf,    // Turquoise/cyan bioluminescent emission
+      emissiveIntensity: 0.65,
+      roughness: 0.25,
+      metalness: 0.05,
+      transparent: true,
+      opacity: 0.88,
+      side: THREE.DoubleSide
+    });
+
+    // Luminous turquoise/cyan polyp core material
+    const polypMat = new THREE.MeshStandardMaterial({
+      color: 0x2dd4bf,
+      emissive: 0x14b8a6,
+      emissiveIntensity: 1.2 + night * 0.8,
+      roughness: 0.20,
+      metalness: 0.10
+    });
+
+    // Inner bright white nucleus core
+    const nucleusMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff
+    });
+
+    // Soft additive cyan halo
+    const haloMat = new THREE.MeshBasicMaterial({
+      color: 0x2dd4bf,
+      transparent: true,
+      opacity: 0.38,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+
+    for (let i = 0; i < biogenicReefs.length; i++) {
+      const reef = biogenicReefs[i];
+      const x3D = reef.x - OCEAN_GEOMETRY.cx;
+      const z3D = reef.y - OCEAN_GEOMETRY.cy;
+      const dist = Math.hypot(x3D, z3D);
+      if (dist > this.chamberRadius * 0.96) continue;
+
+      const floorY = this.getFloorHeight(x3D, z3D);
+
+      // 1. Soft glowing bio-calcite bed decal on the seafloor (matching 2D radial gradient base)
+      const bedR = 5.0 + reef.density * 10.0;
+      const bedGeo = new THREE.PlaneGeometry(bedR * 2, bedR * 2);
+      bedGeo.rotateX(-Math.PI * 0.5);
+      const bedMat = new THREE.MeshBasicMaterial({
+        map: this.createCoralBedTexture(),
+        transparent: true,
+        opacity: 0.60 + reef.density * 0.25,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const bedMesh = new THREE.Mesh(bedGeo, bedMat);
+      bedMesh.position.set(x3D, floorY + 0.08, z3D);
+      this.coralReefsGroup.add(bedMesh);
+
+      // 2. Branching Staghorn Calcite Tendrils (3 to 6 gracefully curving arms)
+      const armCount = 3 + (reef.seed % 4);
+      const baseRot = reef.seed * 0.082;
+
+      for (let a = 0; a < armCount; a++) {
+        const angJitter = Math.sin(a * 2.7 + reef.seed * 0.3) * 0.32;
+        const armAngle = (a / armCount) * Math.PI * 2 + baseRot + angJitter;
+        const armHeight = (9.0 + reef.density * 16.0) * (0.70 + 0.30 * Math.sin(a * 2.1 + reef.seed * 0.17));
+        const armSpan = armHeight * (0.40 + 0.16 * Math.sin(a * 1.7 + reef.seed));
+        const armRadius = Math.max(0.18, 0.22 + reef.density * 0.12);
+
+        // Group rooted at (startX, floorY, startZ) on the seabed
+        const rootOffset = bedR * 0.12;
+        const startX = x3D + Math.cos(armAngle) * rootOffset;
+        const startZ = z3D + Math.sin(armAngle) * rootOffset;
+        const branchGroup = new THREE.Group();
+        branchGroup.position.set(startX, floorY, startZ);
+
+        // Organic curved path from (0,0,0) to tip
+        const curveSide = Math.sin(a * 1.6 + reef.seed) * 0.42;
+        const midSpan = armSpan * 0.46;
+        const p0 = new THREE.Vector3(0, 0, 0);
+        const p1 = new THREE.Vector3(
+          Math.cos(armAngle + curveSide) * midSpan,
+          armHeight * 0.50,
+          Math.sin(armAngle + curveSide) * midSpan
+        );
+        const p2 = new THREE.Vector3(
+          Math.cos(armAngle) * armSpan,
+          armHeight,
+          Math.sin(armAngle) * armSpan
+        );
+
+        const curve = new THREE.QuadraticBezierCurve3(p0, p1, p2);
+        const branchGeo = new THREE.TubeGeometry(curve, 16, armRadius, 8, false);
+        const branchMesh = new THREE.Mesh(branchGeo, branchMat);
+        branchGroup.add(branchMesh);
+
+        // Main tip polyp (Luminous turquoise/cyan sphere)
+        const polypGeo = new THREE.SphereGeometry(armRadius * 1.8, 12, 10);
+        const polypMesh = new THREE.Mesh(polypGeo, polypMat);
+        polypMesh.position.copy(p2);
+        branchGroup.add(polypMesh);
+
+        // Inner bright white nucleus core
+        const nucleusGeo = new THREE.SphereGeometry(armRadius * 0.85, 8, 8);
+        const nucleusMesh = new THREE.Mesh(nucleusGeo, nucleusMat);
+        nucleusMesh.position.copy(p2);
+        branchGroup.add(nucleusMesh);
+
+        // Soft luminous additive halo around polyp
+        const haloGeo = new THREE.SphereGeometry(armRadius * 3.6, 12, 10);
+        const haloMesh = new THREE.Mesh(haloGeo, haloMat);
+        haloMesh.position.copy(p2);
+        branchGroup.add(haloMesh);
+
+        // Secondary forked branch for mature reefs (matching 2D secondary branch)
+        if (reef.density > 0.30) {
+          const forkSide = (a + reef.seed) % 2 === 0 ? 0.48 : -0.48;
+          const forkLen = armHeight * (0.38 + 0.12 * Math.sin(a + reef.seed));
+          const forkSpan = forkLen * 0.55;
+          const midPt = curve.getPoint(0.52);
+
+          const fTip = new THREE.Vector3(
+            midPt.x + Math.cos(armAngle + forkSide) * forkSpan,
+            midPt.y + forkLen,
+            midPt.z + Math.sin(armAngle + forkSide) * forkSpan
+          );
+          const fCtrl = new THREE.Vector3(
+            (midPt.x + fTip.x) * 0.5 + Math.cos(armAngle + forkSide * 1.3) * (forkSpan * 0.22),
+            midPt.y + forkLen * 0.48,
+            (midPt.z + fTip.z) * 0.5 + Math.sin(armAngle + forkSide * 1.3) * (forkSpan * 0.22)
+          );
+          const fCurve = new THREE.QuadraticBezierCurve3(midPt, fCtrl, fTip);
+          const forkGeo = new THREE.TubeGeometry(fCurve, 10, armRadius * 0.65, 6, false);
+          const forkMesh = new THREE.Mesh(forkGeo, branchMat);
+          branchGroup.add(forkMesh);
+
+          // Fork tip polyp
+          const fPolypGeo = new THREE.SphereGeometry(armRadius * 1.3, 10, 8);
+          const fPolypMesh = new THREE.Mesh(fPolypGeo, polypMat);
+          fPolypMesh.position.copy(fTip);
+          branchGroup.add(fPolypMesh);
+
+          // Fork tip nucleus
+          const fNucleusGeo = new THREE.SphereGeometry(armRadius * 0.6, 6, 6);
+          const fNucleusMesh = new THREE.Mesh(fNucleusGeo, nucleusMat);
+          fNucleusMesh.position.copy(fTip);
+          branchGroup.add(fNucleusMesh);
+
+          // Fork tip halo
+          const fHaloGeo = new THREE.SphereGeometry(armRadius * 2.6, 10, 8);
+          const fHaloMesh = new THREE.Mesh(fHaloGeo, haloMat);
+          fHaloMesh.position.copy(fTip);
+          branchGroup.add(fHaloMesh);
+        }
+
+        this.coralReefsGroup.add(branchGroup);
+
+        this.coralReefMeshes.push({
+          group: branchGroup,
+          polyp: polypMesh,
+          initialRotZ: 0,
+          initialRotX: 0,
+          phase: reef.seed + a * 1.4,
+          speed: 0.0013 + (a % 3) * 0.0004
+        });
+      }
+    }
+  }
+
+  setupAlgaeFronds() {
+    if (!this.algaeFrondsGroup) return;
+
+    while (this.algaeFrondsGroup.children.length > 0) {
+      const child = this.algaeFrondsGroup.children[0];
+      this.algaeFrondsGroup.remove(child);
+      if (child.geometry) child.geometry.dispose();
+      child.material?.dispose();
+    }
+    this.algaeFrondMeshes = [];
+
+    const kelpMat = new THREE.MeshStandardMaterial({
+      color: 0x10b981,
+      emissive: 0x065f46,
+      emissiveIntensity: 0.45,
+      roughness: 0.65,
+      metalness: 0.1,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false
+    });
+
+    const ribbonWidth = 3.2;
+    const ribbonHeight = 24.0;
+    const segsY = 7;
+
+    for (let i = 0; i < this.algaeIsles.length; i++) {
+      const isle = this.algaeIsles[i];
+      const centerX = (isle.x ?? OCEAN_GEOMETRY.cx) - OCEAN_GEOMETRY.cx;
+      const centerZ = (isle.y ?? OCEAN_GEOMETRY.cy) - OCEAN_GEOMETRY.cy;
+      const rawR = Number(isle.r !== undefined ? isle.r : (isle.radius || 40));
+      const isleR = rawR * 0.72;
+      const frondCount = Math.min(9, Math.max(6, Math.floor(((isle.f || isle.frondCount || 12)) * 0.6)));
+
+      for (let f = 0; f < frondCount; f++) {
+        const angle = (f / frondCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+        const dist = (0.2 + 0.75 * Math.sqrt(Math.random())) * isleR;
+        const fx = centerX + Math.cos(angle) * dist;
+        const fz = centerZ + Math.sin(angle) * dist;
+
+        const height=ribbonHeight*(0.4+(isle.height??0.6));
+        const geo = new THREE.PlaneGeometry(ribbonWidth*(0.5+(isle.branching??0.5)),height,1,segsY);
+        geo.translate(0,height*0.5,0);
+
+        const pos = geo.attributes.position;
+        const basePositions = new Float32Array(pos.array.length);
+        basePositions.set(pos.array);
+
+        const mat=kelpMat.clone();mat.color.setHSL(isle.h??0.4,0.7,0.4);
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(fx, -15.5, fz);
+        mesh.rotation.y = Math.random() * Math.PI * 2;
+        this.algaeFrondsGroup.add(mesh);
+
+        this.algaeFrondMeshes.push({
+          mesh,
+          isleId:isle.id,initialRadius:rawR,
+          geo,
+          basePositions,
+          phase: Math.random() * Math.PI * 2 + i * 0.8,
+          swaySpeed: 0.0018 + Math.random() * 0.0008,
+          swayAmp: 2.4 + Math.random() * 1.8
+        });
+      }
+    }
+    kelpMat.dispose();
+  }
+
+  setupAlgaeBubbles() {
+    if (!this.particleTexture) {
+      this.particleTexture = this.createParticleTexture();
+    }
+    if (!this.algaeIsles || this.algaeIsles.length === 0) return;
+
+    const count = 70;
+    const geo = new THREE.BufferGeometry();
+    const positions = new Float32Array(count * 3);
+    const velocities = [];
+
+    for (let i = 0; i < count; i++) {
+      const isle = this.algaeIsles[i % this.algaeIsles.length];
+      const centerX = (isle.x ?? OCEAN_GEOMETRY.cx) - OCEAN_GEOMETRY.cx;
+      const centerZ = (isle.y ?? OCEAN_GEOMETRY.cy) - OCEAN_GEOMETRY.cy;
+      const rawR = Number(isle.r !== undefined ? isle.r : (isle.radius || 40));
+      const r = Math.random() * rawR * 0.75;
+      const ang = Math.random() * Math.PI * 2;
+
+      const bx = centerX + Math.cos(ang) * r;
+      const bz = centerZ + Math.sin(ang) * r;
+      const by = -14.0 + Math.random() * 35.0;
+
+      positions[i * 3] = bx;
+      positions[i * 3 + 1] = by;
+      positions[i * 3 + 2] = bz;
+
+      velocities.push({
+        vx: (Math.random() - 0.5) * 0.12,
+        vy: 0.14 + Math.random() * 0.22,
+        vz: (Math.random() - 0.5) * 0.12,
+        centerX,
+        centerZ,
+        isleRadius: rawR * 0.75
+      });
+    }
+
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    const mat = new THREE.PointsMaterial({
+      color: 0x34d399,
+      size: 4.8,
+      map: this.particleTexture,
+      transparent: true,
+      opacity: 0.75,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+
+    this.algaeBubbles = {
+      mesh: new THREE.Points(geo, mat),
+      velocities,
+      count
+    };
+    this.scene.add(this.algaeBubbles.mesh);
+  }
+
   // Draw vibrant bioluminescent seabed canvas texture matching 2D chemical map & local light
-  renderSeafloorCanvas(thumbCanvas = null, playerX3D = 0, playerZ3D = 0, serverBlooms = [], playerColor = '#00f0ff') {
+  renderSeafloorCanvas(thumbCanvas = null, playerX3D = 0, playerZ3D = 0, serverBlooms = [], playerColor = '#00f0ff', biogenicReefs = null, dayPhase = 0.5) {
     const ctx = this.seafloorCtx;
     const w = 512;
     const h = 512;
@@ -276,6 +674,7 @@ export class DiveEnvironment {
     bgGrad.addColorStop(1, '#010c18');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(this.reliefCanvas,0,0,w,h);
 
     // Procedural organic sediment speckles & bio-calcite mineral grit
     ctx.fillStyle = 'rgba(0, 240, 255, 0.04)';
@@ -298,9 +697,10 @@ export class DiveEnvironment {
     if (serverBlooms && serverBlooms.length > 0) {
       for (let b = 0; b < serverBlooms.length; b++) {
         const bl = serverBlooms[b];
-        const bx = (bl.x / this.worldSize) * w;
-        const bz = (bl.y / this.worldSize) * h;
+        const bx = ((bl.x || 0) / this.worldSize) * w;
+        const bz = ((bl.y || 0) / this.worldSize) * h;
         const br = Math.max(25, ((bl.r || 60) / this.worldSize) * w * 1.5);
+        if (!Number.isFinite(bx) || !Number.isFinite(bz) || !Number.isFinite(br) || br <= 0) continue;
 
         const bGrad = ctx.createRadialGradient(bx, bz, 3, bx, bz, br);
         bGrad.addColorStop(0, 'rgba(190, 242, 100, 0.92)');
@@ -313,6 +713,91 @@ export class DiveEnvironment {
         ctx.beginPath();
         ctx.arc(bx, bz, br, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // 2.6. Draw Biogenic Living Coral Reefs on Seafloor Canvas
+    const reefs = biogenicReefs || this.biogenicReefs;
+    if (reefs && reefs.length > 0) {
+      const night = Math.max(0, 1.0 - (dayPhase ?? 0.5) * 1.3);
+      for (let i = 0; i < reefs.length; i++) {
+        const reef = reefs[i];
+        const rx = (reef.x / this.worldSize) * w;
+        const rz = (reef.y / this.worldSize) * h;
+        const rR = Math.max(6, (reef.density * 22 + 8) * (w / this.worldSize) * 2.2);
+
+        const cGrad = ctx.createRadialGradient(rx, rz, 1, rx, rz, rR);
+        cGrad.addColorStop(0, 'rgba(245, 238, 215, 0.85)');
+        cGrad.addColorStop(0.5, 'rgba(215, 185, 140, 0.50)');
+        cGrad.addColorStop(0.85, 'rgba(40, 180, 160, 0.20)');
+        cGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = cGrad;
+        ctx.beginPath();
+        ctx.arc(rx, rz, rR, 0, Math.PI * 2);
+        ctx.fill();
+
+        const arms = 3 + (reef.seed % 4);
+        const baseRot = (reef.seed * 0.082);
+        ctx.strokeStyle = 'rgba(245, 238, 215, 0.65)';
+        ctx.lineWidth = 1.3;
+        for (let a = 0; a < arms; a++) {
+          const angJitter = Math.sin(a * 2.7 + reef.seed * 0.3) * 0.32;
+          const armAngle = (a / arms) * Math.PI * 2 + baseRot + angJitter;
+          const aLen = rR * (0.7 + 0.35 * Math.sin(a * 2.1 + reef.seed * 0.17));
+          ctx.beginPath();
+          ctx.moveTo(rx, rz);
+          ctx.lineTo(rx + Math.cos(armAngle) * aLen, rz + Math.sin(armAngle) * aLen);
+          ctx.stroke();
+
+          // Tip polyp
+          ctx.fillStyle = night > 0.25 ? 'rgba(110, 245, 215, 0.90)' : 'rgba(250, 204, 21, 0.85)';
+          ctx.beginPath();
+          ctx.arc(rx + Math.cos(armAngle) * aLen, rz + Math.sin(armAngle) * aLen, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // 2.7. Draw Phytobenthic Algae Thickets & Sanctuaries
+    if (this.algaeIsles && this.algaeIsles.length > 0) {
+      for (let a = 0; a < this.algaeIsles.length; a++) {
+        const isle = this.algaeIsles[a];
+        const isleRadius = Number(isle.r !== undefined ? isle.r : (isle.radius || 40));
+        const ax = ((isle.x || 0) / this.worldSize) * w;
+        const az = ((isle.y || 0) / this.worldSize) * h;
+        const ar = Math.max(16, (isleRadius / this.worldSize) * w * 1.35);
+        if (!Number.isFinite(ax) || !Number.isFinite(az) || !Number.isFinite(ar) || ar <= 0) continue;
+
+        const aGrad = ctx.createRadialGradient(ax, az, 2, ax, az, ar);
+        aGrad.addColorStop(0, 'rgba(16, 185, 129, 0.88)');
+        aGrad.addColorStop(0.45, 'rgba(5, 150, 105, 0.60)');
+        aGrad.addColorStop(0.75, 'rgba(4, 120, 87, 0.25)');
+        aGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        ctx.save();
+        ctx.fillStyle = aGrad;
+        ctx.beginPath();
+        ctx.arc(ax, az, ar, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Frond filaments radiating outward
+        ctx.strokeStyle = 'rgba(52, 211, 153, 0.55)';
+        ctx.lineWidth = 1.5;
+        const fCount = isle.f || isle.frondCount || 12;
+        for (let f = 0; f < fCount; f++) {
+          const angle = (f / fCount) * Math.PI * 2;
+          const flen = ar * (0.65 + (f % 3) * 0.18);
+          ctx.beginPath();
+          ctx.moveTo(ax, az);
+          ctx.quadraticCurveTo(
+            ax + Math.cos(angle + 0.3) * (flen * 0.6),
+            az + Math.sin(angle + 0.3) * (flen * 0.6),
+            ax + Math.cos(angle) * flen,
+            az + Math.sin(angle) * flen
+          );
+          ctx.stroke();
+        }
         ctx.restore();
       }
     }
@@ -332,10 +817,11 @@ export class DiveEnvironment {
     // 4. Draw Radiant Hydrothermal Vent Hearths & Geothermal Auras
     for (let i = 0; i < this.ventPositions3D.length; i++) {
       const vent = this.ventPositions3D[i];
-      // Convert centered 3D (-700..700) to seafloor canvas (0..512)
+      // Convert centered 3D (centered world) to seafloor canvas (0..512)
       const vx = ((vent.x + this.worldSize * 0.5) / this.worldSize) * w;
       const vz = ((vent.z + this.worldSize * 0.5) / this.worldSize) * h;
       const vr = 48; // Crisp, concentrated radiant pool directly beneath hemisphere
+      if (!Number.isFinite(vx) || !Number.isFinite(vz) || !Number.isFinite(vr) || vr <= 0) continue;
 
       const ventGrad = ctx.createRadialGradient(vx, vz, 4, vx, vz, vr);
       const hex = vent.color.toString(16).padStart(6, '0');
@@ -364,22 +850,24 @@ export class DiveEnvironment {
     }
 
     // 5. Dynamic Cellular Illumination Halo directly beneath Piloted Organism
-    if (playerX3D !== undefined && playerZ3D !== undefined) {
+    if (Number.isFinite(playerX3D) && Number.isFinite(playerZ3D)) {
       const px = ((playerX3D + this.worldSize * 0.5) / this.worldSize) * w;
       const pz = ((playerZ3D + this.worldSize * 0.5) / this.worldSize) * h;
       const pRadius = 42;
 
-      const pGrad = ctx.createRadialGradient(px, pz, 2, px, pz, pRadius);
-      pGrad.addColorStop(0, playerColor || 'rgba(0, 240, 255, 0.75)');
-      pGrad.addColorStop(0.45, 'rgba(0, 240, 255, 0.28)');
-      pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      if (Number.isFinite(px) && Number.isFinite(pz)) {
+        const pGrad = ctx.createRadialGradient(px, pz, 2, px, pz, pRadius);
+        pGrad.addColorStop(0, playerColor || 'rgba(0, 240, 255, 0.75)');
+        pGrad.addColorStop(0.45, 'rgba(0, 240, 255, 0.28)');
+        pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
-      ctx.save();
-      ctx.fillStyle = pGrad;
-      ctx.beginPath();
-      ctx.arc(px, pz, pRadius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+        ctx.save();
+        ctx.fillStyle = pGrad;
+        ctx.beginPath();
+        ctx.arc(px, pz, pRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
     }
 
     this.seafloorTexture.needsUpdate = true;
@@ -417,7 +905,7 @@ export class DiveEnvironment {
       this.scene.add(coreDome);
 
       // 3. Soft Pulsating Volumetric Point Light illuminating surrounding waters and seafloor
-      const pLight = new THREE.PointLight(vent.color, 3.2, 280, 1.2);
+      const pLight = new THREE.PointLight(vent.color, 2.5, 150, 1.4);
       pLight.position.set(vent.x, 6, vent.z);
       this.scene.add(pLight);
       this.ventLights.push(pLight);
@@ -562,20 +1050,38 @@ export class DiveEnvironment {
     }
   }
 
-  update(time, playerX3D = 0, playerZ3D = 0, thumbCanvas = null, serverBlooms = [], playerColor = '#00f0ff') {
+  update(time, playerX3D = 0, playerZ3D = 0, thumbCanvas = null, serverBlooms = [], playerColor = '#00f0ff', substrateCanvas = null, biogenicReefs = null, dayPhase = 0.5) {
     // 1. Dynamic water atmosphere & vent lighting matching 2D
     this.updateAtmosphere(playerX3D, playerZ3D);
 
-    // 1.5. Dynamic Seafloor texture update (throttled every 450ms)
-    if (!this.lastSeafloorUpdate || time - this.lastSeafloorUpdate > 450) {
-      this.lastSeafloorUpdate = time;
-      this.renderSeafloorCanvas(thumbCanvas, playerX3D, playerZ3D, serverBlooms, playerColor);
+    // 1.4. Dynamic 3D Biogenic Living Coral Reefs
+    if (biogenicReefs && biogenicReefs.length > 0) {
+      this.updateBiogenicReefs(biogenicReefs, dayPhase, time);
     }
 
-    // 1.6. Dynamic 3D seafloor topography update (throttled every 2200ms)
-    if (!this.lastTerrainUpdate || time - this.lastTerrainUpdate > 2200) {
+    // 1.45. Animate swaying biogenic coral reef branches (graceful oceanic current drift)
+    if (this.coralReefMeshes && this.coralReefMeshes.length > 0) {
+      for (let i = 0; i < this.coralReefMeshes.length; i++) {
+        const item = this.coralReefMeshes[i];
+        const swayZ = Math.sin(time * item.speed + item.phase) * 0.08;
+        const swayX = Math.cos(time * item.speed * 0.85 + item.phase * 1.2) * 0.06;
+        if (item.group) {
+          item.group.rotation.z = (item.initialRotZ || 0) + swayZ;
+          item.group.rotation.x = (item.initialRotX || 0) + swayX;
+        }
+      }
+    }
+
+    // 1.5. Dynamic Seafloor texture update (throttled every 1200ms for smooth 60fps)
+    if (!this.lastSeafloorUpdate || time - this.lastSeafloorUpdate > 1200) {
+      this.lastSeafloorUpdate = time;
+      this.renderSeafloorCanvas(thumbCanvas, playerX3D, playerZ3D, serverBlooms, playerColor, biogenicReefs, dayPhase);
+    }
+
+    // 1.6. Dynamic 3D seafloor topography update (throttled every 5000ms)
+    if (!this.lastTerrainUpdate || time - this.lastTerrainUpdate > 5000) {
       this.lastTerrainUpdate = time;
-      this.updateTerrainMeshHeights(thumbCanvas);
+      this.updateTerrainMeshHeights(substrateCanvas);
     }
 
     // 1.8. Breathing pulsation of luminous bio-calcite hemispheres
@@ -593,6 +1099,42 @@ export class DiveEnvironment {
           vh.coreDome.scale.set(cs, cs, cs);
         }
       }
+    }
+
+    // 1.85. Animate swaying phytobenthic kelp ribbons (GPU mesh rotation, zero CPU buffer uploads)
+    if (this.algaeFrondMeshes && this.algaeFrondMeshes.length > 0) {
+      for (let i = 0; i < this.algaeFrondMeshes.length; i++) {
+        const frond = this.algaeFrondMeshes[i];
+        const timePhase = time * frond.swaySpeed + frond.phase;
+        frond.mesh.rotation.z = Math.sin(timePhase) * 0.15;
+        frond.mesh.rotation.x = Math.cos(timePhase * 0.85) * 0.08;
+      }
+    }
+
+    // 1.86. Animate rising photosynthetic micro-bubbles
+    if (this.algaeBubbles) {
+      const pos = this.algaeBubbles.mesh.geometry.attributes.position;
+      for (let i = 0; i < this.algaeBubbles.count; i++) {
+        let px = pos.getX(i);
+        let py = pos.getY(i);
+        let pz = pos.getZ(i);
+        const vel = this.algaeBubbles.velocities[i];
+
+        py += vel.vy;
+        px += vel.vx + Math.sin(time * 0.002 + i) * 0.08;
+        pz += vel.vz + Math.cos(time * 0.002 + i) * 0.08;
+
+        if (py > 25.0) {
+          py = -15.0;
+          const ang = Math.random() * Math.PI * 2;
+          const r = Math.random() * vel.isleRadius;
+          px = vel.centerX + Math.cos(ang) * r;
+          pz = vel.centerZ + Math.sin(ang) * r;
+        }
+
+        pos.setXYZ(i, px, py, pz);
+      }
+      pos.needsUpdate = true;
     }
 
     // 2. Animate ascending thermal mineral plumes rising along +Y to surface

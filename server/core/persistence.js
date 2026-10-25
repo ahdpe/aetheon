@@ -41,16 +41,21 @@ export class PersistenceManager {
           heading: org.heading,
           isLazarus: org.isLazarus || false,
           isAvatarLineage: org.isAvatarLineage || false,
+          dynastyName: org.dynastyName || null,
+          dynastyGen: org.dynastyGen || 0,
+          founderId: org.founderId || null,
           maturity: org.maturity !== undefined ? org.maturity : 1.0,
           genome: org.genome
         })),
         speciesList: engine.lineage.getAllSpecies(),
+        dynasties: engine.getSerializableDynasties ? engine.getSerializableDynasties() : [],
         journalEntries: engine.naturalist.journalEntries,
         substrateBase64: (engine.grid && engine.grid.substrate) ? Buffer.from(engine.grid.substrate.buffer).toString('base64') : null,
         colonyData: engine.colonies ? engine.colonies.getSerializableData() : [],
         climate: engine.climate ? engine.climate.toJSON() : null,
         atlasEntries: engine.atlas ? engine.atlas.toJSON() : [],
-        cataclysmData: engine.cataclysms ? engine.cataclysms.toJSON() : null
+        cataclysmData: engine.cataclysms ? engine.cataclysms.toJSON() : null,
+        algaeData: engine.algae ? engine.algae.toJSON() : null
       };
 
       const tempPath = `${this.filePath}.tmp`;
@@ -80,6 +85,7 @@ export class PersistenceManager {
       if (data.climate && engine.climate) engine.climate.fromJSON(data.climate);
       if (data.atlasEntries && engine.atlas) engine.atlas.fromJSON(data.atlasEntries);
       if (data.cataclysmData && engine.cataclysms) engine.cataclysms.fromJSON(data.cataclysmData);
+      if (data.algaeData && engine.algae) engine.algae.fromJSON(data.algaeData);
 
       if (data.speciesList && Array.isArray(data.speciesList)) {
         engine.lineage.speciesMap.clear();
@@ -127,10 +133,18 @@ export class PersistenceManager {
           org.heading = saved.heading;
           org.isLazarus = saved.isLazarus || false;
           org.isAvatarLineage = saved.isAvatarLineage || false;
+          org.dynastyName = saved.dynastyName || null;
+          org.dynastyGen = saved.dynastyGen || 0;
+          org.founderId = saved.founderId || null;
           org.maturity = (saved.maturity !== undefined) ? saved.maturity : 1.0;
           org.size = org.adultSize * (0.38 + 0.62 * org.maturity);
           return org;
         });
+      }
+
+      // Restore active and archived dynasties
+      if (data.dynasties && engine.restoreDynasties) {
+        engine.restoreDynasties(data.dynasties);
       }
 
       console.log(`[Persistence] Resumed world from snapshot! Age: ${Math.floor((Date.now() - engine.genesisTime) / (1000 * 60))} mins, Pop: ${engine.organisms.length}`);

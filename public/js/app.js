@@ -33,6 +33,16 @@ class AetheonApp {
   }
 
   init() {
+    // 0. Clean legacy dynasty storage and cooldowns from old version
+    try {
+      if (localStorage.getItem('aetheon_dynasty_v1_clean') !== '3') {
+        localStorage.removeItem('aetheon_my_dynasty_species');
+        localStorage.removeItem('aetheon_my_dynasty_names');
+        localStorage.removeItem('aetheon_last_dynasty_time');
+        localStorage.setItem('aetheon_dynasty_v1_clean', '3');
+      }
+    } catch (_) {}
+
     // 1. Setup localization
     i18n.applyTranslations();
 
@@ -67,9 +77,12 @@ class AetheonApp {
     if (!this.diveEnginePromise) {
       this.diveEnginePromise = import('./dive/diveEngine.js').then(({ DiveEngine }) => {
         this.diveEngine = new DiveEngine(this);
-        // Sync vents if already received
+        // Sync vents and algae if already received
         if (this.renderer && this.renderer.vents && this.diveEngine.environment) {
           this.diveEngine.environment.updateVents(this.renderer.vents);
+        }
+        if (this.renderer && this.renderer.algaeIsles && this.diveEngine.environment) {
+          this.diveEngine.environment.updateAlgae(this.renderer.algaeIsles);
         }
         return this.diveEngine;
       }).catch(err => {
@@ -192,6 +205,12 @@ class AetheonApp {
         this.renderer.setChamber(msg.chamber);
       }
       this.renderer.setVents(msg.vents);
+      if (msg.algae) {
+        this.renderer.algaeIsles = msg.algae;
+        if (this.diveEngine && this.diveEngine.environment) {
+          this.diveEngine.environment.updateAlgae(msg.algae);
+        }
+      }
       if (msg.thumbnail) this.renderer.updateThumbnail(msg.thumbnail);
       this.updateStats(msg.stats);
       this.updateVisitors(msg.visitors);
@@ -216,6 +235,12 @@ class AetheonApp {
         this.renderer.setVents(msg.vents);
         if (this.diveEngine && this.diveEngine.environment) {
           this.diveEngine.environment.updateVents(msg.vents);
+        }
+      }
+      if (msg.algae) {
+        this.renderer.algaeIsles = msg.algae;
+        if (this.diveEngine && this.diveEngine.environment) {
+          this.diveEngine.environment.updateAlgae(msg.algae);
         }
       }
       this.renderer.onServerTick(msg);
@@ -245,10 +270,25 @@ class AetheonApp {
     } else if (msg.type === 'inspect_result') {
       this.inspector.updateProfile(msg.profile);
     } else if (msg.type === 'codex_data') {
-      this.codexModal.renderData(msg.species, msg.journal);
+      this.codexModal.renderData(msg.species, msg.journal, msg.dynasties);
       if (msg.journal && msg.journal.length > 0) {
         this.journalEntries = msg.journal;
         this.journalDrawer.setEntries(msg.journal);
+      }
+    } else if (msg.type === 'codex') {
+      if (this.codexModal) {
+        this.codexModal.renderData(msg.species, null, msg.dynasties);
+      }
+    } else if (msg.type === 'track_target') {
+      if (msg.id) {
+        if (this.inspector) this.inspector.select(msg.id);
+        const org = this.renderer?.currEntities?.get(msg.id);
+        if (org && this.renderer?.camera) {
+          this.renderer.camera.targetX = org.x;
+          this.renderer.camera.targetY = org.y;
+          this.renderer.camera.targetZoom = Math.max(1.4, this.renderer.camera.zoom);
+          this.renderer.camera.trackedEntityId = msg.id;
+        }
       }
     } else if (msg.type === 'journal_entry') {
       if (msg.entry) {
@@ -391,12 +431,26 @@ class AetheonApp {
     }
   }
 
-  sendLineageFounder(speciesId, founderName) {
+  sendFoundDynasty(orgId, founderName, speciesId = null) {
     if (this.socket && this.isConnected) {
       this.socket.send(JSON.stringify({
-        type: 'name_lineage',
-        speciesId: Number(speciesId),
+        type: 'found_dynasty',
+        orgId: orgId ? Number(orgId) : null,
+        speciesId: speciesId ? Number(speciesId) : undefined,
         founderName: String(founderName).trim()
+      }));
+    }
+  }
+
+  sendLineageFounder(speciesId, founderName, orgId = null) {
+    this.sendFoundDynasty(orgId, founderName, speciesId);
+  }
+
+  sendTrackDynasty(dynastyName) {
+    if (this.socket && this.isConnected) {
+      this.socket.send(JSON.stringify({
+        type: 'track_dynasty',
+        name: String(dynastyName).trim()
       }));
     }
   }
